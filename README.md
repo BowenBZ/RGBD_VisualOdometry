@@ -23,6 +23,7 @@ This repos is only a VO. It uses the following techniques.
 
 * Use `ORB` feature to extract features, descriptors
 * Establish a local map to store space key-points and do the feature matching with new coming frame
+    * Remove space points and add new space points to control the scale of the map
 * Use 3D-2D to calculate the pose
     * Use `EPNP` to calculate the initial value of frame's pose
     * Use BA to estimate the final pose of the frame
@@ -30,3 +31,5 @@ This repos is only a VO. It uses the following techniques.
 The workflow is as the following image. 
 
 ![workflow](png/workflow.png)
+
+Note. This VO is only the front end of SLAM. The keyframes could be used to do the optimization of backend, but they are not used in this repo.
