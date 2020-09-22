@@ -75,7 +75,7 @@ int main ( int argc, char** argv )
 
         boost::timer timer;
         vo->addFrame ( pFrame );
-        cout<<"VO costs time: "<<timer.elapsed()<<endl;
+        cout<<"VO costs time: "<<timer.elapsed()<<endl<<endl;
         
         if ( vo->state_ == myslam::VisualOdometry::LOST )
             break;

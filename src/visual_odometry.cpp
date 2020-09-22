@@ -54,6 +54,8 @@ VisualOdometry::~VisualOdometry()
 
 bool VisualOdometry::addFrame ( Frame::Ptr frame )
 {
+    cout << "Current status: " << (int)state_ << endl;
+
     switch ( state_ )
     {
     case INITIALIZING:
@@ -262,6 +264,7 @@ bool VisualOdometry::checkKeyFrame()
 
 void VisualOdometry::addKeyFrame()
 {
+    cout << "Insert new Keyframe" << endl;
     if ( map_->keyframes_.empty() )
     {
         // first key-frame, add all 3d points into map
