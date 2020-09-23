@@ -26,7 +26,7 @@
 #include "myslam/config.h"
 #include "myslam/visual_odometry.h"
 #include "myslam/g2o_types.h"
-
+#include "myslam/algorithm.h"
 
 namespace myslam
 {
@@ -279,7 +279,7 @@ void VisualOdometry::addKeyFrame()
             Vector3d n = p_world - ref_->getCamCenter();
             n.normalize();
             MapPoint::Ptr map_point = MapPoint::createMapPoint(
-                p_world, n, descriptors_curr_.row(i).clone(), curr_.get()
+                p_world, n, keypoints_curr_[i].pt, descriptors_curr_.row(i).clone(), curr_.get()
             );
             map_->insertMapPoint( map_point );
         }
@@ -298,20 +298,28 @@ void VisualOdometry::addMapPoints()
     for ( int i=0; i<keypoints_curr_.size(); i++ )
     {
         if ( matched[i] == true )   
-            continue;
-        double d = ref_->findDepth ( keypoints_curr_[i] );
-        if ( d<0 )  
-            continue;
-        Vector3d p_world = ref_->camera_->pixel2world (
-            Vector2d ( keypoints_curr_[i].pt.x, keypoints_curr_[i].pt.y ), 
-            curr_->T_c_w_, d
-        );
-        Vector3d n = p_world - ref_->getCamCenter();
-        n.normalize();
-        MapPoint::Ptr map_point = MapPoint::createMapPoint(
-            p_world, n, descriptors_curr_.row(i).clone(), curr_.get()
-        );
-        map_->insertMapPoint( map_point );
+        {
+            // TODO: old mappoint, need to update the observedframes_
+            // match_3dpts_[i]->observed_frames_.push_back(curr_.get());
+            // match_3dpts_[i]->observed_pixel_pos_.push_back(keypoints_curr_[i].pt);
+        }   
+        else    
+        {
+            // new mappoint
+            double d = ref_->findDepth ( keypoints_curr_[i] );
+            if ( d<0 )  
+                continue;
+            Vector3d p_world = ref_->camera_->pixel2world (
+                Vector2d ( keypoints_curr_[i].pt.x, keypoints_curr_[i].pt.y ), 
+                curr_->T_c_w_, d
+            );
+            Vector3d n = p_world - ref_->getCamCenter();
+            n.normalize();
+            MapPoint::Ptr map_point = MapPoint::createMapPoint(
+                p_world, n, keypoints_curr_[i].pt, descriptors_curr_.row(i).clone(), curr_.get()
+            );
+            map_->insertMapPoint( map_point );
+        }
     }
 }
 
@@ -340,12 +348,31 @@ void VisualOdometry::optimizeMap()
         }
         if ( iter->second->good_ == false )
         {
-            // TODO try triangulate this map point
+            // TODO: try triangulate this map point
+            // int size = iter->second->observed_frames_.size();
+            // if (size >= 2)
+            // {
+            //     Frame* frame1 = iter->second->observed_frames_[size-2];
+            //     Frame* frame2 = iter->second->observed_frames_[size-1];
+
+            //     cv::Point2f p1 = iter->second->observed_pixel_pos_[size-2];
+            //     cv::Point2f p2 = iter->second->observed_pixel_pos_[size-1];
+
+            //     vector<SE3> poses {frame1->T_c_w_, frame2->T_c_w_};
+            //     vector<Vec3> points {frame1->camera_->pixel2camera(Vector2d(p1.x, p1.y)), 
+            //                          frame2->camera_->pixel2camera(Vector2d(p2.x, p2.y))};
+            //     Vec3 pworld = Vec3::Zero();
+            //     if (triangulation(poses, points, pworld) && pworld[2] > 0)
+            //     {
+            //         iter->second->pos_ = pworld;
+            //         iter->second->good_ = true;
+            //     }
+            // }
         }
         iter++;
     }
     
-    if ( match_2dkp_index_.size() < 100 )
+    if ( match_2dkp_index_.size() < 100 );
         addMapPoints();
     if ( map_->map_points_.size() > 1000 )  
     {

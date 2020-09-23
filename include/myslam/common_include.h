@@ -28,6 +28,11 @@
 using Eigen::Vector2d;
 using Eigen::Vector3d;
 
+typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> MatXX;
+typedef Eigen::Matrix<double, Eigen::Dynamic, 1> VecX;
+typedef Eigen::Matrix<double, 3, 1> Vec3;
+typedef Eigen::Matrix<double, 3, 4> Mat34;
+
 // for Sophus
 #include <sophus/se3.hpp>
 #include <sophus/so3.hpp>
