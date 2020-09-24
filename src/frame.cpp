@@ -38,10 +38,11 @@ Frame::~Frame()
 
 }
 
+unsigned long Frame::factory_id_ = 0;
+
 Frame::Ptr Frame::createFrame()
 {
-    static long factory_id = 0;
-    return Frame::Ptr( new Frame(factory_id++) );
+    return Frame::Ptr( new Frame(factory_id_++) );
 }
 
 double Frame::findDepth ( const cv::KeyPoint& kp )

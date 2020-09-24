@@ -21,11 +21,11 @@
 #define MAPPOINT_H
 
 #include "myslam/common_include.h"
+#include "myslam/frame.h"
 
 namespace myslam
 {
     
-class Frame;
 class MapPoint
 {
 public:
@@ -38,8 +38,8 @@ public:
     Vector3d    norm_;      // Normal of viewing direction 
     Mat         descriptor_; // Descriptor for matching 
 
-    list<Frame*>    observed_frames_;   // frames that can observe this point 
-    vector<cv::Point2f>    observed_pixel_pos_;    // pixel pos observed by the frames
+    list<Frame::Ptr>  observed_frames_;
+    list<cv::Point2f> observed_pixel_pos_;
 
     int         visible_times_;     // being visible in current frame 
     int         matched_times_;     // being an inliner in pose estimation
@@ -49,8 +49,8 @@ public:
         unsigned long id, 
         const Vector3d& position, 
         const Vector3d& norm, 
-        cv::Point2f pixel_pos,
-        Frame* frame=nullptr, 
+        const cv::Point2f& pixel_pos,
+        const Frame::Ptr& frame=nullptr, 
         const Mat& descriptor=Mat()
     );
     
@@ -65,7 +65,7 @@ public:
         const Vector3d& norm_,
         const cv::Point2f& pixel_pos,
         const Mat& descriptor,
-        Frame* frame );
+        const Frame::Ptr& frame );
 };
 }
 

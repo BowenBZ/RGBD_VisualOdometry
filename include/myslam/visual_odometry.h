@@ -24,6 +24,7 @@
 #include "myslam/map.h"
 
 #include <opencv2/features2d/features2d.hpp>
+#include <bits/stdc++.h>
 
 namespace myslam 
 {
@@ -49,7 +50,8 @@ public:
     
     cv::FlannBasedMatcher   matcher_flann_;     // flann matcher
     vector<MapPoint::Ptr>   match_3dpts_;       // matched 3d points 
-    vector<int>             match_2dkp_index_;  // matched 2d pixels (index of kp_curr)
+    unordered_map<MapPoint::Ptr, cv::Point2f>  match_3d_2d_pts_;   // matched 3d map points and 2d points
+    unordered_set<int>      match_2dkp_index_;  // matched 2d pixels (index of keypoints_curr_)
    
     SE3 T_c_w_estimated_;    // the estimated pose of current frame 
  

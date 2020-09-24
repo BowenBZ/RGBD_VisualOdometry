@@ -148,13 +148,15 @@ void VisualOdometry::featureMatching()
     } )->distance;
 
     match_3dpts_.clear();
+    match_3d_2d_pts_.clear();
     match_2dkp_index_.clear();
     for ( cv::DMatch& m : matches )
     {
         if ( m.distance < max<float> ( min_dis*match_ratio_, 30.0 ) )
         {
             match_3dpts_.push_back( candidate[m.queryIdx] );
-            match_2dkp_index_.push_back( m.trainIdx );
+            match_3d_2d_pts_[candidate[m.queryIdx]] = keypoints_curr_[m.trainIdx].pt;
+            match_2dkp_index_.insert( m.trainIdx );
         }
     }
     cout<<"good matches: "<<match_3dpts_.size() <<endl;
@@ -166,13 +168,10 @@ void VisualOdometry::poseEstimationPnP()
     vector<cv::Point3f> pts3d;
     vector<cv::Point2f> pts2d;
     
-    for ( int index:match_2dkp_index_ )
-    {
-        pts2d.push_back ( keypoints_curr_[index].pt );
-    }
     for ( MapPoint::Ptr pt:match_3dpts_ )
     {
-        pts3d.push_back( pt->getPositionCV() ); // position in world
+        pts3d.push_back( pt->getPositionCV() ); 
+        pts2d.push_back( match_3d_2d_pts_[pt] );
     }
     
     Mat K = ( cv::Mat_<double>(3,3)<<
@@ -279,7 +278,7 @@ void VisualOdometry::addKeyFrame()
             Vector3d n = p_world - ref_->getCamCenter();
             n.normalize();
             MapPoint::Ptr map_point = MapPoint::createMapPoint(
-                p_world, n, keypoints_curr_[i].pt, descriptors_curr_.row(i).clone(), curr_.get()
+                p_world, n, keypoints_curr_[i].pt, descriptors_curr_.row(i).clone(), curr_
             );
             map_->insertMapPoint( map_point );
         }
@@ -295,17 +294,12 @@ void VisualOdometry::addMapPoints()
     vector<bool> matched(keypoints_curr_.size(), false); 
     for ( int index:match_2dkp_index_ )
         matched[index] = true;
+
     for ( int i=0; i<keypoints_curr_.size(); i++ )
     {
-        if ( matched[i] == true )   
+        if ( match_2dkp_index_.find(i) == match_2dkp_index_.end() )   
         {
-            // TODO: old mappoint, need to update the observedframes_
-            // match_3dpts_[i]->observed_frames_.push_back(curr_.get());
-            // match_3dpts_[i]->observed_pixel_pos_.push_back(keypoints_curr_[i].pt);
-        }   
-        else    
-        {
-            // new mappoint
+            // if the keypoint doesn't match with previous mappoints, so this is a new mappoint
             double d = ref_->findDepth ( keypoints_curr_[i] );
             if ( d<0 )  
                 continue;
@@ -316,7 +310,7 @@ void VisualOdometry::addMapPoints()
             Vector3d n = p_world - ref_->getCamCenter();
             n.normalize();
             MapPoint::Ptr map_point = MapPoint::createMapPoint(
-                p_world, n, keypoints_curr_[i].pt, descriptors_curr_.row(i).clone(), curr_.get()
+                p_world, n, keypoints_curr_[i].pt, descriptors_curr_.row(i).clone(), curr_
             );
             map_->insertMapPoint( map_point );
         }
@@ -326,6 +320,7 @@ void VisualOdometry::addMapPoints()
 void VisualOdometry::optimizeMap()
 {
     // remove the hardly seen and no visible points 
+    int update_pt_num = 0;
     for ( auto iter = map_->map_points_.begin(); iter != map_->map_points_.end(); )
     {
         if ( !curr_->isInFrame(iter->second->pos_) )
@@ -348,31 +343,38 @@ void VisualOdometry::optimizeMap()
         }
         if ( iter->second->good_ == false )
         {
-            // TODO: try triangulate this map point
-            // int size = iter->second->observed_frames_.size();
-            // if (size >= 2)
-            // {
-            //     Frame* frame1 = iter->second->observed_frames_[size-2];
-            //     Frame* frame2 = iter->second->observed_frames_[size-1];
+            // Check whether this mappoint matches with current keypoints
+            if ( match_3d_2d_pts_.find(iter -> second) != match_3d_2d_pts_.end() )
+            {
+                Frame::Ptr pre_frame = iter->second->observed_frames_.back();
+                cv::Point2f pre_pt = iter->second->observed_pixel_pos_.back();
 
-            //     cv::Point2f p1 = iter->second->observed_pixel_pos_[size-2];
-            //     cv::Point2f p2 = iter->second->observed_pixel_pos_[size-1];
+                cv::Point2f cur_pt = match_3d_2d_pts_[iter->second];
 
-            //     vector<SE3> poses {frame1->T_c_w_, frame2->T_c_w_};
-            //     vector<Vec3> points {frame1->camera_->pixel2camera(Vector2d(p1.x, p1.y)), 
-            //                          frame2->camera_->pixel2camera(Vector2d(p2.x, p2.y))};
-            //     Vec3 pworld = Vec3::Zero();
-            //     if (triangulation(poses, points, pworld) && pworld[2] > 0)
-            //     {
-            //         iter->second->pos_ = pworld;
-            //         iter->second->good_ = true;
-            //     }
-            // }
+                vector<SE3> poses {pre_frame->T_c_w_, curr_->T_c_w_};
+                vector<Vec3> points {pre_frame->camera_->pixel2camera(Vector2d(pre_pt.x, pre_pt.y)), 
+                                     curr_->camera_->pixel2camera(Vector2d(cur_pt.x, cur_pt.y))};
+                Vec3 pworld = Vec3::Zero();
+
+                if (triangulation(poses, points, pworld) && pworld[2] > 0)
+                {
+                    iter->second->pos_ = pworld;
+                    iter->second->good_ = true;
+                    update_pt_num++;
+                }
+                else
+                {
+                    iter->second->observed_frames_.pop_back();
+                    iter->second->observed_frames_.push_back(curr_);
+                    iter->second->observed_pixel_pos_.pop_back();
+                    iter->second->observed_pixel_pos_.push_back(cv::Point2f(cur_pt.x, cur_pt.y));
+                }
+            }
         }
         iter++;
     }
     
-    if ( match_2dkp_index_.size() < 100 );
+    if ( match_3d_2d_pts_.size()  < 100 );
         addMapPoints();
     if ( map_->map_points_.size() > 1000 )  
     {
@@ -381,7 +383,9 @@ void VisualOdometry::optimizeMap()
     }
     else 
         map_point_erase_ratio_ = 0.1;
-    cout<<"map points: "<<map_->map_points_.size()<<endl;
+    
+    cout<<"triangulate map points: " << update_pt_num << endl;
+    cout<<"total map points: "<<map_->map_points_.size()<<endl;
 }
 
 double VisualOdometry::getViewAngle ( Frame::Ptr frame, MapPoint::Ptr point )
