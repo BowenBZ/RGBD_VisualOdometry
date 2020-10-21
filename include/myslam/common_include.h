@@ -45,14 +45,19 @@ typedef Sophus::SO3d SO3;
 using cv::Mat;
 
 // std 
-#include <vector>
-#include <list>
-#include <memory>
-#include <string>
+#include <atomic>
+#include <condition_variable>
 #include <iostream>
-#include <set>
-#include <unordered_map>
+#include <list>
 #include <map>
+#include <memory>
+#include <mutex>
+#include <set>
+#include <string>
+#include <thread>
+#include <typeinfo>
+#include <unordered_map>
+#include <vector>
 
 using namespace std; 
 #endif
