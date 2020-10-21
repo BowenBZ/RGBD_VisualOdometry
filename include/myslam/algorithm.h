@@ -33,6 +33,16 @@ inline bool triangulation(const std::vector<SE3> &poses,
     return false;
 }
 
+
+inline Vector2d toVec2d(const cv::Point2f& pt) {
+    return Vector2d ( pt.x, pt.y );
 }
+
+inline Vector2d toVec2d(const cv::KeyPoint& kp) {
+    return toVec2d( kp.pt );
+}
+
+
+} // namespace
 
 #endif  // MYSLAM_ALGORITHM_H

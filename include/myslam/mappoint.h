@@ -41,7 +41,7 @@ public:
     list<Frame::Ptr>  observed_frames_;
     list<cv::Point2f> observed_pixel_pos_;
 
-    int         visible_times_;     // being visible in current frame 
+    int         visible_times_;     // times should in the view of current frame, but maybe cannot be matched 
     int         matched_times_;     // being an inliner in pose estimation
     
     MapPoint();

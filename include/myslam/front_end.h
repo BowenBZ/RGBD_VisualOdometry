@@ -86,9 +86,12 @@ private:
     void computeDescriptors(); 
     void featureMatching();
     void poseEstimationPnP(); 
-    void optimizeMap();
+
+    // first key-frame, add all 3d points into map
+    void initMap();
+    // optimize the active mappoints in map
+    void optimizeActiveMapPoints();
     
-    void addKeyFrame();
     void addMapPoints();
     bool checkEstimatedPose(); 
     bool checkKeyFrame();

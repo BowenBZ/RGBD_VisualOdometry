@@ -54,41 +54,46 @@ FrontEnd::~FrontEnd()
 bool FrontEnd::addFrame ( Frame::Ptr frame )
 {
     cout << "Current status: " << (int)state_ << endl;
+    curr_frame_ = frame;
 
     switch ( state_ )
     {
     case INITIALIZING:
     {
         state_ = TRACKING;
-        curr_frame_ = ref_frame_ = frame;
-        // extract features from first frame 
+
+        // extract features from curr_frame_
         extractKeyPoints();
         computeDescriptors();
-        addKeyFrame();      // the first frame is a key-frame
+
+        // the first frame is a key-frame
+        map_->insertKeyFrame ( curr_frame_ );
+        initMap();
+        ref_frame_ = frame;
         break;
     }
     case TRACKING:
     {
-        curr_frame_ = frame;
-        curr_frame_->T_c_w_ = ref_frame_->T_c_w_;   // set a initial pose, used for looking for whether map points are in frame
+        // set a initial pose, used for looking for whether map points are in frame
+        curr_frame_->T_c_w_ = ref_frame_->T_c_w_;   
+
         extractKeyPoints();
         computeDescriptors();
+
         // Map the keypoints of current frames with the points in map 
         featureMatching();
         // Estimate pose of current frame
         poseEstimationPnP();
+
         if ( checkEstimatedPose() == true ) // a good estimation
         {
             curr_frame_->T_c_w_ = T_c_w_estimated_;  // update to estimated pose
-            //optimizeMap();
-            addMapPoints();
+            optimizeActiveMapPoints();
             num_lost_ = 0;
-            viewer_->SetCurrentFrame ( curr_frame_ );
-            viewer_->UpdateMap();
-
             if ( checkKeyFrame() == true ) // is a key-frame
             {
-                addKeyFrame();
+                map_->insertKeyFrame ( curr_frame_ );
+                ref_frame_ = curr_frame_;
             }
         }
         else // bad estimation due to various reasons
@@ -109,6 +114,9 @@ bool FrontEnd::addFrame ( Frame::Ptr frame )
     }
     }
 
+    viewer_->SetCurrentFrame ( curr_frame_ );
+    viewer_->UpdateMap();
+
     return true;
 }
 
@@ -125,10 +133,10 @@ void FrontEnd::computeDescriptors()
 void FrontEnd::featureMatching()
 {
     vector<cv::DMatch> matches;
-    // select the candidates in map 
     Mat desp_map;
+    // get the active candidates from map 
     vector<MapPoint::Ptr> candidate;
-    for ( auto& mappoint: map_->getAllMappoints() )
+    for ( auto& mappoint: map_->getActiveMappoints() )
     {
         auto p = mappoint.second;
         // check if p in curr frame image 
@@ -178,11 +186,7 @@ void FrontEnd::poseEstimationPnP()
         pts2d.push_back( match_3d_2d_pts_[pt] );
     }
     
-    Mat K = ( cv::Mat_<double>(3,3)<<
-        ref_frame_->camera_->fx_, 0, ref_frame_->camera_->cx_,
-        0, ref_frame_->camera_->fy_, ref_frame_->camera_->cy_,
-        0,0,1
-    );
+    Mat K = curr_frame_->camera_->getCameraMatrix();
     Mat rvec, tvec, inliers;
     cv::solvePnPRansac( pts3d, pts2d, K, Mat(), rvec, tvec, false, 100, 4.0, 0.99, inliers );
     num_inliers_ = inliers.rows;
@@ -221,7 +225,7 @@ void FrontEnd::poseEstimationPnP()
         EdgeProjection* edge = new EdgeProjection(Vector3d( pts3d[index].x, pts3d[index].y, pts3d[index].z ), curr_frame_->camera_.get());
         edge->setId(i);
         edge->setVertex(0, pose);
-        edge->setMeasurement( Vector2d(pts2d[index].x, pts2d[index].y) );
+        edge->setMeasurement( toVec2d(pts2d[index]) );
         edge->setInformation( Eigen::Matrix2d::Identity() );
         optimizer.addEdge( edge );
         // set the inlier map points 
@@ -264,53 +268,40 @@ bool FrontEnd::checkKeyFrame()
     return false;
 }
 
-void FrontEnd::addKeyFrame()
-{
-    cout << "Insert new Keyframe" << endl;
-    if ( map_->getAllKeyFrames().empty() )
-    {
-        // first key-frame, add all 3d points into map
-        for ( size_t i=0; i < keypoints_curr_.size(); i++ )
-        {
-            double d = curr_frame_->findDepth ( keypoints_curr_[i] );
-            if ( d < 0 ) 
-                continue;
-            Vector3d p_world = ref_frame_->camera_->pixel2world (
-                Vector2d ( keypoints_curr_[i].pt.x, keypoints_curr_[i].pt.y ), curr_frame_->T_c_w_, d
-            );
-            Vector3d n = p_world - ref_frame_->getCamCenter();
-            n.normalize();
-            MapPoint::Ptr map_point = MapPoint::createMapPoint(
-                p_world, n, keypoints_curr_[i].pt, descriptors_curr_.row(i).clone(), curr_frame_
-            );
-            map_->insertMapPoint( map_point );
-        }
-    }
-    map_->insertKeyFrame ( curr_frame_ );
-    ref_frame_ = curr_frame_;
-}
+void FrontEnd::initMap() {
 
+    for ( size_t i=0; i < keypoints_curr_.size(); i++ )
+    {
+        double d = curr_frame_->findDepth ( keypoints_curr_[i] );
+        if ( d < 0 ) 
+            continue;
+        Vector3d p_world = curr_frame_->camera_->pixel2world (
+            toVec2d ( keypoints_curr_[i]), curr_frame_->T_c_w_, d
+        );
+        Vector3d n = p_world - curr_frame_->getCamCenter();
+        n.normalize();
+        MapPoint::Ptr map_point = MapPoint::createMapPoint(
+            p_world, n, keypoints_curr_[i].pt, descriptors_curr_.row(i).clone(), curr_frame_
+        );
+        map_->insertMapPoint( map_point );
+    }
+}
 
 void FrontEnd::addMapPoints()
 {
-    // add the new map points into map
-    vector<bool> matched(keypoints_curr_.size(), false); 
-    for ( int index:match_2dkp_index_ )
-        matched[index] = true;
-
     for ( int i=0; i<keypoints_curr_.size(); i++ )
     {
-        if ( match_2dkp_index_.find(i) == match_2dkp_index_.end() )   
+        // if the keypoint doesn't match with previous mappoints, so this is a new mappoint
+        if ( !match_2dkp_index_.count(i) )   
         {
-            // if the keypoint doesn't match with previous mappoints, so this is a new mappoint
-            double d = ref_frame_->findDepth ( keypoints_curr_[i] );
-            if ( d<0 )  
+            double d = curr_frame_->findDepth ( keypoints_curr_[i] );
+            if ( d < 0 )  
                 continue;
-            Vector3d p_world = ref_frame_->camera_->pixel2world (
+            Vector3d p_world = curr_frame_->camera_->pixel2world (
                 Vector2d ( keypoints_curr_[i].pt.x, keypoints_curr_[i].pt.y ), 
                 curr_frame_->T_c_w_, d
             );
-            Vector3d n = p_world - ref_frame_->getCamCenter();
+            Vector3d n = p_world - curr_frame_->getCamCenter();
             n.normalize();
             MapPoint::Ptr map_point = MapPoint::createMapPoint(
                 p_world, n, keypoints_curr_[i].pt, descriptors_curr_.row(i).clone(), curr_frame_
@@ -320,76 +311,82 @@ void FrontEnd::addMapPoints()
     }
 }
 
-// void FrontEnd::optimizeMap()
-// {
-//     // remove the hardly seen and no visible points 
-//     int update_pt_num = 0;
-//     for ( auto iter = map_->map_points_.begin(); iter != map_->map_points_.end(); )
-//     {
-//         if ( !curr_frame_->isInFrame(iter->second->pos_) )
-//         {
-//             iter = map_->map_points_.erase(iter);
-//             continue;
-//         }
-//         float match_ratio = float(iter->second->matched_times_)/iter->second->visible_times_;
-//         if ( match_ratio < map_point_erase_ratio_ )
-//         {
-//             iter = map_->map_points_.erase(iter);
-//             continue;
-//         }
-        
-//         double angle = getViewAngle( curr_frame_, iter->second );
-//         if ( angle > M_PI/6. )
-//         {
-//             iter = map_->map_points_.erase(iter);
-//             continue;
-//         }
-//         if ( iter->second->good_ == false )
-//         {
-//             // Check whether this mappoint matches with current keypoints
-//             if ( match_3d_2d_pts_.find(iter -> second) != match_3d_2d_pts_.end() )
-//             {
-//                 Frame::Ptr pre_frame = iter->second->observed_frames_.back();
-//                 cv::Point2f pre_pt = iter->second->observed_pixel_pos_.back();
+void FrontEnd::optimizeActiveMapPoints()
+{
+    // remove the hardly seen and no visible points from active mappoints
+    list<unsigned long> remove_id;
+    for (auto& mappoint : map_->getActiveMappoints()) {
+        auto mp = mappoint.second;
 
-//                 cv::Point2f cur_pt = match_3d_2d_pts_[iter->second];
+        // if not in current view
+        if ( !curr_frame_->isInFrame(mp->pos_) ) {
+            remove_id.push_back(mappoint.first);
+            continue;
+        }
 
-//                 vector<SE3> poses {pre_frame->T_c_w_, curr_frame_->T_c_w_};
-//                 vector<Vec3> points {pre_frame->camera_->pixel2camera(Vector2d(pre_pt.x, pre_pt.y)), 
-//                                      curr_frame_->camera_->pixel2camera(Vector2d(cur_pt.x, cur_pt.y))};
-//                 Vec3 pworld = Vec3::Zero();
+        // not often matches
+        float match_ratio = float(mp->matched_times_) / mp->visible_times_;
+        if ( match_ratio < map_point_erase_ratio_ )
+        {
+            remove_id.push_back(mappoint.first);
+            continue;
+        }
 
-//                 if (triangulation(poses, points, pworld) && pworld[2] > 0)
-//                 {
-//                     iter->second->pos_ = pworld;
-//                     iter->second->good_ = true;
-//                     update_pt_num++;
-//                 }
-//                 else
-//                 {
-//                     iter->second->observed_frames_.pop_back();
-//                     iter->second->observed_frames_.push_back(curr_frame_);
-//                     iter->second->observed_pixel_pos_.pop_back();
-//                     iter->second->observed_pixel_pos_.push_back(cv::Point2f(cur_pt.x, cur_pt.y));
-//                 }
-//             }
-//         }
-//         iter++;
-//     }
+        // not in good view
+        double angle = getViewAngle( curr_frame_, mp );
+        if ( angle > M_PI/6. )
+        {
+            remove_id.push_back(mappoint.first);
+            continue;
+        }
+
+        // TODO: consider place to keyframe triangulate to remove error of depth
+        // if (!mp->good_) {
+        //     // Check whether this mappoint matches with current keypoints
+        //     if ( match_3d_2d_pts_.count(mp) )
+        //     {
+        //         Frame::Ptr pre_frame = mp->observed_frames_.back();
+        //         cv::Point2f pre_pt = mp->observed_pixel_pos_.back();
+
+        //         cv::Point2f cur_pt = match_3d_2d_pts_[mp];
+
+        //         vector<SE3> poses {pre_frame->T_c_w_, curr_frame_->T_c_w_};
+        //         vector<Vec3> points {pre_frame->camera_->pixel2camera(Vector2d(pre_pt.x, pre_pt.y)), 
+        //                              curr_frame_->camera_->pixel2camera(Vector2d(cur_pt.x, cur_pt.y))};
+        //         Vec3 pworld = Vec3::Zero();
+
+        //         if (triangulation(poses, points, pworld) && pworld[2] > 0)
+        //         {
+        //             mp->pos_ = pworld;
+        //             mp->good_ = true;
+        //             update_pt_num++;
+        //         }
+        //         else
+        //         {
+        //             mp->observed_frames_.push_back(curr_frame_);
+        //             mp->observed_pixel_pos_.push_back(cv::Point2f(cur_pt.x, cur_pt.y));
+        //         }
+        //     }
+        // }
+    }
+
+    map_->removeActiveMapPoints(remove_id);
+
+    if ( match_3d_2d_pts_.size()  < 100 ) {
+        addMapPoints();
+    }
+
+    if ( map_->getActiveMappoints().size() > 1000 )  
+    {
+        // TODO map is too large, remove some one 
+        map_point_erase_ratio_ += 0.05;
+    }
+    else {
+        map_point_erase_ratio_ = 0.1;
+    }
     
-//     if ( match_3d_2d_pts_.size()  < 100 );
-//         addMapPoints();
-//     if ( map_->map_points_.size() > 1000 )  
-//     {
-//         // TODO map is too large, remove some one 
-//         map_point_erase_ratio_ += 0.05;
-//     }
-//     else 
-//         map_point_erase_ratio_ = 0.1;
-    
-//     cout<<"triangulate map points: " << update_pt_num << endl;
-//     cout<<"total map points: "<<map_->map_points_.size()<<endl;
-// }
+    cout<<"total active points: "<<map_->getActiveMappoints().size()<<endl;
+}
 
 double FrontEnd::getViewAngle ( Frame::Ptr frame, MapPoint::Ptr point )
 {

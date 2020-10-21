@@ -47,6 +47,7 @@ private:
     Map::Ptr map_ = nullptr;
     Map::KeyframeDict all_keyframes_;
     Map::MappointDict all_mappoints_;
+    Map::MappointDict active_mappoints_;
     Frame::Ptr current_frame_;
 
     void ThreadLoop();

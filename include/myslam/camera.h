@@ -38,6 +38,14 @@ public:
         fx_ ( fx ), fy_ ( fy ), cx_ ( cx ), cy_ ( cy ), depth_scale_ ( depth_scale )
     {}
 
+    Mat getCameraMatrix () {
+        Mat K = ( cv::Mat_<double>(3,3)<<
+                    fx_, 0,   cx_,
+                    0,   fy_, cy_,
+                    0,   0,   1 );
+        return K;
+    }
+
     // coordinate transform: world, camera, pixel
     Vector3d world2camera( const Vector3d& p_w, const SE3& T_c_w );
     Vector3d camera2world( const Vector3d& p_c, const SE3& T_c_w );

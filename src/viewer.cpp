@@ -11,6 +11,7 @@ void Viewer::UpdateMap() {
     assert(map_ != nullptr);
     all_keyframes_ = map_->getAllKeyFrames();
     all_mappoints_ = map_->getAllMappoints();
+    active_mappoints_ = map_->getActiveMappoints();
 }
 
 void Viewer::ThreadLoop() {
@@ -75,7 +76,12 @@ void Viewer::DrawMapPoints() {
     glPointSize(2);
     glBegin(GL_POINTS);
     for (auto& mappoint : all_mappoints_) {
-        glColor3f(normalColor[0], normalColor[1], normalColor[2]);
+        if (active_mappoints_.count(mappoint.first)) {
+            glColor3f(activeColor[0], activeColor[1], activeColor[2]);
+        }
+        else {
+            glColor3f(normalColor[0], normalColor[1], normalColor[2]);
+        }
         auto pos = mappoint.second->pos_;
         glVertex3d(pos[0], pos[1], pos[2]);
     }

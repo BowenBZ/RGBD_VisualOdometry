@@ -27,7 +27,6 @@ void Map::insertKeyFrame ( Frame::Ptr frame )
     unique_lock<mutex> lck(data_mutex_);
     keyframes_[ frame->id_ ] = frame;
     active_keyframes_[ frame->id_ ] = frame;
-    
 }
 
 void Map::insertMapPoint ( MapPoint::Ptr map_point )

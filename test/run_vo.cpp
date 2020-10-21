@@ -46,12 +46,12 @@ int main ( int argc, char** argv )
     }
 
     myslam::Camera::Ptr camera ( new myslam::Camera );
-    myslam::FrontEnd::Ptr vo ( new myslam::FrontEnd );
+    myslam::FrontEnd::Ptr frontend ( new myslam::FrontEnd );
     myslam::Viewer::Ptr viewer (new myslam::Viewer );
     myslam::Map::Ptr map (new myslam::Map );
 
-    vo->SetMap(map);
-    vo->SetViewer(viewer);
+    frontend->SetMap(map);
+    frontend->SetViewer(viewer);
     viewer->SetMap(map);
 
     cout<<"read total "<<rgb_files.size() <<" entries"<<endl;
@@ -68,10 +68,10 @@ int main ( int argc, char** argv )
         pFrame->time_stamp_ = rgb_times[i];
 
         boost::timer timer;
-        vo->addFrame ( pFrame );
+        frontend->addFrame ( pFrame );
         cout<<"VO costs time: "<<timer.elapsed()<<endl<<endl;
         
-        if ( vo->getState() == myslam::FrontEnd::LOST )
+        if ( frontend->getState() == myslam::FrontEnd::LOST )
             break;        
     }
 

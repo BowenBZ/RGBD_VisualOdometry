@@ -39,6 +39,18 @@ public:
     void insertKeyFrame( Frame::Ptr frame );
     void insertMapPoint( MapPoint::Ptr map_point );
 
+    void removeActiveMapPoint ( const unsigned long id ) {
+        unique_lock<mutex> lck(data_mutex_);
+        active_map_points_.erase(id);
+    }
+
+    void removeActiveMapPoints ( const list<unsigned long>& ids ) {
+        unique_lock<mutex> lck(data_mutex_);
+        for(auto& id : ids) {
+            active_map_points_.erase(id);
+        }
+    }
+
     KeyframeDict getAllKeyFrames() {
         unique_lock<mutex> lck(data_mutex_);
         return keyframes_;
@@ -61,11 +73,11 @@ public:
 private:
     mutex data_mutex_;
 
-    MappointDict  map_points_;        // all landmarks
+    MappointDict  map_points_;        // all mappoints
     KeyframeDict  keyframes_;         // all key-frames
 
-    MappointDict  active_map_points_;        // all landmarks
-    KeyframeDict  active_keyframes_;         // all key-frames
+    MappointDict  active_map_points_;        // active mappoints, used for feature matching in frontend
+    KeyframeDict  active_keyframes_;         // active key-frames
 };
 
 } //namespace
