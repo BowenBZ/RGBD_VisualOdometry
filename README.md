@@ -2,7 +2,7 @@
 
 This repo is modified from gaoxiang12's [slambook/project/0.4](https://github.com/gaoxiang12/slambook/tree/master/project/0.4). This repo is a VO (Visual Odometry) for RGBD stream. It could track the camera's poses and the keypoints in space and render them with viz. 
 
-![screentshot](png/screenshot.png)
+![screentshot](pngs/screenshot.png)
 
 ## Requirements
 
@@ -31,6 +31,6 @@ This repos is only a VO. It uses the following techniques.
 
 The workflow is as the following image. 
 
-![workflow](png/workflow.drawio.png)
+![workflow](pngs/workflow.drawio.png)
 
 Note. This VO is only the front end of SLAM. The keyframes could be used to do the optimization of backend, but they are not used in this repo.
