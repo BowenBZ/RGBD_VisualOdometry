@@ -8,6 +8,7 @@
 #include "myslam/common_include.h"
 #include "myslam/map.h"
 #include "myslam/frame.h"
+#include <opencv2/features2d/features2d.hpp>
 
 namespace myslam {
 
@@ -29,9 +30,10 @@ public:
         viewer_thread_.join();
     }
 
-    void SetCurrentFrame(Frame::Ptr current_frame) {
+    void SetCurrentFrame(const Frame::Ptr& current_frame, const list<cv::Point2f>& keypoints) {
         unique_lock<mutex> lck(viewer_data_mutex_);
         current_frame_ = current_frame;
+        keypoints_curr_ = keypoints;
     }
 
     /*
@@ -49,6 +51,7 @@ private:
     Map::MappointDict all_mappoints_;
     Map::MappointDict active_mappoints_;
     Frame::Ptr current_frame_;
+    list<cv::Point2f> keypoints_curr_;
 
     void ThreadLoop();
 

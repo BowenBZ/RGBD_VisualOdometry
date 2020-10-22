@@ -146,12 +146,9 @@ void Viewer::FollowCurrentFrame(pangolin::OpenGlRenderState& vis_camera) {
 
 cv::Mat Viewer::PlotFrameImage() {
     cv::Mat img_out = current_frame_->color_.clone();
-    // for (size_t i = 0; i < current_frame_->features_left_.size(); ++i) {
-    //     if (current_frame_->features_left_[i]->map_point_.lock()) {
-    //         auto feat = current_frame_->features_left_[i];
-    //         cv::circle(img_out, feat->position_.pt, 2, cv::Scalar(0, 250, 0), 2);
-    //     }
-    // }
+    for(auto& pt : keypoints_curr_) {
+        cv::circle(img_out, pt, 2, cv::Scalar(0, 250, 0), 2);
+    }
     return img_out;
 }
 

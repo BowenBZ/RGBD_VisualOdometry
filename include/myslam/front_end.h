@@ -65,6 +65,7 @@ private:
     vector<MapPoint::Ptr>   match_3dpts_;       // matched 3d points 
     unordered_map<MapPoint::Ptr, cv::Point2f>  match_3d_2d_pts_;   // matched 3d map points and 2d points
     unordered_set<int>      match_2dkp_index_;  // matched 2d pixels (index of keypoints_curr_)
+    list<cv::Point2f>       match_2dpts_;
    
     SE3 T_c_w_estimated_;    // the estimated pose of current frame 
  
@@ -90,6 +91,8 @@ private:
     // first key-frame, add all 3d points into map
     void initMap();
     // optimize the active mappoints in map
+    void cullNonActiveMapPoints();
+    // triangulate the mappoints
     void optimizeActiveMapPoints();
     
     void addMapPoints();
