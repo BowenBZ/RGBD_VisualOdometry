@@ -31,7 +31,7 @@ MapPoint::MapPoint()
 
 
 MapPoint::MapPoint ( long unsigned int id, const Vector3d& position, const Vector3d& norm, 
-                     const cv::Point2f& pixel_pos, const Frame::Ptr& frame, const Mat& descriptor )
+                     const cv::Point2f& pixel_pos, const weak_ptr<Frame>& frame, const Mat& descriptor )
 : id_(id), pos_(position), norm_(norm), good_(false), visible_times_(1), matched_times_(1), descriptor_(descriptor)
 {
     observed_frames_.push_back(frame);

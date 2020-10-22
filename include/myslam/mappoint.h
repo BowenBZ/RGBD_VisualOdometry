@@ -38,10 +38,10 @@ public:
     Vector3d    norm_;      // Normal of viewing direction 
     Mat         descriptor_; // Descriptor for matching 
 
-    list<Frame::Ptr>  observed_frames_;
+    list<weak_ptr<Frame>> observed_frames_;
     list<cv::Point2f> observed_pixel_pos_;
 
-    int         visible_times_;     // being visible in current frame 
+    int         visible_times_;     // times should in the view of current frame, but maybe cannot be matched 
     int         matched_times_;     // being an inliner in pose estimation
     
     MapPoint();
@@ -50,7 +50,7 @@ public:
         const Vector3d& position, 
         const Vector3d& norm, 
         const cv::Point2f& pixel_pos,
-        const Frame::Ptr& frame=nullptr, 
+        const weak_ptr<Frame>& frame=weak_ptr<Frame>(), 
         const Mat& descriptor=Mat()
     );
     

@@ -7,7 +7,9 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include "myslam/config.h"
-#include "myslam/visual_odometry.h"
+#include "myslam/front_end.h"
+#include "myslam/viewer.h"
+#include "myslam/map.h"
 
 int main ( int argc, char** argv )
 {
@@ -18,7 +20,6 @@ int main ( int argc, char** argv )
     }
 
     myslam::Config::setParameterFile ( argv[1] );
-    myslam::VisualOdometry::Ptr vo ( new myslam::VisualOdometry );
 
     string dataset_dir = myslam::Config::get<string> ( "dataset_dir" );
     cout<<"dataset: "<<dataset_dir<<endl;
@@ -45,20 +46,13 @@ int main ( int argc, char** argv )
     }
 
     myslam::Camera::Ptr camera ( new myslam::Camera );
-    
-    // visualization
-    cv::viz::Viz3d vis("Visual Odometry");
-    cv::viz::WCoordinateSystem world_coor(1.0), camera_coor(0.5);
-    cv::Point3d cam_pos( 0, -1.0, -1.0 ), cam_focal_point(0,0,0), cam_y_dir(0,1,0);
-    cv::Affine3d cam_pose = cv::viz::makeCameraPose( cam_pos, cam_focal_point, cam_y_dir );
-    vis.setViewerPose( cam_pose );
-    
-    world_coor.setRenderingProperty(cv::viz::LINE_WIDTH, 2.0);
-    camera_coor.setRenderingProperty(cv::viz::LINE_WIDTH, 1.0);
-    vis.showWidget( "World", world_coor );
-    vis.showWidget( "Camera", camera_coor );
+    myslam::FrontEnd::Ptr frontend ( new myslam::FrontEnd );
+    myslam::Viewer::Ptr viewer (new myslam::Viewer );
+    myslam::Map::Ptr map (new myslam::Map );
 
-    cv::Point3d test(1, 1, 1);
+    frontend->SetMap(map);
+    frontend->SetViewer(viewer);
+    viewer->SetMap(map);
 
     cout<<"read total "<<rgb_files.size() <<" entries"<<endl;
     for ( int i=0; i<rgb_files.size(); i++ )
@@ -74,42 +68,14 @@ int main ( int argc, char** argv )
         pFrame->time_stamp_ = rgb_times[i];
 
         boost::timer timer;
-        vo->addFrame ( pFrame );
+        frontend->addFrame ( pFrame );
         cout<<"VO costs time: "<<timer.elapsed()<<endl<<endl;
         
-        if ( vo->state_ == myslam::VisualOdometry::LOST )
-            break;
-        SE3 Tcw = pFrame->T_c_w_.inverse();
-        
-        // show the map and the camera pose 
-        cv::Affine3d M(
-            cv::Affine3d::Mat3( 
-                Tcw.rotationMatrix()(0,0), Tcw.rotationMatrix()(0,1), Tcw.rotationMatrix()(0,2),
-                Tcw.rotationMatrix()(1,0), Tcw.rotationMatrix()(1,1), Tcw.rotationMatrix()(1,2),
-                Tcw.rotationMatrix()(2,0), Tcw.rotationMatrix()(2,1), Tcw.rotationMatrix()(2,2)
-            ), 
-            cv::Affine3d::Vec3(
-                Tcw.translation()(0,0), Tcw.translation()(1,0), Tcw.translation()(2,0)
-            )
-        );
-
-        vector<cv::Point3f> mapPoints;
-        Mat img_show = color.clone();
-        for ( auto& pt:vo->map_->map_points_ )
-        {
-            myslam::MapPoint::Ptr p = pt.second;
-            Vector2d pixel = pFrame->camera_->world2pixel ( p->pos_, pFrame->T_c_w_ );
-            cv::circle ( img_show, cv::Point2f ( pixel ( 0,0 ),pixel ( 1,0 ) ), 5, cv::Scalar ( 0,255,0 ), 2 );
-
-            mapPoints.push_back(p->getPositionCV());
-        }
-        
-        cv::imshow("image", img_show );
-        cv::waitKey(1);
-        vis.setWidgetPose( "Camera", M);
-        vis.showWidget( "Points", cv::viz::WCloud(mapPoints, cv::viz::Color::green()));
-        vis.spinOnce(1, false);
+        if ( frontend->getState() == myslam::FrontEnd::LOST )
+            break;        
     }
+
+    viewer->Close();
 
     return 0;
 }

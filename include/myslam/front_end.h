@@ -17,74 +17,84 @@
  *
  */
 
-#ifndef VISUALODOMETRY_H
-#define VISUALODOMETRY_H
+#ifndef FrontEnd_H
+#define FrontEnd_H
 
-#include "myslam/common_include.h"
-#include "myslam/map.h"
 
 #include <opencv2/features2d/features2d.hpp>
 #include <bits/stdc++.h>
+#include "myslam/common_include.h"
+#include "myslam/map.h"
+#include "myslam/viewer.h"
+#include "myslam/frame.h"
 
 namespace myslam 
 {
-class VisualOdometry
+class FrontEnd
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    typedef shared_ptr<VisualOdometry> Ptr;
+    typedef shared_ptr<FrontEnd> Ptr;
     enum VOState {
         INITIALIZING=-1,
-        OK=0,
+        TRACKING=0,
         LOST
     };
     
-    VOState     state_;     // current VO status
-    Map::Ptr    map_;       // map with all frames and map points
-    Frame::Ptr  ref_;       // reference frame 
-    Frame::Ptr  curr_;      // current frame 
+public: // functions 
+    FrontEnd();
+    ~FrontEnd();
     
+    bool addFrame( Frame::Ptr frame );      // add a new frame 
+
+    void SetMap(Map::Ptr map) {map_ = map;}
+
+    void SetViewer(Viewer::Ptr viewer) {viewer_ = viewer;}
+
+    VOState getState() { return state_;}
+    
+private:  
+    Map::Ptr    map_;       // map with all frames and map points
+    Frame::Ptr  ref_frame_;       // reference frame 
+    Frame::Ptr  curr_frame_;      // current frame 
+    VOState     state_;     // current VO status
     cv::Ptr<cv::ORB> orb_;  // orb detector and computer 
     vector<cv::KeyPoint>    keypoints_curr_;    // keypoints in current frame
     Mat                     descriptors_curr_;  // descriptor in current frame 
-    
     cv::FlannBasedMatcher   matcher_flann_;     // flann matcher
     vector<MapPoint::Ptr>   match_3dpts_;       // matched 3d points 
     unordered_map<MapPoint::Ptr, cv::Point2f>  match_3d_2d_pts_;   // matched 3d map points and 2d points
     unordered_set<int>      match_2dkp_index_;  // matched 2d pixels (index of keypoints_curr_)
+    list<cv::Point2f>       match_2dpts_;
    
     SE3 T_c_w_estimated_;    // the estimated pose of current frame 
  
     int num_inliers_;        // number of inlier features in icp
     int num_lost_;           // number of lost times
     
-    // parameters 
-    int num_of_features_;   // number of features
-    double scale_factor_;   // scale in image pyramid
-    int level_pyramid_;     // number of pyramid levels
-    float match_ratio_;      // ratio for selecting  good matches
+    // parameters, see config/default.yaml
+    float match_ratio_;      // ratio for selecting good matches
     int max_num_lost_;      // max number of continuous lost times
     int min_inliers_;       // minimum inliers
-    
     double key_frame_min_rot;   // minimal rotation of two key-frames
     double key_frame_min_trans; // minimal translation of two key-frames
     double map_point_erase_ratio_; // remove map point ratio
     
-public: // functions 
-    VisualOdometry();
-    ~VisualOdometry();
-    
-    bool addFrame( Frame::Ptr frame );      // add a new frame 
-    
-protected:  
+    Viewer::Ptr viewer_;
+
     // inner operation 
     void extractKeyPoints();
     void computeDescriptors(); 
     void featureMatching();
     void poseEstimationPnP(); 
-    void optimizeMap();
+
+    // first key-frame, add all 3d points into map
+    void initMap();
+    // optimize the active mappoints in map
+    void cullNonActiveMapPoints();
+    // triangulate the mappoints
+    void optimizeActiveMapPoints();
     
-    void addKeyFrame();
     void addMapPoints();
     bool checkEstimatedPose(); 
     bool checkKeyFrame();
@@ -93,4 +103,4 @@ protected:
 };
 }
 
-#endif // VISUALODOMETRY_H
+#endif // FrontEnd_H

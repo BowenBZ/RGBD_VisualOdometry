@@ -31,14 +31,55 @@ class Map
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     typedef shared_ptr<Map> Ptr;
-    unordered_map<unsigned long, MapPoint::Ptr >  map_points_;        // all landmarks
-    unordered_map<unsigned long, Frame::Ptr >     keyframes_;         // all key-frames
+    typedef unordered_map<unsigned long, MapPoint::Ptr > MappointDict;
+    typedef unordered_map<unsigned long, Frame::Ptr > KeyframeDict;
 
     Map() {}
     
     void insertKeyFrame( Frame::Ptr frame );
     void insertMapPoint( MapPoint::Ptr map_point );
+
+    void removeActiveMapPoint ( const unsigned long id ) {
+        unique_lock<mutex> lck(data_mutex_);
+        active_map_points_.erase(id);
+    }
+
+    void removeActiveMapPoints ( const list<unsigned long>& ids ) {
+        unique_lock<mutex> lck(data_mutex_);
+        for(auto& id : ids) {
+            active_map_points_.erase(id);
+        }
+    }
+
+    KeyframeDict getAllKeyFrames() {
+        unique_lock<mutex> lck(data_mutex_);
+        return keyframes_;
+    }
+    MappointDict getAllMappoints() {
+        unique_lock<mutex> lck(data_mutex_);
+        return map_points_;
+    }
+
+    KeyframeDict getActiveKeyFrames() {
+        unique_lock<mutex> lck(data_mutex_);
+        return active_keyframes_;
+
+    }
+    MappointDict getActiveMappoints() {
+        unique_lock<mutex> lck(data_mutex_);
+        return active_map_points_;
+    }
+
+private:
+    mutex data_mutex_;
+
+    MappointDict  map_points_;        // all mappoints
+    KeyframeDict  keyframes_;         // all key-frames
+
+    MappointDict  active_map_points_;        // active mappoints, used for feature matching in frontend
+    KeyframeDict  active_keyframes_;         // active key-frames
 };
-}
+
+} //namespace
 
 #endif // MAP_H
