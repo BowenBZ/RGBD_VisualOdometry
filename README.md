@@ -8,10 +8,11 @@ This repo is modified from gaoxiang12's [slambook/project/0.4](https://github.co
 
 * C++ 11
 * CMake
-* Opencv: 3.1 with viz module
+* Opencv: 3.1
 * Eigen3
 * Sophus: commit [13fb328](https://github.com/strasdat/Sophus/tree/13fb3288311485dc94e3226b69c9b59cd06ff94e)
 * G2O: commit [9b41a4e](https://github.com/RainerKuemmerle/g2o/tree/9b41a4ea5ade8e1250b9c1b279f3a9c098811b5a)
+* Pangolin: commit [1ec721d](https://github.com/stevenlovegrove/Pangolin/tree/1ec721d59ff6b799b9c24b8817f3b7ad2c929b83)
 
 ## Dataset
 
@@ -30,6 +31,6 @@ This repos is only a VO. It uses the following techniques.
 
 The workflow is as the following image. 
 
-![workflow](png/workflow.png)
+![workflow](png/workflow.drawio.png)
 
 Note. This VO is only the front end of SLAM. The keyframes could be used to do the optimization of backend, but they are not used in this repo.
