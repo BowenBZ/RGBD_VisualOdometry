@@ -141,13 +141,13 @@ void FrontEnd::featureMatching()
     {
         auto p = mappoint.second;
         // check if p in curr frame image 
-        if ( curr_frame_->isInFrame( p->pos_ ) )
-        {
+        // if ( curr_frame_->isInFrame( p->pos_ ) )
+        // {
             // add to candidate 
             p->visible_times_++;
             candidate.push_back( p );
             desp_map.push_back( p->descriptor_ );
-        }
+        // }
     }
     
     matcher_flann_.match ( desp_map, descriptors_curr_, matches );
