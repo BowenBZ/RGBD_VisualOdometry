@@ -27,6 +27,7 @@
 #include "myslam/map.h"
 #include "myslam/viewer.h"
 #include "myslam/frame.h"
+#include "myslam/backend.h"
 
 namespace myslam 
 {
@@ -41,7 +42,6 @@ public:
         LOST
     };
     
-public: // functions 
     FrontEnd();
     ~FrontEnd();
     
@@ -50,6 +50,8 @@ public: // functions
     void SetMap(Map::Ptr map) {map_ = map;}
 
     void SetViewer(Viewer::Ptr viewer) {viewer_ = viewer;}
+
+    void SetBackend(Backend::Ptr backend) {backend_ = backend;}
 
     VOState getState() { return state_;}
     
@@ -80,8 +82,6 @@ private:
     double key_frame_min_trans; // minimal translation of two key-frames
     double map_point_erase_ratio_; // remove map point ratio
     
-    Viewer::Ptr viewer_;
-
     // inner operation 
     void extractKeyPoints();
     void computeDescriptors(); 
@@ -100,6 +100,11 @@ private:
     bool checkKeyFrame();
     
     double getViewAngle( Frame::Ptr frame, MapPoint::Ptr point );
+
+    Viewer::Ptr viewer_;
+
+    Backend::Ptr backend_;
+
 };
 }
 

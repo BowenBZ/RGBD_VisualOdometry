@@ -7,9 +7,10 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include "myslam/config.h"
-#include "myslam/front_end.h"
+#include "myslam/frontend.h"
 #include "myslam/viewer.h"
 #include "myslam/map.h"
+#include "myslam/backend.h"
 
 int main ( int argc, char** argv )
 {
@@ -53,6 +54,13 @@ int main ( int argc, char** argv )
     frontend->SetMap(map);
     frontend->SetViewer(viewer);
     viewer->SetMap(map);
+
+    if (myslam::Config::get<int> ( "enable_local_backend" )) {
+        cout << "Enable local backend" << endl;
+        myslam::Backend::Ptr backend (new myslam::Backend );
+        backend->SetMap(map);
+        frontend->SetBackend(backend); 
+    }
 
     cout<<"read total "<<rgb_files.size() <<" entries"<<endl;
     for ( int i=0; i<rgb_files.size(); i++ )

@@ -24,7 +24,7 @@
 #include <boost/timer.hpp>
 
 #include "myslam/config.h"
-#include "myslam/front_end.h"
+#include "myslam/frontend.h"
 #include "myslam/g2o_types.h"
 #include "myslam/algorithm.h"
 
