@@ -226,7 +226,7 @@ void FrontEnd::poseEstimationPnP()
     {
         int index = inliers.at<int>(i, 0);
         // 3D -> 2D projection
-        EdgeProjection* edge = new EdgeProjection(Vector3d( pts3d[index].x, pts3d[index].y, pts3d[index].z ), curr_frame_->camera_.get());
+        UnaryEdgeProjection* edge = new UnaryEdgeProjection(Vector3d( pts3d[index].x, pts3d[index].y, pts3d[index].z ), curr_frame_->camera_);
         edge->setId(i);
         edge->setVertex(0, pose);
         edge->setMeasurement( toVec2d(pts2d[index]) );
