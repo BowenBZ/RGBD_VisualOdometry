@@ -59,6 +59,7 @@ int main ( int argc, char** argv )
         cout << "Enable local backend" << endl;
         myslam::Backend::Ptr backend (new myslam::Backend );
         backend->SetMap(map);
+        backend->SetCamera(camera);
         frontend->SetBackend(backend); 
     }
 

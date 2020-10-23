@@ -3,6 +3,7 @@
 
 #include "myslam/common_include.h"
 #include "myslam/map.h"
+#include "myslam/camera.h"
 
 namespace myslam {
 
@@ -27,7 +28,9 @@ public:
         map_update_.notify_one();
     }
 
-    void SetMap(std::shared_ptr<Map> map) { map_ = map; }
+    void SetMap(const Map::Ptr& map) { map_ = map; }
+
+    void SetCamera(const Camera::Ptr& camera) { camera_ = camera; }
 
 private:
 
@@ -39,9 +42,8 @@ private:
 
     void Optimize(Map::KeyframeDict& keyframes, Map::MappointDict& mappoints);
 
-
-    std::shared_ptr<Map> map_;
-
+    Map::Ptr map_;
+    Camera::Ptr camera_;
 
 }; // class Backend
 

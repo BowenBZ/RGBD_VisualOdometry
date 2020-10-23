@@ -34,12 +34,12 @@ public:
     typedef unordered_map<unsigned long, MapPoint::Ptr > MappointDict;
     typedef unordered_map<unsigned long, Frame::Ptr > KeyframeDict;
 
-    Map() {}
+    Map() {   }
     
-    void insertKeyFrame( Frame::Ptr frame );
-    void insertMapPoint( MapPoint::Ptr map_point );
+    void insertKeyFrame( const Frame::Ptr& frame );
+    void insertMapPoint( const MapPoint::Ptr& map_point );
 
-    void removeActiveMapPoint ( const unsigned long id ) {
+    void removeActiveMapPoint ( const unsigned long& id ) {
         unique_lock<mutex> lck(data_mutex_);
         active_map_points_.erase(id);
     }
@@ -60,15 +60,11 @@ public:
         return map_points_;
     }
 
-    KeyframeDict getActiveKeyFrames() {
-        unique_lock<mutex> lck(data_mutex_);
-        return active_keyframes_;
-
-    }
     MappointDict getActiveMappoints() {
         unique_lock<mutex> lck(data_mutex_);
         return active_map_points_;
     }
+
 
 private:
     mutex data_mutex_;
@@ -77,7 +73,7 @@ private:
     KeyframeDict  keyframes_;         // all key-frames
 
     MappointDict  active_map_points_;        // active mappoints, used for feature matching in frontend
-    KeyframeDict  active_keyframes_;         // active key-frames
+
 };
 
 } //namespace

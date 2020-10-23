@@ -31,6 +31,7 @@
 #include <g2o/solvers/dense/linear_solver_dense.h>
 #include <g2o/core/robust_kernel.h>
 #include <g2o/core/robust_kernel_impl.h>
+#include <g2o/solvers/csparse/linear_solver_csparse.h>
 
 namespace myslam
 {

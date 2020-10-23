@@ -33,10 +33,7 @@ class Frame
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     typedef std::shared_ptr<Frame> Ptr;
-    unsigned long                  id_;         // id of this frame
-    static unsigned long           factory_id_;
     double                         time_stamp_; // when it is recorded
-    SE3                            T_c_w_;      // transform from world to camera
     Camera::Ptr                    camera_;     // Pinhole RGBD Camera model 
     Mat                            color_, depth_; // color and depth image 
     
@@ -55,6 +52,26 @@ public:
     
     // check if a point is in this frame 
     bool isInFrame( const Vector3d& pt_world );
+
+    SE3 getPose() {
+        unique_lock<mutex> lck(pose_mutex_);
+        return T_c_w_;
+    }
+
+    SE3 setPose(const SE3& pose) {
+        unique_lock<mutex> lck(pose_mutex_);
+        T_c_w_ = pose;
+    }
+
+    unsigned long getID() { return id_; }
+
+private: 
+    static unsigned long factory_id_;
+    unsigned long               id_;         // id of this frame
+
+    mutex pose_mutex_;
+    SE3                         T_c_w_;      // transform from world to camera
+
 };
 
 }

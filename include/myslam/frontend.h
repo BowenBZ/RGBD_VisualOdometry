@@ -90,9 +90,9 @@ private:
 
     // first key-frame, add all 3d points into map
     void initMap();
-    // optimize the active mappoints in map
-    void cullNonActiveMapPoints();
-    // triangulate the mappoints
+    // remove non-active mappoints from active map, add more mappoints if the the map is small
+    void cullActiveMapPoints();
+    // use backend or triangulatiton to optmize the position of mappoints (and pose of frames when use backend)
     void optimizeActiveMapPoints();
     
     void addMapPoints();

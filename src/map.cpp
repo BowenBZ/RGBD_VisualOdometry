@@ -22,18 +22,17 @@
 namespace myslam
 {
 
-void Map::insertKeyFrame ( Frame::Ptr frame )
+void Map::insertKeyFrame ( const Frame::Ptr& frame )
 {
     unique_lock<mutex> lck(data_mutex_);
-    keyframes_[ frame->id_ ] = frame;
-    active_keyframes_[ frame->id_ ] = frame;
+    keyframes_[ frame->getID() ] = frame;
 }
 
-void Map::insertMapPoint ( MapPoint::Ptr map_point )
+void Map::insertMapPoint ( const MapPoint::Ptr& map_point )
 {
     unique_lock<mutex> lck(data_mutex_);
-    map_points_[map_point->id_] = map_point;
-    active_map_points_[map_point->id_] = map_point;
+    map_points_[map_point->getID()] = map_point;
+    active_map_points_[map_point->getID()] = map_point;
 }
 
 
