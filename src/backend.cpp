@@ -5,7 +5,7 @@
 namespace myslam {
 
 void Backend::BackendLoop() {
-    while (backend_running_.load()) {
+    while (backend_running_) {
         unique_lock<mutex> lock(backend_mutex_);
         map_update_.wait(lock);
 
@@ -25,12 +25,6 @@ void Backend::Optimize(Map::KeyframeDict &keyframes,
             g2o::make_unique<LinearSolverType>()));
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(solver);
-
-   
-    for (auto &keyframe : keyframes) {
-        auto kf = keyframe.second;
-        
-    }
 
     // Record pose vertices
     std::unordered_map<unsigned long, VertexPose *> verticesPoseMap;

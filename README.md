@@ -2,7 +2,12 @@
 
 This repo is modified from gaoxiang12's [slambook/project/0.4](https://github.com/gaoxiang12/slambook/tree/master/project/0.4). This repo is a VO (Visual Odometry) for RGBD stream. It could track the camera's poses and the mappoints in space and render them as a point cloud map. 
 
+The first image shows the frame with the features drew on, and the second image shows the generated point cloud.
+
 ![screentshot](pngs/screenshot.png)
+
+![screentshot2](pngs/screenshot2.png)
+
 
 ## Requirements
 

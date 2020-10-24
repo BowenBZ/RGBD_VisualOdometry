@@ -13,12 +13,12 @@ public:
     typedef std::shared_ptr<Backend> Ptr;
 
     Backend() {
-        backend_running_.store(true);
+        backend_running_ = true;
         backend_thread_ = std::thread(std::bind(&Backend::BackendLoop, this));
     }
 
     void Stop() {
-        backend_running_.store(false);
+        backend_running_ = false;
         map_update_.notify_one();
         backend_thread_.join();
     }
@@ -34,7 +34,7 @@ public:
 
 private:
 
-    atomic<bool> backend_running_;
+    bool backend_running_;
     thread backend_thread_;
     mutex backend_mutex_;
     condition_variable map_update_;

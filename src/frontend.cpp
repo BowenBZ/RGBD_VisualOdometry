@@ -137,7 +137,13 @@ void FrontEnd::featureMatching()
     Mat desp_map;
     // get the active candidates from map 
     vector<MapPoint::Ptr> candidate;
-    for ( auto& mappoint: map_->getActiveMappoints() )
+    auto mappoints = map_->getActiveMappoints();
+    if (mappoints.size() < 100) {
+        mappoints = map_->getAllMappoints();
+        map_->resetActiveMappoints();
+    }
+
+    for ( auto& mappoint: mappoints )
     {
         auto mp = mappoint.second;
 

@@ -65,6 +65,10 @@ public:
         return active_map_points_;
     }
 
+    void resetActiveMappoints() {
+        unique_lock<mutex> lck(data_mutex_);
+        active_map_points_ = map_points_;
+    }
 
 private:
     mutex data_mutex_;
