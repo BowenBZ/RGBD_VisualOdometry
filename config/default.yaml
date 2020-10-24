@@ -1,7 +1,7 @@
 %YAML:1.0
 # data
 # the tum dataset directory, change it to yours! 
-dataset_dir: /mnt/d/Bowen/Study/SLAM/dataset/TUM/rgbd_dataset_freiburg1_desk/
+dataset_dir: /mnt/d/Bowen/Study/SLAM/dataset/TUM/rgbd_dataset_freiburg1_room/
 
 # camera intrinsics
 # fr1
