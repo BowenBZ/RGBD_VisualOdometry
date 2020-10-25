@@ -9,7 +9,7 @@ void Backend::BackendLoop() {
         unique_lock<mutex> lock(backend_mutex_);
         map_update_.wait(lock);
 
-        auto active_kfs = map_->getAllKeyFrames();
+        auto active_kfs = map_->getActiveKeyFrames();
         auto active_mappoints = map_->getActiveMappoints();
         Optimize(active_kfs, active_mappoints);
     }
@@ -52,7 +52,7 @@ void Backend::Optimize(Map::KeyframeDict &keyframes,
 
             // Add the frame vertex if haven't
             if (!verticesPoseMap.count(frame->getID())) {
-                VertexPose *vertex_pose = new VertexPose();  // camera vertex_pose
+                VertexPose *vertex_pose = new VertexPose;  // camera vertex_pose
                 vertex_pose->setId(vertex_index++);
                 vertex_pose->setEstimate(frame->getPose());
                 optimizer.addVertex(vertex_pose);
