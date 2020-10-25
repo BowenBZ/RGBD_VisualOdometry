@@ -1,8 +1,13 @@
 # RGBD_VisualOdometry
 
-This repo is modified from gaoxiang12's [slambook/project/0.4](https://github.com/gaoxiang12/slambook/tree/master/project/0.4). This repo is a VO (Visual Odometry) for RGBD stream. It could track the camera's poses and the keypoints in space and render them with viz. 
+This repo is modified from gaoxiang12's [slambook/project/0.4](https://github.com/gaoxiang12/slambook/tree/master/project/0.4). This repo is a VO (Visual Odometry) for RGBD stream. It could track the camera's poses and the mappoints in space and render them as a point cloud map. 
+
+The first image shows the frame with the features drew on, and the second image shows the generated point cloud.
 
 ![screentshot](pngs/screenshot.png)
+
+![screentshot2](pngs/screenshot2.png)
+
 
 ## Requirements
 
@@ -18,19 +23,22 @@ This repo is modified from gaoxiang12's [slambook/project/0.4](https://github.co
 
 [TUM dataset](https://vision.in.tum.de/data/datasets/rgbd-dataset/download)
 
+To process the TUM dataset, use the script in `tools` to generate the `associate.txt` file.
+
 ## Work Flow
 
 This repos is only a VO. It uses the following techniques. 
 
 * Use `ORB` feature to extract features, descriptors
-* Establish a local map to store space key-points and do the feature matching with new coming frame
-    * Remove space points and add new space points to control the scale of the map
+* Establish a map to store active mappoints and do the feature matching with new coming frame
+    * Remove mappoints points and add new space points to control the scale of the map
 * Use 3D-2D to calculate the pose
     * Use `EPNP` to calculate the initial value of frame's pose
     * Use BA to estimate the final pose of the frame
+* Local backend
+    * If backend provided, use the local backend to optimize the position of active mappoints and the poses of frames
+    * If backend not provided, use the triangulation to optimize the position of active mappoints
 
 The workflow is as the following image. 
 
 ![workflow](pngs/workflow.drawio.png)
-
-Note. This VO is only the front end of SLAM. The keyframes could be used to do the optimization of backend, but they are not used in this repo.

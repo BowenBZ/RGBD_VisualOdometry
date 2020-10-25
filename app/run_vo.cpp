@@ -1,15 +1,14 @@
 // -------------- test the visual odometry -------------
 #include <fstream>
+#include <iostream>
 #include <boost/timer.hpp>
+#include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/viz.hpp> 
-#include <opencv2/imgproc/imgproc.hpp>
-
 #include "myslam/config.h"
-#include "myslam/front_end.h"
+#include "myslam/frontend.h"
 #include "myslam/viewer.h"
 #include "myslam/map.h"
+#include "myslam/backend.h"
 
 int main ( int argc, char** argv )
 {
@@ -54,6 +53,15 @@ int main ( int argc, char** argv )
     frontend->SetViewer(viewer);
     viewer->SetMap(map);
 
+    myslam::Backend::Ptr backend;
+    if (myslam::Config::get<int> ( "enable_local_backend" )) {
+        cout << "Enable local backend" << endl;
+        backend = myslam::Backend::Ptr(new myslam::Backend);
+        backend->SetMap(map);
+        backend->SetCamera(camera);
+        frontend->SetBackend(backend); 
+    }
+
     cout<<"read total "<<rgb_files.size() <<" entries"<<endl;
     for ( int i=0; i<rgb_files.size(); i++ )
     {
@@ -74,6 +82,13 @@ int main ( int argc, char** argv )
         if ( frontend->getState() == myslam::FrontEnd::LOST )
             break;        
     }
+
+    if (myslam::Config::get<int> ( "enable_local_backend" )) {
+        backend->Stop();
+    }
+
+    cout << "Finished. \nPress <enter> to continue\n"; 
+    cin.get();
 
     viewer->Close();
 

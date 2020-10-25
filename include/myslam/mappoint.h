@@ -31,18 +31,14 @@ class MapPoint
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     typedef shared_ptr<MapPoint> Ptr;
-    unsigned long      id_; // ID
-    static unsigned long factory_id_;    // factory id
-    bool        good_;      // wheter a good point 
-    Vector3d    pos_;       // Position in world
-    Vector3d    norm_;      // Normal of viewing direction 
-    Mat         descriptor_; // Descriptor for matching 
+    typedef list<pair<weak_ptr<Frame>, cv::Point2f>> ObservationType;
+    bool        triangulated_;          // whether have been triangulated
+    bool        outlier_;               // whether this is an outlider
+    Vector3d    norm_;                  // Normal of viewing direction 
 
-    list<weak_ptr<Frame>> observed_frames_;
-    list<cv::Point2f> observed_pixel_pos_;
-
-    int         visible_times_;     // times should in the view of current frame, but maybe cannot be matched 
-    int         matched_times_;     // being an inliner in pose estimation
+    Mat         descriptor_;            // Descriptor for matching 
+    int         visible_times_;         // times should in the view of current frame, but maybe cannot be matched 
+    int         matched_times_;         // being an inliner in pose estimation
     
     MapPoint();
     MapPoint( 
@@ -54,9 +50,22 @@ public:
         const Mat& descriptor=Mat()
     );
     
-    inline cv::Point3f getPositionCV() const {
+    Vector3d getPosition() {
+        unique_lock<mutex> lock(pos_mutex_);
+        return pos_;
+    }
+
+    cv::Point3f getPositionCV() {
+        unique_lock<mutex> lock(pos_mutex_);
         return cv::Point3f( pos_(0,0), pos_(1,0), pos_(2,0) );
     }
+
+    void setPosition(const Vector3d& pos) {
+        unique_lock<mutex> lock(pos_mutex_);
+        pos_ = pos;
+    }
+
+    unsigned long getID() { return id_; }
 
     // factory function
     static MapPoint::Ptr createMapPoint();
@@ -66,7 +75,30 @@ public:
         const cv::Point2f& pixel_pos,
         const Mat& descriptor,
         const Frame::Ptr& frame );
+
+    void addFrameObservation(const weak_ptr<Frame>& frame, const cv::Point2f& pixel_pos) {
+        unique_lock<mutex> lock(observation_mutex_);
+        observations_.push_back(make_pair(frame, pixel_pos));
+    }
+
+    ObservationType getFrameObservations() {
+        unique_lock<mutex> lock(observation_mutex_);
+        return observations_;
+    }
+
+    void removeFrameObservation(const Frame::Ptr& frame);
+
+private:
+    static unsigned long factory_id_;    // factory id
+    unsigned long      id_; // ID
+
+    mutex pos_mutex_;
+    Vector3d    pos_;       // Position in world
+
+    mutex observation_mutex_;
+    ObservationType observations_;
 };
-}
+
+} // namespace
 
 #endif // MAPPOINT_H

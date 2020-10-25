@@ -24,7 +24,7 @@
 #include <boost/timer.hpp>
 
 #include "myslam/config.h"
-#include "myslam/front_end.h"
+#include "myslam/frontend.h"
 #include "myslam/g2o_types.h"
 #include "myslam/algorithm.h"
 
@@ -75,7 +75,7 @@ bool FrontEnd::addFrame ( Frame::Ptr frame )
     case TRACKING:
     {
         // set a initial pose, used for looking for whether map points are in frame
-        curr_frame_->T_c_w_ = ref_frame_->T_c_w_;   
+        curr_frame_->setPose(ref_frame_->getPose());   
 
         extractKeyPoints();
         computeDescriptors();
@@ -87,8 +87,8 @@ bool FrontEnd::addFrame ( Frame::Ptr frame )
 
         if ( checkEstimatedPose() == true ) // a good estimation
         {
-            curr_frame_->T_c_w_ = T_c_w_estimated_;  // update to estimated pose
-            cullNonActiveMapPoints();
+            curr_frame_->setPose(T_c_w_estimated_);  // update to estimated pose
+            cullActiveMapPoints();  // remove non-active mappoints, may add new mappoints
             num_lost_ = 0;
             if ( checkKeyFrame() == true ) // is a key-frame
             {
@@ -137,16 +137,27 @@ void FrontEnd::featureMatching()
     Mat desp_map;
     // get the active candidates from map 
     vector<MapPoint::Ptr> candidate;
-    for ( auto& mappoint: map_->getActiveMappoints() )
+    auto mappoints = map_->getActiveMappoints();
+    if (mappoints.size() < 100) {
+        mappoints = map_->getAllMappoints();
+        map_->resetActiveMappoints();
+    }
+
+    for ( auto& mappoint: mappoints )
     {
-        auto p = mappoint.second;
-        // check if p in curr frame image 
-        // if ( curr_frame_->isInFrame( p->pos_ ) )
+        auto mp = mappoint.second;
+
+        if(mp->outlier_)
+            continue;
+        /*since the active mappoints have been optimized in last time,
+          there is no need to check whether in frame again
+        */
+        // if ( curr_frame_->isInFrame( p->getPosition() ) )
         // {
             // add to candidate 
-            p->visible_times_++;
-            candidate.push_back( p );
-            desp_map.push_back( p->descriptor_ );
+            mp->visible_times_++;
+            candidate.push_back( mp );
+            desp_map.push_back( mp->descriptor_ );
         // }
     }
     
@@ -226,7 +237,7 @@ void FrontEnd::poseEstimationPnP()
     {
         int index = inliers.at<int>(i, 0);
         // 3D -> 2D projection
-        EdgeProjection* edge = new EdgeProjection(Vector3d( pts3d[index].x, pts3d[index].y, pts3d[index].z ), curr_frame_->camera_.get());
+        UnaryEdgeProjection* edge = new UnaryEdgeProjection(Vector3d( pts3d[index].x, pts3d[index].y, pts3d[index].z ), curr_frame_->camera_);
         edge->setId(i);
         edge->setVertex(0, pose);
         edge->setMeasurement( toVec2d(pts2d[index]) );
@@ -251,7 +262,7 @@ bool FrontEnd::checkEstimatedPose()
         return false;
     }
     // if the motion is too large, it is probably wrong
-    SE3 T_r_c = ref_frame_->T_c_w_ * T_c_w_estimated_.inverse();
+    SE3 T_r_c = ref_frame_->getPose() * T_c_w_estimated_.inverse();
     Sophus::Vector6d d = T_r_c.log();
     if ( d.norm() > 5.0 )
     {
@@ -263,7 +274,7 @@ bool FrontEnd::checkEstimatedPose()
 
 bool FrontEnd::checkKeyFrame()
 {
-    SE3 T_r_c = ref_frame_->T_c_w_ * T_c_w_estimated_.inverse();
+    SE3 T_r_c = ref_frame_->getPose() * T_c_w_estimated_.inverse();
     Sophus::Vector6d d = T_r_c.log();
     Vector3d trans = d.head<3>();
     Vector3d rot = d.tail<3>();
@@ -280,7 +291,7 @@ void FrontEnd::initMap() {
         if ( d < 0 ) 
             continue;
         Vector3d p_world = curr_frame_->camera_->pixel2world (
-            toVec2d ( keypoints_curr_[i]), curr_frame_->T_c_w_, d
+            toVec2d ( keypoints_curr_[i]), curr_frame_->getPose(), d
         );
         Vector3d n = p_world - curr_frame_->getCamCenter();
         n.normalize();
@@ -303,7 +314,7 @@ void FrontEnd::addMapPoints()
                 continue;
             Vector3d p_world = curr_frame_->camera_->pixel2world (
                 Vector2d ( keypoints_curr_[i].pt.x, keypoints_curr_[i].pt.y ), 
-                curr_frame_->T_c_w_, d
+                curr_frame_->getPose(), d
             );
             Vector3d n = p_world - curr_frame_->getCamCenter();
             n.normalize();
@@ -315,16 +326,23 @@ void FrontEnd::addMapPoints()
     }
 }
 
-void FrontEnd::cullNonActiveMapPoints()
+void FrontEnd::cullActiveMapPoints()
 {
     // remove the hardly seen and no visible points from active mappoints
     list<unsigned long> remove_id;
     for (auto& mappoint : map_->getActiveMappoints()) {
+        auto mp_id = mappoint.first;
         auto mp = mappoint.second;
 
+        // if outlider decided by backend
+        if ( mp->outlier_ ) {
+            remove_id.push_back(mp_id);
+            continue;
+        }
+
         // if not in current view
-        if ( !curr_frame_->isInFrame(mp->pos_) ) {
-            remove_id.push_back(mappoint.first);
+        if ( !curr_frame_->isInFrame(mp->getPosition()) ) {
+            remove_id.push_back(mp_id);
             continue;
         }
 
@@ -332,7 +350,7 @@ void FrontEnd::cullNonActiveMapPoints()
         float match_ratio = float(mp->matched_times_) / mp->visible_times_;
         if ( match_ratio < map_point_erase_ratio_ )
         {
-            remove_id.push_back(mappoint.first);
+            remove_id.push_back(mp_id);
             continue;
         }
 
@@ -340,7 +358,7 @@ void FrontEnd::cullNonActiveMapPoints()
         double angle = getViewAngle( curr_frame_, mp );
         if ( angle > M_PI/6. )
         {
-            remove_id.push_back(mappoint.first);
+            remove_id.push_back(mp_id);
             continue;
         }
     }
@@ -365,38 +383,60 @@ void FrontEnd::cullNonActiveMapPoints()
 
 double FrontEnd::getViewAngle ( Frame::Ptr frame, MapPoint::Ptr point )
 {
-    Vector3d n = point->pos_ - frame->getCamCenter();
+    Vector3d n = point->getPosition() - frame->getCamCenter();
     n.normalize();
     return acos( n.transpose()*point->norm_ );
 }
 
 void FrontEnd::optimizeActiveMapPoints() {
-    for (auto& mappoint : map_->getActiveMappoints()) {
-        auto mp = mappoint.second;
-        // Check whether this mappoint have matches
-        if (!mp->good_ && match_3d_2d_pts_.count(mp)) {
-            auto pre_frame = mp->observed_frames_.back().lock();
-            if(!pre_frame)
-                continue;
+    // if have backend, use backend to optimize mappoints position and frame pose
+    if(backend_) {
+        // add current frame as observations for mappoints
+        for (auto& mappoint : map_->getActiveMappoints()) {
+            auto mp = mappoint.second;
 
-            cv::Point2f pre_pt = mp->observed_pixel_pos_.back();
-            cv::Point2f cur_pt = match_3d_2d_pts_[mp];
-            vector<SE3> poses {pre_frame->T_c_w_, curr_frame_->T_c_w_};
-            vector<Vec3> points {pre_frame->camera_->pixel2camera(Vector2d(pre_pt.x, pre_pt.y)), 
-                                    curr_frame_->camera_->pixel2camera(Vector2d(cur_pt.x, cur_pt.y))};
-            Vec3 pworld = Vec3::Zero();
-
-            if (triangulation(poses, points, pworld) && pworld[2] > 0)
-            {
-                mp->pos_ = pworld;
-                mp->good_ = true;
-            }
-            else
-            {
-                mp->observed_frames_.push_back(curr_frame_);
-                mp->observed_pixel_pos_.push_back(cur_pt);
+            // if it have been observed by curr_frame
+            if (match_3d_2d_pts_.count(mp)) {
+                mp->addFrameObservation(curr_frame_, match_3d_2d_pts_[mp]);
             }
         }
+        backend_->OptimizeMap();
+    }
+    // if no backend, use triangulation to optimize mappoints position
+    else {
+        int triangulate_cnt = 0;
+        for (auto& mappoint : map_->getActiveMappoints()) {
+            auto mp = mappoint.second;
+            // Check whether this mappoint have matches
+            if (!mp->triangulated_ && match_3d_2d_pts_.count(mp)) {
+                auto obs = mp->getFrameObservations();
+                auto pre_frame = obs.back().first.lock();
+                if(!pre_frame) {
+                    mp->addFrameObservation(curr_frame_, match_3d_2d_pts_[mp]);
+                    continue;
+                }
+                cv::Point2f pre_pt = obs.back().second;
+                cv::Point2f cur_pt = match_3d_2d_pts_[mp];
+                vector<SE3> poses {pre_frame->getPose(), curr_frame_->getPose()};
+                vector<Vec3> points {pre_frame->camera_->pixel2camera(toVec2d(pre_pt)), 
+                                     curr_frame_->camera_->pixel2camera(toVec2d(cur_pt))};
+                Vec3 pworld = Vec3::Zero();
+
+                if (triangulation(poses, points, pworld) && pworld[2] > 0)
+                {
+                    // if triangulate successfully
+                    mp->setPosition(pworld);
+                    mp->triangulated_ = true;
+                    triangulate_cnt++;
+                }
+                else
+                {   
+                    // not triangulate successfully, wait next time to triangulate
+                    mp->addFrameObservation(curr_frame_, cur_pt);
+                }
+            }
+        }
+        cout << "Triangulate mappoints: " << triangulate_cnt << endl;
     }
 }
 

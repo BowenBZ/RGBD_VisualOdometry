@@ -61,7 +61,7 @@ void Viewer::DrawOtherKeyFrames() {
     const float normalColor[3] = {0, 0, 1.0};
 
     for (auto& kf : all_keyframes_) {
-        if(kf.first == current_frame_->id_)
+        if(kf.first == current_frame_->getID())
             continue;
 
         DrawFrame(kf.second, normalColor);
@@ -82,7 +82,7 @@ void Viewer::DrawMapPoints() {
         else {
             glColor3f(normalColor[0], normalColor[1], normalColor[2]);
         }
-        auto pos = mappoint.second->pos_;
+        auto pos = mappoint.second->getPosition();
         glVertex3d(pos[0], pos[1], pos[2]);
     }
     glEnd();
@@ -90,7 +90,7 @@ void Viewer::DrawMapPoints() {
 
 
 void Viewer::DrawFrame(Frame::Ptr frame, const float* color) {
-    SE3 Twc = frame->T_c_w_.inverse();
+    SE3 Twc = frame->getPose().inverse();
     const float sz = 1.0;
     const int line_width = 2.0;
     const float fx = 400;
@@ -139,7 +139,7 @@ void Viewer::DrawFrame(Frame::Ptr frame, const float* color) {
 }
 
 void Viewer::FollowCurrentFrame(pangolin::OpenGlRenderState& vis_camera) {
-    SE3 Twc = current_frame_->T_c_w_.inverse();
+    SE3 Twc = current_frame_->getPose().inverse();
     pangolin::OpenGlMatrix m(Twc.matrix());
     vis_camera.Follow(m, true);
 }

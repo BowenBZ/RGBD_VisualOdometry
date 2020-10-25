@@ -1,7 +1,7 @@
 %YAML:1.0
 # data
 # the tum dataset directory, change it to yours! 
-dataset_dir: /mnt/d/Bowen/Study/SLAM/dataset/TUM/rgbd_dataset_freiburg1_desk/
+dataset_dir: /mnt/d/Bowen/Study/SLAM/dataset/TUM/rgbd_dataset_freiburg1_xyz/
 
 # camera intrinsics
 # fr1
@@ -22,3 +22,7 @@ min_inliers: 10
 keyframe_rotation: 0.1
 keyframe_translation: 0.1
 map_point_erase_ratio: 0.1
+
+# local backend paras
+enable_local_backend: 1
+active_keyframes_num: 5
