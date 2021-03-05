@@ -6,10 +6,10 @@ It could track the camera's poses and the mappoints in space and render them as 
 
 The first image shows the frame with the features drew on, and the second image shows the generated point cloud.
 
-![screentshot](pngs/screenshot.png)
-
-![screentshot2](pngs/screenshot2.png)
-
+<p float="left">
+  <img src="pngs/screenshot.png" width="400"/>
+  <img src="pngs/screenshot2.png" width="400"/>
+</p>
 
 ## Requirements
 
