@@ -6,7 +6,7 @@ It could track the camera's poses and the mappoints in space and render them as 
 
 The first image shows the frame with the features drew on, and the second image shows the generated point cloud.
 
-<p float="left">
+<p float="middle">
   <img src="pngs/screenshot.png" width="300"/>
   <img src="pngs/screenshot2.png" width="300"/>
 </p>
