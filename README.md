@@ -29,17 +29,26 @@ You could refers to the `docker/dockerfile` for commands of how to install the d
 
 If you plan to use docker to develop, follows the following steps
 
-1. Check out this repo
-2. Build the docker image by
+1. Pull the built image from [here](https://hub.docker.com/repository/docker/zbw1455/myslam)
 ```
-docker -t myslam /path-to-this-repo/docker/
+docker pull zbw1455/myslam:rgbd_vo
 ```
-3. Configure the docker to support GUI application by this [link](https://cuneyt.aliustaoglu.biz/en/running-gui-applications-in-docker-on-windows-linux-mac-hosts/)
-4. Download the dataset
-5. Check your machine's IP
+2. Configure the docker to support GUI application by this [link](https://cuneyt.aliustaoglu.biz/en/running-gui-applications-in-docker-on-windows-linux-mac-hosts/)
+3. Download the dataset
+4. Check your machine's IP
 5. Run the docker container by
 ```
-docker run -it --rm -v /path-to-dataset-in-disk/:/path-of-dataset-in-docker/ -e DISPLAY=YOUR-IP:0.0 myslam
+docker run -it --rm \
+            -v /path-to-dataset-in-disk/:/path-of-dataset-in-docker/ \
+            -e DISPLAY=YOUR-IP:0.0 \
+            zbw1455/myslam:rgbd_vo
+```
+
+or
+
+You can manually build this image by
+```
+docker -t myslam /path-to-this-repo/docker/
 ```
 
 **Note**. For docker development, only running in Windows with `VcXsrv Windows X Server` to support the GUI is tested. There might be driver issues for other platforms. If this happens, you could refers to this [link](https://gernotklingler.com/blog/howto-get-hardware-accelerated-opengl-support-docker/).
