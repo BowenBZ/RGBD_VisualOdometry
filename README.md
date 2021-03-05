@@ -75,4 +75,4 @@ This repos is only a VO. It uses the following techniques.
 
 The workflow is as the following image. 
 
-![workflow](pngs/workflow.drawio.png)
+<img src="pngs/workflow.drawio.png" width="500"/>
