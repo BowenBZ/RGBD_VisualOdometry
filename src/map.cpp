@@ -1,23 +1,9 @@
 /*
- * <one line to give the program's name and a brief idea of what it does.>
- * Copyright (C) 2016  <copyright holder> <email>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * 
  */
 
 #include "myslam/map.h"
+#include "myslam/util.h"
 
 namespace myslam
 {
@@ -25,9 +11,9 @@ namespace myslam
 void Map::insertKeyFrame ( const Frame::Ptr& frame )
 {
     unique_lock<mutex> lck(data_mutex_);
-    keyframes_[ frame->getID() ] = frame;
-    active_keyframes_[ frame->getID() ] = frame;
-    int remove_times = active_keyframes_.size() - active_keyframes_num_;
+    keyFrames_[ frame->getID() ] = frame;
+    activeKeyFrames_[ frame->getID() ] = frame;
+    int remove_times = activeKeyFrames_.size() - maxActiveKeyFrameNum_;
     for (int i = 0; i < remove_times; i++) {
         removeOldKeyframe(frame);
     }
@@ -36,8 +22,8 @@ void Map::insertKeyFrame ( const Frame::Ptr& frame )
 void Map::insertMapPoint ( const MapPoint::Ptr& map_point )
 {
     unique_lock<mutex> lck(data_mutex_);
-    map_points_[map_point->getID()] = map_point;
-    active_map_points_[map_point->getID()] = map_point;
+    mapPoints[map_point->getID()] = map_point;
+    activeMapPoints_[map_point->getID()] = map_point;
 }
 
 void Map::removeOldKeyframe( const Frame::Ptr& curr_frame ) {
@@ -45,7 +31,7 @@ void Map::removeOldKeyframe( const Frame::Ptr& curr_frame ) {
     double max_dis = 0, min_dis = 9999;
     unsigned long max_kf_id = 0, min_kf_id = 0;
     auto Twc = curr_frame->getPose().inverse();
-    for (auto& kf : active_keyframes_) {
+    for (auto& kf : activeKeyFrames_) {
         if (kf.first == curr_frame->getID()) 
             continue;
 
@@ -62,7 +48,50 @@ void Map::removeOldKeyframe( const Frame::Ptr& curr_frame ) {
 
     const double min_dis_th = 0.2;
     unsigned long id_to_remove = (min_dis < min_dis_th) ? min_kf_id : max_kf_id;
-    active_keyframes_.erase(id_to_remove);
+    activeKeyFrames_.erase(id_to_remove);
+}
+
+void Map::cullNonActiveMapPoints( const Frame::Ptr& currFrame ) {
+    unique_lock<mutex> lck(data_mutex_);
+
+    // remove the hardly seen and no visible points from active mappoints
+    list<unsigned long> remove_id;
+    for (auto& mappoint : activeMapPoints_) {
+        auto mp_id = mappoint.first;
+        auto mp = mappoint.second;
+
+        // if outlider decided by backend
+        if ( mp->outlier_ ) {
+            remove_id.push_back(mp_id);
+            continue;
+        }
+
+        // if not in current view
+        if ( !currFrame->isInFrame(mp->getPosition()) ) {
+            remove_id.push_back(mp_id);
+            continue;
+        }
+
+        // not often matches
+        float match_ratio = float(mp->matched_times_) / mp->visible_times_;
+        if ( match_ratio < mapPointEraseRatio_ )
+        {
+            remove_id.push_back(mp_id);
+            continue;
+        }
+
+        // not in good view
+        double angle = getViewAngle( currFrame, mp );
+        if ( angle > M_PI/6. )
+        {
+            remove_id.push_back(mp_id);
+            continue;
+        }
+    }
+
+    for(auto& id : remove_id) {
+        activeMapPoints_.erase(id);
+    }
 }
 
 

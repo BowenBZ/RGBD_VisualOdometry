@@ -6,7 +6,7 @@
 namespace myslam {
 
 
-void Viewer::UpdateMap() {
+void Viewer::updateDrawingObjects() {
     std::unique_lock<std::mutex> lck(viewer_data_mutex_);
     assert(map_ != nullptr);
     all_keyframes_ = map_->getAllKeyFrames();
@@ -146,8 +146,8 @@ void Viewer::FollowCurrentFrame(pangolin::OpenGlRenderState& vis_camera) {
 
 cv::Mat Viewer::PlotFrameImage() {
     cv::Mat img_out = current_frame_->color_.clone();
-    for(auto& pt : keypoints_curr_) {
-        cv::circle(img_out, pt, 2, cv::Scalar(0, 250, 0), 2);
+    for(auto& keypoint : keypointsCurr_) {
+        cv::circle(img_out, keypoint.pt, 2, cv::Scalar(0, 250, 0), 2);
     }
     return img_out;
 }

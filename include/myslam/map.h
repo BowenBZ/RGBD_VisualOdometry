@@ -36,8 +36,9 @@ public:
     typedef unordered_map<unsigned long, Frame::Ptr > KeyframeDict;
 
     Map() {   
-        active_keyframes_num_ = Config::get<int> ( "active_keyframes_num" );
-        cout << "Keep active frames: " << active_keyframes_num_ << endl;
+        maxActiveKeyFrameNum_ = Config::get<int> ( "active_keyframes_num" );
+        mapPointEraseRatio_ = Config::get<double> ( "map_point_erase_ratio" );
+        cout << "Keep "<< maxActiveKeyFrameNum_ << " active keyframes in map\n";
     }
     
     void insertKeyFrame( const Frame::Ptr& frame );
@@ -45,50 +46,54 @@ public:
 
     void removeActiveMapPoint ( const unsigned long& id ) {
         unique_lock<mutex> lck(data_mutex_);
-        active_map_points_.erase(id);
+        activeMapPoints_.erase(id);
     }
 
-    void removeActiveMapPoints ( const list<unsigned long>& ids ) {
-        unique_lock<mutex> lck(data_mutex_);
-        for(auto& id : ids) {
-            active_map_points_.erase(id);
-        }
+    // cull the hardly seen and no visible points of current frame from active mappoints
+    void cullNonActiveMapPoints( const Frame::Ptr& currFrame );
+
+    void updateMappointEraseRatio() {
+        mapPointEraseRatio_ = (activeMapPoints_.size() > 1000 ) ? 
+                                    mapPointEraseRatio_ + 0.05 :
+                                    0.1;
     }
 
     KeyframeDict getAllKeyFrames() {
         unique_lock<mutex> lck(data_mutex_);
-        return keyframes_;
+        return keyFrames_;
     }
     MappointDict getAllMappoints() {
         unique_lock<mutex> lck(data_mutex_);
-        return map_points_;
+        return mapPoints;
     }
 
     MappointDict getActiveMappoints() {
         unique_lock<mutex> lck(data_mutex_);
-        return active_map_points_;
+        return activeMapPoints_;
     }
 
     KeyframeDict getActiveKeyFrames() {
         unique_lock<mutex> lck(data_mutex_);
-        return active_keyframes_;
+        return activeKeyFrames_;
     }
 
     void resetActiveMappoints() {
         unique_lock<mutex> lck(data_mutex_);
-        active_map_points_ = map_points_;
+        activeMapPoints_ = mapPoints;
     }
 
 private:
     mutex data_mutex_;
 
-    MappointDict  map_points_;        // all mappoints
-    KeyframeDict  keyframes_;         // all key-frames
+    MappointDict  mapPoints;        // all mappoints
+    KeyframeDict  keyFrames_;         // all key-frames
 
-    MappointDict  active_map_points_;        // active mappoints, used for feature matching in frontend
-    KeyframeDict  active_keyframes_;         // active keyframes
+    MappointDict  activeMapPoints_;        // active mappoints, used for feature matching in frontend
+    KeyframeDict  activeKeyFrames_;         // active keyframes
 
-    int active_keyframes_num_;
+    int maxActiveKeyFrameNum_;
+
+    float mapPointEraseRatio_;
 
     void removeOldKeyframe( const Frame::Ptr& curr_frame);
 

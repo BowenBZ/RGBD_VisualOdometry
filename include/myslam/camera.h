@@ -54,6 +54,9 @@ public:
     Vector3d pixel2world ( const Vector2d& p_p, const SE3& T_c_w, double depth=1 );
     Vector2d world2pixel ( const Vector3d& p_w, const SE3& T_c_w );
 
+    // overload functions
+    Vector3d pixel2world ( const cv::KeyPoint& p_p, const SE3& T_c_w, double depth=1 );
+    Vector3d pixel2camera( const cv::Point2f& p_p, double depth=1 ); 
 };
 
 }

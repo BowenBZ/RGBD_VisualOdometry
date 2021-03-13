@@ -66,7 +66,7 @@ public:
     unsigned long getID() { return id_; }
 
 private: 
-    static unsigned long factory_id_;
+    static unsigned long factoryId_;
     unsigned long               id_;         // id of this frame
 
     mutex pose_mutex_;

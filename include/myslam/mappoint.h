@@ -50,23 +50,6 @@ public:
         const Mat& descriptor=Mat()
     );
     
-    Vector3d getPosition() {
-        unique_lock<mutex> lock(pos_mutex_);
-        return pos_;
-    }
-
-    cv::Point3f getPositionCV() {
-        unique_lock<mutex> lock(pos_mutex_);
-        return cv::Point3f( pos_(0,0), pos_(1,0), pos_(2,0) );
-    }
-
-    void setPosition(const Vector3d& pos) {
-        unique_lock<mutex> lock(pos_mutex_);
-        pos_ = pos;
-    }
-
-    unsigned long getID() { return id_; }
-
     // factory function
     static MapPoint::Ptr createMapPoint();
     static MapPoint::Ptr createMapPoint( 
@@ -76,27 +59,39 @@ public:
         const Mat& descriptor,
         const Frame::Ptr& frame );
 
-    void addFrameObservation(const weak_ptr<Frame>& frame, const cv::Point2f& pixel_pos) {
-        unique_lock<mutex> lock(observation_mutex_);
-        observations_.push_back(make_pair(frame, pixel_pos));
+    Vector3d getPosition() {
+        unique_lock<mutex> lock(posMutex_);
+        return pos_;
     }
 
-    ObservationType getFrameObservations() {
-        unique_lock<mutex> lock(observation_mutex_);
-        return observations_;
+    void setPosition(const Vector3d& pos) {
+        unique_lock<mutex> lock(posMutex_);
+        pos_ = pos;
     }
 
-    void removeFrameObservation(const Frame::Ptr& frame);
+    unsigned long getID() { return id_; }
+
+    void addKeyFrameObservation(const weak_ptr<Frame>& frame, const cv::Point2f& pixel_pos) {
+        unique_lock<mutex> lock(observationMutex_);
+        observedKeyFrameMap_.push_back(make_pair(frame, pixel_pos));
+    }
+
+    ObservationType getKeyFrameObservationsMap() {
+        unique_lock<mutex> lock(observationMutex_);
+        return observedKeyFrameMap_;
+    }
+
+    void removeKeyFrameObservation(const Frame::Ptr& frame);
 
 private:
-    static unsigned long factory_id_;    // factory id
+    static unsigned long factoryId_;    // factory id
     unsigned long      id_; // ID
 
-    mutex pos_mutex_;
+    mutex posMutex_;
     Vector3d    pos_;       // Position in world
 
-    mutex observation_mutex_;
-    ObservationType observations_;
+    mutex observationMutex_;
+    ObservationType observedKeyFrameMap_;
 };
 
 } // namespace

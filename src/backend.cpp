@@ -1,21 +1,21 @@
 #include "myslam/backend.h"
 #include "myslam/g2o_types.h"
-#include "myslam/algorithm.h"
+#include "myslam/util.h"
 
 namespace myslam {
 
-void Backend::BackendLoop() {
-    while (backend_running_) {
-        unique_lock<mutex> lock(backend_mutex_);
-        map_update_.wait(lock);
+void Backend::backendLoop() {
+    while (backendRunning_) {
+        unique_lock<mutex> lock(backendMutex_);
+        mapUpdate_.wait(lock);
 
-        auto active_kfs = map_->getActiveKeyFrames();
-        auto active_mappoints = map_->getActiveMappoints();
-        Optimize(active_kfs, active_mappoints);
+        auto activeKeyFrames = map_->getActiveKeyFrames();
+        auto activeMapPoints = map_->getActiveMappoints();
+        optimize(activeKeyFrames, activeMapPoints);
     }
 }
 
-void Backend::Optimize(Map::KeyframeDict &keyframes,
+void Backend::optimize(Map::KeyframeDict &keyframes,
                        Map::MappointDict &mappoints) {
 
     typedef g2o::BlockSolver_6_3 BlockSolverType;
@@ -44,7 +44,7 @@ void Backend::Optimize(Map::KeyframeDict &keyframes,
         if(mp->outlier_)
             continue;
 
-        for(auto& obs : mappoint.second->getFrameObservations()) {
+        for(auto& obs : mappoint.second->getKeyFrameObservationsMap()) {
             // Check whether this observation is in current active keyframe
             auto frame = obs.first.lock();
             if (frame == nullptr || !keyframes.count(frame->getID()))
@@ -121,7 +121,7 @@ void Backend::Optimize(Map::KeyframeDict &keyframes,
     cnt_outlier = 0;
     for (auto &ef : edges_and_frames) {
         if (ef.first->chi2() > chi2_th) {
-            edges_and_mappoint[ef.first]->removeFrameObservation(ef.second);
+            edges_and_mappoint[ef.first]->removeKeyFrameObservation(ef.second);
             cnt_outlier++;
         }
     }

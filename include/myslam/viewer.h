@@ -8,6 +8,7 @@
 #include "myslam/common_include.h"
 #include "myslam/map.h"
 #include "myslam/frame.h"
+#include "myslam/util.h"
 #include <opencv2/features2d/features2d.hpp>
 
 namespace myslam {
@@ -23,23 +24,24 @@ public:
         viewer_thread_ = std::thread(std::bind(&Viewer::ThreadLoop, this));
     }
     
-    void SetMap(Map::Ptr map) { map_ = map; }
+    void setMap(Map::Ptr map) { map_ = map; }
 
     void Close() {
         viewer_running_ = false;
         viewer_thread_.join();
     }
 
-    void SetCurrentFrame(const Frame::Ptr& current_frame, const list<cv::Point2f>& keypoints) {
+    void setCurrentFrame(const Frame::Ptr& current_frame, 
+                         const unordered_set<cv::KeyPoint, KeyPointHash, KeyPointsComparision>& keypoints) {
         unique_lock<mutex> lck(viewer_data_mutex_);
         current_frame_ = current_frame;
-        keypoints_curr_ = keypoints;
+        keypointsCurr_ = keypoints;
     }
 
     /*
       Update the all_keyframes_ and all_mappoints_
     */
-    void UpdateMap();
+    void updateDrawingObjects();
 
 private:
     bool viewer_running_;
@@ -51,7 +53,7 @@ private:
     Map::MappointDict all_mappoints_;
     Map::MappointDict active_mappoints_;
     Frame::Ptr current_frame_;
-    list<cv::Point2f> keypoints_curr_;
+    unordered_set<cv::KeyPoint, KeyPointHash, KeyPointsComparision> keypointsCurr_;
 
     void ThreadLoop();
 

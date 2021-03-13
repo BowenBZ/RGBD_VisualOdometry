@@ -19,6 +19,7 @@
 
 #include "myslam/camera.h"
 #include "myslam/config.h"
+#include "myslam/util.h"
 
 namespace myslam
 {
@@ -59,6 +60,11 @@ Vector3d Camera::pixel2camera ( const Vector2d& p_p, double depth )
     );
 }
 
+Vector3d Camera::pixel2camera ( const cv::Point2f& p_p, double depth )
+{
+    return pixel2camera(toVec2d(p_p), depth);
+}
+
 Vector2d Camera::world2pixel ( const Vector3d& p_w, const SE3& T_c_w )
 {
     return camera2pixel ( world2camera ( p_w, T_c_w ) );
@@ -69,5 +75,9 @@ Vector3d Camera::pixel2world ( const Vector2d& p_p, const SE3& T_c_w, double dep
     return camera2world ( pixel2camera ( p_p, depth ), T_c_w );
 }
 
+Vector3d Camera::pixel2world ( const cv::KeyPoint& p_p, const SE3& T_c_w, double depth )
+{
+    return pixel2world(toVec2d(p_p), T_c_w, depth);
+}
 
 }

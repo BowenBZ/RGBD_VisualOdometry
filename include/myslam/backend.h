@@ -13,34 +13,34 @@ public:
     typedef std::shared_ptr<Backend> Ptr;
 
     Backend() {
-        backend_running_ = true;
-        backend_thread_ = std::thread(std::bind(&Backend::BackendLoop, this));
+        backendRunning_ = true;
+        backendThread_ = std::thread(std::bind(&Backend::backendLoop, this));
     }
 
     void Stop() {
-        backend_running_ = false;
-        map_update_.notify_one();
-        backend_thread_.join();
+        backendRunning_ = false;
+        mapUpdate_.notify_one();
+        backendThread_.join();
     }
 
-    void OptimizeMap() {
-        unique_lock<mutex> lock(backend_mutex_);
-        map_update_.notify_one();
+    void optimizeActivePosesAndActiveMapPoints() {
+        unique_lock<mutex> lock(backendMutex_);
+        mapUpdate_.notify_one();
     }
 
-    void SetMap(const Map::Ptr& map) { map_ = map; }
+    void setMap(const Map::Ptr& map) { map_ = map; }
 
-    void SetCamera(const Camera::Ptr& camera) { camera_ = camera; }
+    void setCamera(const Camera::Ptr& camera) { camera_ = camera; }
 
 private:
 
-    bool backend_running_;
-    thread backend_thread_;
-    mutex backend_mutex_;
-    condition_variable map_update_;
-    void BackendLoop();
+    bool backendRunning_;
+    thread backendThread_;
+    mutex backendMutex_;
+    condition_variable mapUpdate_;
+    void backendLoop();
 
-    void Optimize(Map::KeyframeDict& keyframes, Map::MappointDict& mappoints);
+    void optimize(Map::KeyframeDict& keyframes, Map::MappointDict& mappoints);
 
     Map::Ptr map_;
     Camera::Ptr camera_;

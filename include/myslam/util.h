@@ -1,8 +1,10 @@
-#ifndef MYSLAM_ALGORITHM_H
-#define MYSLAM_ALGORITHM_H
+#ifndef MYSLAM_UTIL_H
+#define MYSLAM_UTIL_H
 
 // algorithms used in myslam
 #include "myslam/common_include.h"
+#include "myslam/frame.h"
+#include "myslam/mappoint.h"
 
 namespace myslam {
 
@@ -14,7 +16,8 @@ namespace myslam {
  * @return true if success
  */
 inline bool triangulation(const std::vector<SE3> &poses,
-                   const std::vector<Vec3> points, Vec3 &pt_world) {
+                          const std::vector<Vec3> points, 
+                          Vec3 &pt_world) {
     MatXX A(2 * poses.size(), 4);
     VecX b(2 * poses.size());
     b.setZero();
@@ -27,12 +30,17 @@ inline bool triangulation(const std::vector<SE3> &poses,
     pt_world = (svd.matrixV().col(3) / svd.matrixV()(3, 3)).head<3>();
 
     if (svd.singularValues()[3] / svd.singularValues()[2] < 1e-2) {
-        // 解质量不好，放弃
         return true;
     }
     return false;
 }
 
+inline double getViewAngle ( const Frame::Ptr& frame, const MapPoint::Ptr& point )
+{
+    Vector3d n = point->getPosition() - frame->getCamCenter();
+    n.normalize();
+    return acos( n.transpose()*point->norm_ );
+}
 
 inline Vector2d toVec2d(const cv::Point2f& pt) {
     return Vector2d ( pt.x, pt.y );
@@ -42,7 +50,30 @@ inline Vector2d toVec2d(const cv::KeyPoint& kp) {
     return toVec2d( kp.pt );
 }
 
+inline Vector3d toVec3d(const cv::Point3f& pt) {
+    return Vector3d ( pt.x, pt.y, pt.z );
+}
+
+inline cv::Point3f toPoint3f(const Vector3d& pt) {
+    return cv::Point3f( pt(0,0), pt(1,0), pt(2,0) );
+}
+
+struct KeyPointHash   
+{  
+    size_t operator()(const cv::KeyPoint& kpt) const  
+    {  
+        return kpt.hash();  
+    }  
+};
+
+struct KeyPointsComparision  
+{  
+    bool operator()(const cv::KeyPoint& kpt1, const cv::KeyPoint& kpt2) const  
+    {  
+        return kpt1.hash() == kpt2.hash();  
+    }  
+};
 
 } // namespace
 
-#endif  // MYSLAM_ALGORITHM_H
+#endif  // MYSLAM_UTIL_H

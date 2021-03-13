@@ -1,4 +1,6 @@
-// -------------- test the visual odometry -------------
+/*
+ * Sample code to run the RGBD VO system
+ */
 #include <fstream>
 #include <iostream>
 #include <boost/timer.hpp>
@@ -21,7 +23,7 @@ int main ( int argc, char** argv )
     myslam::Config::setParameterFile ( argv[1] );
 
     string dataset_dir = myslam::Config::get<string> ( "dataset_dir" );
-    cout<<"dataset: "<<dataset_dir<<endl;
+    cout<<"Path of dataset: "<<dataset_dir<<endl;
     ifstream fin ( dataset_dir+"/associate.txt" );
     if ( !fin )
     {
@@ -44,25 +46,29 @@ int main ( int argc, char** argv )
             break;
     }
 
+    cout << "Initializing VO system ..." << endl;
+
     myslam::Camera::Ptr camera ( new myslam::Camera );
     myslam::FrontEnd::Ptr frontend ( new myslam::FrontEnd );
     myslam::Viewer::Ptr viewer (new myslam::Viewer );
     myslam::Map::Ptr map (new myslam::Map );
 
-    frontend->SetMap(map);
-    frontend->SetViewer(viewer);
-    viewer->SetMap(map);
+    frontend->setMap(map);
+    frontend->setViewer(viewer);
+    viewer->setMap(map);
 
     myslam::Backend::Ptr backend;
-    if (myslam::Config::get<int> ( "enable_local_backend" )) {
-        cout << "Enable local backend" << endl;
+    if (myslam::Config::get<int> ( "enable_local_optimization" )) {
+        cout << "Enable local optimization" << endl;
         backend = myslam::Backend::Ptr(new myslam::Backend);
-        backend->SetMap(map);
-        backend->SetCamera(camera);
-        frontend->SetBackend(backend); 
+        backend->setMap(map);
+        backend->setCamera(camera);
+        frontend->setBackend(backend); 
     }
 
-    cout<<"read total "<<rgb_files.size() <<" entries"<<endl;
+    cout << "Finish initialization!" << endl;
+
+    cout<<"Total "<<rgb_files.size() <<" images from dataset\n\n";
     for ( int i=0; i<rgb_files.size(); i++ )
     {
         Mat color = cv::imread ( rgb_files[i] );
@@ -75,15 +81,16 @@ int main ( int argc, char** argv )
         pFrame->depth_ = depth;
         pFrame->time_stamp_ = rgb_times[i];
 
+        cout << "Image #" << i << endl;
         boost::timer timer;
         frontend->addFrame ( pFrame );
-        cout<<"VO costs time: "<<timer.elapsed()<<endl<<endl;
+        cout<<"Time cost (s): "<<timer.elapsed()<<endl<<endl;
         
         if ( frontend->getState() == myslam::FrontEnd::LOST )
             break;        
     }
 
-    if (myslam::Config::get<int> ( "enable_local_backend" )) {
+    if (myslam::Config::get<int> ( "enable_local_optimization" )) {
         backend->Stop();
     }
 
