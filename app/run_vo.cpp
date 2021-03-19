@@ -6,11 +6,21 @@
 #include <boost/timer.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <Eigen/Core>
 #include "myslam/config.h"
 #include "myslam/frontend.h"
 #include "myslam/viewer.h"
 #include "myslam/map.h"
 #include "myslam/backend.h"
+#include "myslam/frame.h"
+
+void writePosetoFile(ofstream& outputFile, const string& timestamp, const SE3& pose) {
+    Vector3d translation = pose.translation();
+    Eigen::Quaterniond rotation = Eigen::Quaterniond(pose.rotationMatrix());
+    outputFile << timestamp << ' ' << translation[0] << ' ' << translation[1] << ' ' << translation[2] 
+                << ' ' << rotation.coeffs()[0] << ' ' << rotation.coeffs()[1] << ' ' 
+                << rotation.coeffs()[2] << ' ' << rotation.coeffs()[3] << endl;
+}
 
 int main ( int argc, char** argv )
 {
@@ -45,6 +55,7 @@ int main ( int argc, char** argv )
         if ( fin.good() == false )
             break;
     }
+    fin.close();
 
     cout << "Initializing VO system ..." << endl;
 
@@ -68,6 +79,10 @@ int main ( int argc, char** argv )
 
     cout << "Finish initialization!" << endl;
 
+    ofstream fout (myslam::Config::get<string> ( "output_file" ));
+    fout << "# estimated trajectory format" << endl;
+    fout << "# timestamp tx ty tz qx qy qz qw" << endl;
+
     cout<<"Total "<<rgb_files.size() <<" images from dataset\n\n";
     for ( int i=0; i<rgb_files.size(); i++ )
     {
@@ -85,10 +100,16 @@ int main ( int argc, char** argv )
         boost::timer timer;
         frontend->addFrame ( pFrame );
         cout<<"Time cost (s): "<<timer.elapsed()<<endl<<endl;
-        
-        if ( frontend->getState() == myslam::FrontEnd::LOST )
+
+        writePosetoFile(fout, std::to_string(rgb_times[i]), pFrame->getPose());
+
+        if ( frontend->getState() == myslam::FrontEnd::LOST ) {
+            cout << "VO lost" << endl;
             break;        
+        }
     }
+
+    fout.close();
 
     if (myslam::Config::get<int> ( "enable_local_optimization" )) {
         backend->Stop();

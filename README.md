@@ -55,9 +55,24 @@ docker -t myslam /path-to-this-repo/docker/
 
 ## Dataset
 
+### Preparation
+
 [TUM dataset](https://vision.in.tum.de/data/datasets/rgbd-dataset/download)
 
-To process the TUM dataset, use the `tools/associate.py` to generate the `associate.txt` file and place it into the dataset folder. This requires Python3 with Numpy package installed.
+To process the TUM dataset, use the `tools/associate.py` to generate the `associate.txt` file and place it into the dataset folder. This requires Python3 with Numpy module installed.
+
+### Evaluation
+
+The TUM dataset also provides the tools to evaluate the estimated trajectory. Those scripts are also placed in the `tools` folder. 
+
+The `run_vo` app will save the estiamted trajectory to a `.txt` file. Then you can use the scripts to compute ATE (accumulated trajectory error) or RPE (relative pose error) based on the output file and `groundtruth.txt` provided by dataset. 
+
+You can also generate the trajectory in plane or the drift error per second. This requires Python3 with matplotlib module installed. 
+
+<p float="left">
+  <img src="pngs/plot_ate.png" width="300"/>
+  <img src="pngs/plot_rpe.png" width="300"/>
+</p>
 
 ## Work Flow
 

@@ -1,1 +1,1 @@
-python3 associate.py PATH_TO_SEQUENCE/rgb.txt PATH_TO_SEQUENCE/depth.txt > associate.txt
+python3 associate.py PATH_TO_SEQUENCE/rgb.txt PATH_TO_SEQUENCE/depth.txt > PATH_TO_SEQUENCE/associate.txt
