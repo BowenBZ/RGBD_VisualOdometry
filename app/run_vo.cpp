@@ -79,10 +79,6 @@ int main ( int argc, char** argv )
 
     cout << "Finish initialization!" << endl;
 
-    ofstream fout (myslam::Config::get<string> ( "output_file" ));
-    fout << "# estimated trajectory format" << endl;
-    fout << "# timestamp tx ty tz qx qy qz qw" << endl;
-
     cout<<"Total "<<rgb_files.size() <<" images from dataset\n\n";
     for ( int i=0; i<rgb_files.size(); i++ )
     {
@@ -101,15 +97,11 @@ int main ( int argc, char** argv )
         frontend->addFrame ( pFrame );
         cout<<"Time cost (s): "<<timer.elapsed()<<endl<<endl;
 
-        writePosetoFile(fout, std::to_string(rgb_times[i]), pFrame->getPose());
-
         if ( frontend->getState() == myslam::FrontEnd::LOST ) {
             cout << "VO lost" << endl;
             break;        
         }
     }
-
-    fout.close();
 
     if (myslam::Config::get<int> ( "enable_local_optimization" )) {
         backend->Stop();
@@ -117,6 +109,15 @@ int main ( int argc, char** argv )
 
     cout << "Finished. \nPress <enter> to continue\n"; 
     cin.get();
+
+    ofstream fout (myslam::Config::get<string> ( "output_file" ));
+    fout << "# estimated trajectory format" << endl;
+    fout << "# timestamp tx ty tz qx qy qz qw" << endl;
+    for(auto keyFrameMap: map->getAllKeyFrames()) {
+        auto keyFrame = keyFrameMap.second;
+        writePosetoFile(fout, std::to_string(keyFrame->time_stamp_), keyFrame->getPose());
+    }
+    fout.close();
 
     viewer->Close();
 
