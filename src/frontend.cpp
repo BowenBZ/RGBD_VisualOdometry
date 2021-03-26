@@ -326,35 +326,42 @@ void FrontEnd::optimizeActiveMapPointsPosition() {
     for (auto& mappoint : map_->getActiveMappoints()) {
         auto mp = mappoint.second;
         // Check whether this mappoint have matches
-        if (mp->triangulated_ || !matchedMptKptMap_.count(mp)) {
+        if (!matchedMptKptMap_.count(mp)) {
             continue;
         }
 
-        auto lastKeyFrameObservationMap = mp->getKeyFrameObservationsMap().back();
-        auto lastKeyFrame = lastKeyFrameObservationMap.first.lock();
-
-        // the first observed frame may not be keyframe, so this weak_ptr may point to null
-        if(!lastKeyFrame) {
-            mp -> addKeyFrameObservation(frameCurr_, matchedMptKptMap_[mp].pt);
+        // If have already triangulalted, just added the new observation
+        if (mp->triangulated_) {
+            mp->addKeyFrameObservation(frameCurr_, matchedMptKptMap_[mp].pt);
             continue;
         }
 
-        cv::Point2f lastPt = lastKeyFrameObservationMap.second;
-        cv::Point2f currPt = matchedMptKptMap_[mp].pt;
-        vector<SE3> poses {lastKeyFrame->getPose(), frameCurr_->getPose()};
-        vector<Vec3> points {lastKeyFrame->camera_->pixel2camera(lastPt), 
-                             frameCurr_->camera_->pixel2camera(currPt)};
-        Vec3 pworld = Vec3::Zero();
+        // Try to triangulate the mappoint
+        for (auto& refKeyFrameMap : mp->getKeyFrameObservationsMap()) {
+            if (refKeyFrameMap.first.expired()) {
+                continue;
+            }
 
-        if (triangulation(poses, points, pworld) && pworld[2] > 0)
-        {
-            // if triangulate successfully
-            mp->setPosition(pworld);
-            mp->triangulated_ = true;
-            triangulate_cnt++;
+            auto refKeyFrame = refKeyFrameMap.first.lock();
+
+            auto refKeyPoint = refKeyFrameMap.second;
+            auto curKeyPoint = matchedMptKptMap_[mp].pt;
+
+            vector<SE3> poses {refKeyFrame->getPose(), frameCurr_->getPose()};
+            vector<Vec3> points {refKeyFrame->camera_->pixel2camera(refKeyPoint), 
+                                 frameCurr_->camera_->pixel2camera(curKeyPoint)};
+            Vec3 pworld = Vec3::Zero();
+            if (triangulation(poses, points, pworld) && pworld[2] > 0)
+            {
+                // if triangulate successfully
+                mp->setPosition(pworld);
+                mp->triangulated_ = true;
+                triangulate_cnt++;
+                break;
+            }
         }
 
-        mp->addKeyFrameObservation(frameCurr_, currPt);
+        mp->addKeyFrameObservation(frameCurr_, matchedMptKptMap_[mp].pt);
     }
     cout << "  Triangulate active mappoints size: " << triangulate_cnt << endl;
 
