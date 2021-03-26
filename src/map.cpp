@@ -3,7 +3,6 @@
  */
 
 #include "myslam/map.h"
-#include "myslam/util.h"
 
 namespace myslam
 {
@@ -81,7 +80,9 @@ void Map::cullNonActiveMapPoints( const Frame::Ptr& currFrame ) {
         }
 
         // not in good view
-        double angle = getViewAngle( currFrame, mp );
+        Vector3d direction = mp->getPosition() - currFrame->getCamCenter();
+        direction.normalize();
+        double angle = acos( direction.transpose() * mp->norm_ );
         if ( angle > M_PI/6. )
         {
             remove_id.push_back(mp_id);
@@ -94,5 +95,11 @@ void Map::cullNonActiveMapPoints( const Frame::Ptr& currFrame ) {
     }
 }
 
+inline double getViewAngle ( const Frame::Ptr& frame, const MapPoint::Ptr& point )
+{
+    Vector3d n = point->getPosition() - frame->getCamCenter();
+    n.normalize();
+    return acos( n.transpose()*point->norm_ );
+}
 
 } //namespace

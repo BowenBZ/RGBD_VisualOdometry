@@ -18,6 +18,7 @@
  */
 
 #include "myslam/frame.h"
+#include "myslam/mappoint.h"
 
 namespace myslam
 {
@@ -87,5 +88,49 @@ bool Frame::isInFrame ( const Vector3d& pt_world )
         && pixel(0,0)<color_.cols 
         && pixel(1,0)<color_.rows;
 }
+
+void Frame::updateConnectedKeyFrames() {
+    unique_lock<mutex> lck(connecedMutex_);
+
+    // Calcualte the co-visibliblity keyframes' weight
+    ConnectedKeyFrameMapType connectedKeyFrameCandidates;
+    for(auto& mapPoint : observedMapPoints_) {
+        if (mapPoint.expired()) {
+            continue;
+        }
+
+        for(auto& keyFrameMap : (mapPoint.lock())->getKeyFrameObservationsMap()) {
+
+            auto keyFrame = keyFrameMap.first;
+
+            if (!keyFrame.expired() && keyFrame.lock()->getID() != id_) {
+                connectedKeyFrameCandidates[keyFrame]++;
+            }
+        }
+    }
+       
+    // Filter the connections whose weight larger than 15
+    connectedKeyFramesCounter_.clear();
+    int maxCount = 0;
+    weak_ptr<Frame> maxCountKeyFrame;
+
+    for(auto& connectedKeyFrame : connectedKeyFrameCandidates) {
+        if(connectedKeyFrame.first.lock() && connectedKeyFrame.second >= 15) {
+            connectedKeyFramesCounter_[connectedKeyFrame.first] = connectedKeyFrame.second;
+            (connectedKeyFrame.first.lock())->addConnectedKeyFrame(Ptr(this), connectedKeyFrame.second);
+        }
+        if(connectedKeyFrame.second > maxCount) {
+            maxCountKeyFrame = connectedKeyFrame.first;
+            maxCount = connectedKeyFrame.second;
+        }
+    }
+
+    // In case there is no weight larger than 15
+    if(connectedKeyFramesCounter_.empty()) {
+        connectedKeyFramesCounter_[maxCountKeyFrame] = maxCount;
+        (maxCountKeyFrame.lock())->addConnectedKeyFrame(Ptr(this), maxCount);
+    }    
+}
+
 
 }
