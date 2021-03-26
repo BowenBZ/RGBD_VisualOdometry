@@ -21,11 +21,11 @@
 #define MAPPOINT_H
 
 #include "myslam/common_include.h"
-#include "myslam/frame.h"
 
 namespace myslam
 {
-    
+class Frame;
+
 class MapPoint
 {
 public:
@@ -57,7 +57,7 @@ public:
         const Vector3d& norm_,
         const cv::Point2f& pixel_pos,
         const Mat& descriptor,
-        const Frame::Ptr& frame );
+        const shared_ptr<Frame>& frame );
 
     Vector3d getPosition() {
         unique_lock<mutex> lock(posMutex_);
@@ -81,7 +81,7 @@ public:
         return observedKeyFrameMap_;
     }
 
-    void removeKeyFrameObservation(const Frame::Ptr& frame);
+    void removeKeyFrameObservation(const shared_ptr<Frame>& frame);
 
 private:
     static unsigned long factoryId_;    // factory id

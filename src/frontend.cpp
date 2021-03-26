@@ -115,6 +115,7 @@ void FrontEnd::matchKeyPointsWithActiveMapPoints()
         map_->resetActiveMappoints();
         cout << " Not enough active mappoints, reset activie mappoints to all mappoints" << endl;
     }
+    // auto activeMpts = map_->getAllMappoints();
 
     // Select the good mappoints candidates
     vector<MapPoint::Ptr> mptCandidates;

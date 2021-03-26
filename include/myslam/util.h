@@ -3,8 +3,6 @@
 
 // algorithms used in myslam
 #include "myslam/common_include.h"
-#include "myslam/frame.h"
-#include "myslam/mappoint.h"
 
 namespace myslam {
 
@@ -15,8 +13,8 @@ namespace myslam {
  * @param pt_world  triangulated point in the world
  * @return true if success
  */
-inline bool triangulation(const std::vector<SE3> &poses,
-                          const std::vector<Vec3> points, 
+inline bool triangulation(const vector<SE3> &poses,
+                          const vector<Vec3> points, 
                           Vec3 &pt_world) {
     MatXX A(2 * poses.size(), 4);
     VecX b(2 * poses.size());
@@ -33,13 +31,6 @@ inline bool triangulation(const std::vector<SE3> &poses,
         return true;
     }
     return false;
-}
-
-inline double getViewAngle ( const Frame::Ptr& frame, const MapPoint::Ptr& point )
-{
-    Vector3d n = point->getPosition() - frame->getCamCenter();
-    n.normalize();
-    return acos( n.transpose()*point->norm_ );
 }
 
 inline Vector2d toVec2d(const cv::Point2f& pt) {
@@ -73,6 +64,34 @@ struct KeyPointsComparision
         return kpt1.hash() == kpt2.hash();  
     }  
 };
+
+typedef unordered_set<cv::KeyPoint, KeyPointHash, KeyPointsComparision> KeyPointSet;
+
+
+template<class T>
+struct WeakPtrHash
+{  
+    size_t operator()(const weak_ptr<T>& ptr) const  
+    {  
+        return (ptr.expired()) ? 0: hash<shared_ptr<T>>()(ptr.lock());
+    }  
+};
+
+template<class T>
+struct WeakPtrComparision
+{  
+    bool operator()(const weak_ptr<T>& ptr1, const weak_ptr<T>& ptr2) const  
+    {  
+        if (!ptr1.expired() && !ptr2.expired()) {
+            return hash<shared_ptr<T>>()(ptr1.lock()) == hash<shared_ptr<T>>()(ptr2.lock());
+        } else if (ptr1.expired() && ptr2.expired()) {
+            return true;
+        } else {
+            return false;
+        }
+    }  
+};
+
 
 } // namespace
 

@@ -49,7 +49,7 @@ MapPoint::Ptr MapPoint::createMapPoint (
     const Vector3d& norm,
     const cv::Point2f& pixel_pos, 
     const Mat& descriptor, 
-    const Frame::Ptr& frame )
+    const shared_ptr<Frame>& frame )
 {
     return MapPoint::Ptr( 
         new MapPoint( factoryId_++, pos_world, norm, pixel_pos, frame, descriptor )
@@ -59,7 +59,7 @@ MapPoint::Ptr MapPoint::createMapPoint (
 unsigned long MapPoint::factoryId_ = 0;
 
 
-void MapPoint::removeKeyFrameObservation(const Frame::Ptr& frame) {
+void MapPoint::removeKeyFrameObservation(const shared_ptr<Frame>& frame) {
     unique_lock<mutex> lck(observationMutex_);
     for (auto iter = observedKeyFrameMap_.begin(); iter != observedKeyFrameMap_.end(); iter++) {
         if (iter->first.lock() == frame) {

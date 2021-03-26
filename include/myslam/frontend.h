@@ -41,7 +41,7 @@ public:
     
 private:  
     Map::Ptr    map_;       // map with all frames and map points
-    Frame::Ptr  frameRef_;       // reference frame 
+    Frame::Ptr  frameRef_;       // reference key frame
     Frame::Ptr  frameCurr_;      // current frame 
     VOState     state_;     // current VO status
     cv::Ptr<cv::ORB> orb_;  // orb detector and computer 
@@ -49,7 +49,7 @@ private:
     Mat                     descriptorsCurr_;  // descriptor in current frame 
     cv::FlannBasedMatcher   flannMatcher_;     // flann matcher
     unordered_map<MapPoint::Ptr, cv::KeyPoint>  matchedMptKptMap_;   // matched map points and keypoints
-    unordered_set<cv::KeyPoint, KeyPointHash, KeyPointsComparision>  matchedKptSet_; // set of matched keypoint
+    KeyPointSet  matchedKptSet_; // set of matched keypoint
    
     SE3 estimatedPoseCurr_;    // the estimated pose of current frame 
  

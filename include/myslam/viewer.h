@@ -32,7 +32,7 @@ public:
     }
 
     void setCurrentFrame(const Frame::Ptr& current_frame, 
-                         const unordered_set<cv::KeyPoint, KeyPointHash, KeyPointsComparision>& keypoints) {
+                         const KeyPointSet& keypoints) {
         unique_lock<mutex> lck(viewer_data_mutex_);
         current_frame_ = current_frame;
         keypointsCurr_ = keypoints;
@@ -53,7 +53,7 @@ private:
     Map::MappointDict all_mappoints_;
     Map::MappointDict active_mappoints_;
     Frame::Ptr current_frame_;
-    unordered_set<cv::KeyPoint, KeyPointHash, KeyPointsComparision> keypointsCurr_;
+    KeyPointSet keypointsCurr_;
 
     void ThreadLoop();
 

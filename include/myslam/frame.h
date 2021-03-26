@@ -22,17 +22,20 @@
 
 #include "myslam/common_include.h"
 #include "myslam/camera.h"
+#include "myslam/util.h"
 
 namespace myslam 
 {
     
 // forward declare 
 class MapPoint;
+
 class Frame
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    typedef std::shared_ptr<Frame> Ptr;
+    typedef shared_ptr<Frame> Ptr;
+    typedef unordered_map<weak_ptr<Frame>, int, WeakPtrHash<Frame>, WeakPtrComparision<Frame>> ConnectedKeyFrameMapType;
     double                         time_stamp_; // when it is recorded
     Camera::Ptr                    camera_;     // Pinhole RGBD Camera model 
     Mat                            color_, depth_; // color and depth image 
@@ -54,24 +57,43 @@ public:
     bool isInFrame( const Vector3d& pt_world );
 
     SE3 getPose() {
-        unique_lock<mutex> lck(pose_mutex_);
+        unique_lock<mutex> lck(poseMutex_);
         return T_c_w_;
     }
 
     SE3 setPose(const SE3& pose) {
-        unique_lock<mutex> lck(pose_mutex_);
+        unique_lock<mutex> lck(poseMutex_);
         T_c_w_ = pose;
     }
 
     unsigned long getID() { return id_; }
 
+    // Update the co-visible key-frames when this frame is a key-frame 
+    void updateConnectedKeyFrames();
+
+    // Add the connection of another frame with weight to current frame
+    void addConnectedKeyFrame(const weak_ptr<Frame>& frame, const int& weight) {
+        unique_lock<mutex> lck(connecedMutex_);
+        connectedKeyFramesCounter_[frame] = weight;
+    }
+
+    ConnectedKeyFrameMapType getConnectedKeyFrames() {
+        unique_lock<mutex> lck(connecedMutex_);
+        return connectedKeyFramesCounter_;
+    }
+
 private: 
     static unsigned long factoryId_;
     unsigned long               id_;         // id of this frame
 
-    mutex pose_mutex_;
+    mutex poseMutex_;
     SE3                         T_c_w_;      // transform from world to camera
 
+    mutex connecedMutex_;
+    // Connected keyframes (has same observed mappoints >= 15) and the number of mappoints
+    ConnectedKeyFrameMapType connectedKeyFramesCounter_;
+
+    list<weak_ptr<MapPoint>> observedMapPoints_;
 };
 
 }
