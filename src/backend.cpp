@@ -9,138 +9,180 @@ void Backend::backendLoop() {
         unique_lock<mutex> lock(backendMutex_);
         mapUpdate_.wait(lock);
 
-        auto activeKeyFrames = map_->getActiveKeyFrames();
-        auto activeMapPoints = map_->getActiveMappoints();
-        optimize(activeKeyFrames, activeMapPoints);
+        optimize();
     }
 }
 
-void Backend::optimize(Map::KeyframeDict &keyframes,
-                       Map::MappointDict &mappoints) {
+void Backend::optimize() {
 
     typedef g2o::BlockSolver_6_3 BlockSolverType;
     typedef g2o::LinearSolverCSparse<BlockSolverType::PoseMatrixType> LinearSolverType;
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
-        g2o::make_unique<BlockSolverType>(
-            g2o::make_unique<LinearSolverType>()));
+        g2o::make_unique<BlockSolverType>(g2o::make_unique<LinearSolverType>()));
+
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(solver);
 
-    // Record pose vertices
-    std::unordered_map<unsigned long, VertexPose *> verticesPoseMap;
-    // Record mappoint vertices
-    std::unordered_map<unsigned long, VertexMappoint *> verticesMappointMap;
+    // <Id, Frame::Ptr>
+    unordered_map<uint64_t, Frame::Ptr> keyFrameMap;
+    unordered_map<uint64_t, MapPoint::Ptr> mapPointMap;
+    unordered_map<uint64_t, Frame::Ptr> fixedKeyFrameMap;
+    
+    // Optmized pose vertices
+    unordered_map<uint64_t, VertexPose*> verticesPoseMap;
+    // Mappoint vertices
+    unordered_map<uint64_t, VertexMappoint*> verticesMappointMap;
+    // Fixed pose vertices
+    unordered_map<uint64_t, VertexPose*> fixedPoseVerticesMap;
+
     // Record edges
-    std::unordered_map<BinaryEdgeProjection *, Frame::Ptr> edges_and_frames;
-    std::unordered_map<BinaryEdgeProjection *, MapPoint::Ptr> edges_and_mappoint;
-    int vertex_index = 1;
-    int edge_index = 1;
-    double chi2_th = 5.991;
+    unordered_map<BinaryEdgeProjection*, Frame::Ptr> edges_and_frames;
+    unordered_map<BinaryEdgeProjection*, MapPoint::Ptr> edges_and_mappoint;
 
-    for (auto &mappoint : mappoints) {
-        unsigned long mappoint_id = mappoint.first;
-        auto mp = mappoint.second;
+    int vertexIndex = 1;
+    int edgeIndex = 1;
 
-        if(mp->outlier_)
-            continue;
+    auto connectedKeyFrames = keyFrameCurr_->getConnectedKeyFrames();
 
-        for(auto& obs : mappoint.second->getKeyFrameObservationsMap()) {
-            // Check whether this observation is in current active keyframe
-            auto frame = obs.first.lock();
-            if (frame == nullptr || !keyframes.count(frame->getID()))
+    // Add curr KeyFrame to the KeyFrame map
+    connectedKeyFrames[keyFrameCurr_] = 0;
+
+    // Find all keyFrames connected with current keyFrame
+    for(auto& connectedKeyFrame: connectedKeyFrames) {
+        auto keyFrame = connectedKeyFrame.first;
+
+        // Create camera pose vertex
+        VertexPose *vertexPose = new VertexPose;
+        vertexPose->setId(vertexIndex++);
+        vertexPose->setEstimate(keyFrame->getPose());
+        vertexPose->setFixed(keyFrame->getID() == 0);
+        optimizer.addVertex(vertexPose);
+
+        // Record in map
+        keyFrameMap[keyFrame->getID()] = keyFrame;
+        verticesPoseMap[keyFrame->getID()] = vertexPose;
+    }
+
+    // Find all mapppoints observed by keyFrameMap
+    for (auto& pair : connectedKeyFrames) {
+        auto keyFrame = pair.first;
+
+        for(auto& mapPointPtr: keyFrame -> getObservedMapPoints()) {
+            if ( mapPointPtr.expired() ) {
                 continue;
-
-            // Add the frame vertex if haven't
-            if (!verticesPoseMap.count(frame->getID())) {
-                VertexPose *vertex_pose = new VertexPose;  // camera vertex_pose
-                vertex_pose->setId(vertex_index++);
-                vertex_pose->setEstimate(frame->getPose());
-                optimizer.addVertex(vertex_pose);
-
-                // Record in map
-                verticesPoseMap[frame->getID()] = vertex_pose;
             }
-           
-            // Add mappoint vertex if haven't
-            if (!verticesMappointMap.count(mappoint_id)) {
-                VertexMappoint *vertex_mappoint = new VertexMappoint;
-                vertex_mappoint->setEstimate(mp->getPosition());
-                vertex_mappoint->setId(vertex_index++);
-                vertex_mappoint->setMarginalized(true);
-                optimizer.addVertex(vertex_mappoint);
+            auto mapPoint = mapPointPtr.lock();
+            if(mapPoint->outlier_) {
+                continue;
+            }
+
+            // Create mapPoint vertex
+            VertexMappoint *vertexMapPoint = new VertexMappoint;
+            vertexMapPoint->setEstimate(mapPoint->getPosition());
+            vertexMapPoint->setId(vertexIndex++);
+            vertexMapPoint->setMarginalized(true);
+            optimizer.addVertex(vertexMapPoint);
+            
+            // Record in map
+            mapPointMap[mapPoint -> getID()] = mapPoint;
+            verticesMappointMap[mapPoint->getID()] = vertexMapPoint;
+        }
+    }
+
+    const double deltaRGBD = sqrt(7.815);    
+    // Add all edges 
+    for (auto& pair : mapPointMap) {
+        auto mapPoint = pair.second;
+
+        for(auto& observation: mapPoint->getKeyFrameObservationsMap()) {
+            auto keyFramePtr = observation.first;
+            auto observedPixelPos = observation.second;
+
+            if ( keyFramePtr.expired() ) {
+                continue;
+            }
+            auto keyFrame = keyFramePtr.lock();
+            
+            // TODO: check is keyframe is outlier
+
+            VertexPose* edgePoseVertex;
+            // If is connected keyFrame
+            if ( keyFrameMap.count(keyFrame -> getID()) ) {
+                edgePoseVertex = verticesPoseMap[keyFrame->getID()];
+            } else { // else is fixed keyFrame
+                fixedKeyFrameMap[keyFrame -> getID()] = keyFrame;
+
+                // Create fixed pose vertex
+                VertexPose* vertexPose = new VertexPose;
+                vertexPose->setId(vertexIndex++);
+                vertexPose->setEstimate(keyFrame->getPose());
+                vertexPose->setFixed(true);
+                optimizer.addVertex(vertexPose);
 
                 // Record in map
-                verticesMappointMap[mappoint_id] = vertex_mappoint;
+                fixedPoseVerticesMap[keyFrame->getID()] = vertexPose;
+
+                edgePoseVertex = vertexPose;
             }
 
             // Add edge
             BinaryEdgeProjection* edge = new BinaryEdgeProjection(camera_);
-            // Set two connecting vertex
-            edge->setVertex(0, verticesPoseMap[frame->getID()]);    // pose vertex
-            edge->setVertex(1, verticesMappointMap[mappoint_id]);        // mappoint vertex
 
-            edge->setId(edge_index++);
-            edge->setMeasurement(toVec2d(obs.second));
+            edge->setVertex(0, edgePoseVertex);
+            edge->setVertex(1, verticesMappointMap[mapPoint->getID()]);
+            edge->setId(edgeIndex++);
+            edge->setMeasurement(toVec2d(observedPixelPos));
             edge->setInformation(Eigen::Matrix<double, 2, 2>::Identity());
             auto rk = new g2o::RobustKernelHuber();
-            rk->setDelta(chi2_th);
+            rk->setDelta(deltaRGBD);
             edge->setRobustKernel(rk);
             optimizer.addEdge(edge);
             
-            edges_and_frames[edge] = frame;
-            edges_and_mappoint[edge] = mp;
+            edges_and_frames[edge] = keyFrame;
+            edges_and_mappoint[edge] = mapPoint;
         }
     }
 
-    // do optimization and eliminate the outliers
+    // Do first round optimization
+    optimizer.initializeOptimization();
+    optimizer.optimize(5);
+
+    const float chi2_th = 7.815;
+    // Remove outlier and do second round optimization
+    int outlierCnt = 0;
+    for (auto &ef : edges_and_frames) {
+        auto edge = ef.first;
+        edge->computeError();
+        if (edge->chi2() > chi2_th) {
+            edges_and_mappoint[edge]->removeKeyFrameObservation(ef.second);
+            edge->setLevel(1);
+            outlierCnt++;
+        } 
+        edge->setRobustKernel(0);
+    }
+
     optimizer.initializeOptimization();
     optimizer.optimize(10);
 
-    // remove outlier observations from mappoint
-    int cnt_outlier = 0, cnt_inlier = 0;
-    int iteration = 0;
-    while (iteration < 5) {
-        cnt_outlier = 0;
-        cnt_inlier = 0;
-        // determine if we want to adjust the outlier threshold
-        for (auto &ef : edges_and_frames) {
-            if (ef.first->chi2() > chi2_th) {
-                cnt_outlier++;
-            } else {
-                cnt_inlier++;
-            }
-        }
-        double inlier_ratio = cnt_inlier / double(cnt_inlier + cnt_outlier);
-        if (inlier_ratio > 0.5) {
-            break;
-        } else {
-            chi2_th *= 2;
-            iteration++;
-        }
-    }
-    cnt_outlier = 0;
-    for (auto &ef : edges_and_frames) {
-        if (ef.first->chi2() > chi2_th) {
-            edges_and_mappoint[ef.first]->removeKeyFrameObservation(ef.second);
-            cnt_outlier++;
-        }
-    }
-
     cout << "\nBackend:" << endl;
-    cout << "  pose number: " << verticesPoseMap.size() << endl;
+    cout << "  optimized pose number: " << verticesPoseMap.size() << endl;
+    cout << "  fixed pose number: " << fixedPoseVerticesMap.size() << endl;
     cout << "  mappoint/edge number: " << verticesMappointMap.size() << endl;
-    cout << "  outlier observations: " << cnt_outlier << endl;
+    cout << "  outlier observations: " << outlierCnt << endl;
     cout << endl;
 
     // Set pose and mappoint position
-    for (auto &v : verticesPoseMap) {
-        keyframes[v.first]->setPose(v.second->estimate());
+    for (auto& v : verticesPoseMap) {
+        keyFrameMap[v.first]->setPose(v.second->estimate());
     }
-    for (auto &v : verticesMappointMap) {
-        mappoints[v.first]->setPosition(v.second->estimate());
+    for (auto& v : verticesMappointMap) {
+        if (!mapPointMap[v.first]->outlier_) {
+            mapPointMap[v.first]->setPosition(v.second->estimate());
+        }
     }
-
 }
+
+
 
 
 } // namespace 

@@ -46,7 +46,6 @@ public:
         const Vector3d& position, 
         const Vector3d& norm, 
         const cv::Point2f& pixel_pos,
-        const weak_ptr<Frame>& frame=weak_ptr<Frame>(), 
         const Mat& descriptor=Mat()
     );
     
@@ -56,8 +55,7 @@ public:
         const Vector3d& posWorld, 
         const Vector3d& norm,
         const cv::Point2f& pixel_pos,
-        const Mat& descriptor,
-        const shared_ptr<Frame>& frame );
+        const Mat& descriptor);
 
     Vector3d getPosition() {
         unique_lock<mutex> lock(posMutex_);

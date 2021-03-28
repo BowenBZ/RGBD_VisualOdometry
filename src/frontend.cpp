@@ -312,9 +312,10 @@ namespace myslam
         MapPoint::Ptr mpt = MapPoint::createMapPoint(
             mptPos, direction,
             cv::Point2f(keypointsCurr_[idx].pt),
-            descriptorsCurr_.row(idx).clone(),
-            frameCurr_);
+            descriptorsCurr_.row(idx).clone());
         map_->insertMapPoint(mpt);
+        // set this mappoint as the observed mappoints of current frame
+        frameCurr_->addObservedMapPoint(mpt);
     }
 
     void FrontEnd::updateActiveMapPointsMap()
