@@ -37,8 +37,8 @@ public:
     Vector3d    norm_;                  // Normal of viewing direction 
 
     Mat         descriptor_;            // Descriptor for matching 
-    int         visible_times_;         // times should in the view of current frame, but maybe cannot be matched 
-    int         matched_times_;         // being an inliner in pose estimation
+    int         visibleTimes_;         // times should in the view of current frame, but maybe cannot be matched 
+    int         matchedTimes_;         // times of being an inliner in frontend P3P result
     
     MapPoint();
     MapPoint( 
@@ -53,8 +53,8 @@ public:
     // factory function
     static MapPoint::Ptr createMapPoint();
     static MapPoint::Ptr createMapPoint( 
-        const Vector3d& pos_world, 
-        const Vector3d& norm_,
+        const Vector3d& posWorld, 
+        const Vector3d& norm,
         const cv::Point2f& pixel_pos,
         const Mat& descriptor,
         const shared_ptr<Frame>& frame );

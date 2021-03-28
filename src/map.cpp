@@ -72,7 +72,7 @@ void Map::cullNonActiveMapPoints( const Frame::Ptr& currFrame ) {
         }
 
         // not often matches
-        float match_ratio = float(mp->matched_times_) / mp->visible_times_;
+        float match_ratio = float(mp->matchedTimes_) / mp->visibleTimes_;
         if ( match_ratio < mapPointEraseRatio_ )
         {
             remove_id.push_back(mp_id);

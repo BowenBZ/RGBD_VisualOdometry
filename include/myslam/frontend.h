@@ -54,14 +54,14 @@ private:
     SE3 estimatedPoseCurr_;    // the estimated pose of current frame 
  
     int num_inliers_;        // number of inlier features in pnp
-    int num_lost_;           // number of lost times
+    int accuLostFrameNums_;           // number of lost times
     
     // parameters, see config/default.yaml
-    float match_ratio_;      // ratio for selecting good matches
-    int max_num_lost_;      // max number of continuous lost times
+    float minDisRatio_;      // ratio for selecting good matches
+    int maxLostFrames_;      // max number of continuous lost times
     int min_inliers_;       // minimum inliers
-    double key_frame_min_rot;   // minimal rotation of two key-frames
-    double key_frame_min_trans; // minimal translation of two key-frames
+    double keyFrameMinRot_;   // minimal rotation of two key-frames
+    double keyFrameMinTrans_; // minimal translation of two key-frames
     
     // inner operation 
     void extractKeyPointsAndComputeDescriptors();
@@ -73,9 +73,12 @@ private:
     // remove non-active mappoints from active map, add more mappoints if the the map is small
     void updateActiveMapPointsMap();
     // use backend or triangulatiton to optmize the position of mappoints (and pose of frames when use backend)
-    void optimizeActiveMapPointsPosition();
-    
-    void addNewMapPoints();
+    void triangulateActiveMapPoints();
+    // add new mappoint to the map if the actvie mappoint is not enought
+    void addNewMapPoints();     
+    // really perform the adding action
+    void addNewMapPoint(const int& idx);      
+
     bool isGoodEstimation(); 
     bool isKeyFrame();
 

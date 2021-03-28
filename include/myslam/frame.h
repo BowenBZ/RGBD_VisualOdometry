@@ -82,6 +82,16 @@ public:
         return connectedKeyFramesCounter_;
     }
 
+    void addObservedMapPoint(const weak_ptr<MapPoint>& mpt) {
+        unique_lock<mutex> lck(connecedMutex_);
+        observedMapPoints_.push_back(mpt);
+    }
+
+    list<weak_ptr<MapPoint>> getObservedMapPoints() {
+        unique_lock<mutex> lck(connecedMutex_);
+        return observedMapPoints_;
+    }
+
 private: 
     static unsigned long factoryId_;
     unsigned long               id_;         // id of this frame

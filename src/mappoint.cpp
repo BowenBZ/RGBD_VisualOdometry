@@ -24,7 +24,7 @@ namespace myslam
 {
 
 MapPoint::MapPoint()
-: id_(-1), pos_(Vector3d(0,0,0)), norm_(Vector3d(0,0,0)), triangulated_(false), visible_times_(0), matched_times_(0)
+: id_(-1), pos_(Vector3d(0,0,0)), norm_(Vector3d(0,0,0)), triangulated_(false), visibleTimes_(0), matchedTimes_(0)
 {
 
 }
@@ -32,7 +32,7 @@ MapPoint::MapPoint()
 
 MapPoint::MapPoint ( long unsigned int id, const Vector3d& position, const Vector3d& norm, 
                      const cv::Point2f& pixel_pos, const weak_ptr<Frame>& frame, const Mat& descriptor )
-: id_(id), pos_(position), norm_(norm), triangulated_(false), visible_times_(1), matched_times_(1), descriptor_(descriptor), outlier_(false)
+: id_(id), pos_(position), norm_(norm), triangulated_(false), visibleTimes_(1), matchedTimes_(1), descriptor_(descriptor), outlier_(false)
 {
     addKeyFrameObservation(frame, pixel_pos);
 }
@@ -45,14 +45,14 @@ MapPoint::Ptr MapPoint::createMapPoint()
 }
 
 MapPoint::Ptr MapPoint::createMapPoint ( 
-    const Vector3d& pos_world, 
+    const Vector3d& posWorld, 
     const Vector3d& norm,
     const cv::Point2f& pixel_pos, 
     const Mat& descriptor, 
     const shared_ptr<Frame>& frame )
 {
     return MapPoint::Ptr( 
-        new MapPoint( factoryId_++, pos_world, norm, pixel_pos, frame, descriptor )
+        new MapPoint( factoryId_++, posWorld, norm, pixel_pos, frame, descriptor )
     );
 }
 
