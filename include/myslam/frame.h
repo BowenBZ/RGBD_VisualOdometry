@@ -35,7 +35,7 @@ class Frame
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     typedef shared_ptr<Frame> Ptr;
-    typedef unordered_map<weak_ptr<Frame>, int, WeakPtrHash<Frame>, WeakPtrComparision<Frame>> ConnectedKeyFrameMapType;
+    typedef unordered_map<Frame::Ptr, int> ConnectedKeyFrameMapType;
     double                         time_stamp_; // when it is recorded
     Camera::Ptr                    camera_;     // Pinhole RGBD Camera model 
     Mat                            color_, depth_; // color and depth image 
@@ -72,7 +72,7 @@ public:
     void updateConnectedKeyFrames();
 
     // Add the connection of another frame with weight to current frame
-    void addConnectedKeyFrame(const weak_ptr<Frame>& frame, const int& weight) {
+    void addConnectedKeyFrame(const Frame::Ptr& frame, const int& weight) {
         unique_lock<mutex> lck(connecedMutex_);
         connectedKeyFramesCounter_[frame] = weight;
     }

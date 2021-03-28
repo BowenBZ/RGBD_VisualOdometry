@@ -4,6 +4,7 @@
 #include "myslam/common_include.h"
 #include "myslam/map.h"
 #include "myslam/camera.h"
+#include "myslam/frame.h"
 
 namespace myslam {
 
@@ -23,8 +24,9 @@ public:
         backendThread_.join();
     }
 
-    void optimizeActivePosesAndActiveMapPoints() {
+    void optimizeCovisibilityGraph(const Frame::Ptr& keyFrameCurr) {
         unique_lock<mutex> lock(backendMutex_);
+        keyFrameCurr_ = keyFrameCurr;
         mapUpdate_.notify_one();
     }
 
@@ -40,10 +42,11 @@ private:
     condition_variable mapUpdate_;
     void backendLoop();
 
-    void optimize(Map::KeyframeDict& keyframes, Map::MappointDict& mappoints);
+    void optimize();
 
     Map::Ptr map_;
     Camera::Ptr camera_;
+    Frame::Ptr keyFrameCurr_;
 
 }; // class Backend
 

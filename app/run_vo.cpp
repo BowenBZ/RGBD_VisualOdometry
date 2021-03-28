@@ -103,10 +103,6 @@ int main ( int argc, char** argv )
         }
     }
 
-    if (myslam::Config::get<int> ( "enable_local_optimization" )) {
-        backend->Stop();
-    }
-
     cout << "Finished. \nPress <enter> to continue\n"; 
     cin.get();
 
@@ -118,6 +114,10 @@ int main ( int argc, char** argv )
         writePosetoFile(fout, std::to_string(keyFrame->time_stamp_), keyFrame->getPose());
     }
     fout.close();
+
+    if (myslam::Config::get<int> ( "enable_local_optimization" )) {
+        backend->Stop();
+    }
 
     viewer->Close();
 

@@ -105,7 +105,7 @@ void Frame::updateConnectedKeyFrames() {
             auto keyFrame = keyFrameMap.first;
 
             if (!keyFrame.expired() && keyFrame.lock()->getID() != id_) {
-                connectedKeyFrameCandidates[keyFrame]++;
+                connectedKeyFrameCandidates[keyFrame.lock()]++;
             }
         }
     }
@@ -113,23 +113,26 @@ void Frame::updateConnectedKeyFrames() {
     // Filter the connections whose weight larger than 15
     connectedKeyFramesCounter_.clear();
     int maxCount = 0;
-    weak_ptr<Frame> maxCountKeyFrame;
+    Frame::Ptr maxCountKeyFrame;
 
-    for(auto& connectedKeyFrame : connectedKeyFrameCandidates) {
-        if(connectedKeyFrame.first.lock() && connectedKeyFrame.second >= 15) {
-            connectedKeyFramesCounter_[connectedKeyFrame.first] = connectedKeyFrame.second;
-            (connectedKeyFrame.first.lock())->addConnectedKeyFrame(Ptr(this), connectedKeyFrame.second);
+    for(auto& connectedKeyFrameMap : connectedKeyFrameCandidates) {
+        auto connectedKeyFrame = connectedKeyFrameMap.first;
+        auto connectedMapPointsNum = connectedKeyFrameMap.second;
+        if(connectedMapPointsNum >= 15) {
+            connectedKeyFramesCounter_[connectedKeyFrame] = connectedMapPointsNum;
+            connectedKeyFrame->addConnectedKeyFrame(Ptr(this), connectedMapPointsNum);
         }
-        if(connectedKeyFrame.second > maxCount) {
-            maxCountKeyFrame = connectedKeyFrame.first;
-            maxCount = connectedKeyFrame.second;
+
+        if(connectedMapPointsNum> maxCount) {
+            maxCountKeyFrame = connectedKeyFrame;
+            maxCount = connectedMapPointsNum;
         }
     }
 
     // In case there is no weight larger than 15
-    if(connectedKeyFramesCounter_.empty()) {
+    if(connectedKeyFramesCounter_.empty() && maxCount != 0 ) {
         connectedKeyFramesCounter_[maxCountKeyFrame] = maxCount;
-        (maxCountKeyFrame.lock())->addConnectedKeyFrame(Ptr(this), maxCount);
+        maxCountKeyFrame->addConnectedKeyFrame(Ptr(this), maxCount);
     }    
 }
 

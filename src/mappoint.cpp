@@ -31,10 +31,10 @@ MapPoint::MapPoint()
 
 
 MapPoint::MapPoint ( long unsigned int id, const Vector3d& position, const Vector3d& norm, 
-                     const cv::Point2f& pixel_pos, const weak_ptr<Frame>& frame, const Mat& descriptor )
+                     const cv::Point2f& pixel_pos, const Mat& descriptor )
 : id_(id), pos_(position), norm_(norm), triangulated_(false), visibleTimes_(1), matchedTimes_(1), descriptor_(descriptor), outlier_(false)
 {
-    addKeyFrameObservation(frame, pixel_pos);
+
 }
 
 MapPoint::Ptr MapPoint::createMapPoint()
@@ -48,11 +48,10 @@ MapPoint::Ptr MapPoint::createMapPoint (
     const Vector3d& posWorld, 
     const Vector3d& norm,
     const cv::Point2f& pixel_pos, 
-    const Mat& descriptor, 
-    const shared_ptr<Frame>& frame )
+    const Mat& descriptor )
 {
     return MapPoint::Ptr( 
-        new MapPoint( factoryId_++, posWorld, norm, pixel_pos, frame, descriptor )
+        new MapPoint( factoryId_++, posWorld, norm, pixel_pos, descriptor )
     );
 }
 
@@ -68,9 +67,10 @@ void MapPoint::removeKeyFrameObservation(const shared_ptr<Frame>& frame) {
         }
     }
 
-    // if all the observations has been removed, or only left the first frame (maybe not keyframe)
-    if(observedKeyFrameMap_.size() <= 1)
+    // if all the observations has been removed
+    if(observedKeyFrameMap_.size() == 0) {
         outlier_ = true;
+    }
 }
 
 
