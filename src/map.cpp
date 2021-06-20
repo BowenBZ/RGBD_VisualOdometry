@@ -11,11 +11,6 @@ void Map::insertKeyFrame ( const Frame::Ptr& frame )
 {
     unique_lock<mutex> lck(data_mutex_);
     keyFrames_[ frame->getID() ] = frame;
-    activeKeyFrames_[ frame->getID() ] = frame;
-    int remove_times = activeKeyFrames_.size() - maxActiveKeyFrameNum_;
-    for (int i = 0; i < remove_times; i++) {
-        removeOldKeyframe(frame);
-    }
 }
 
 void Map::insertMapPoint ( const MapPoint::Ptr& map_point )
@@ -23,31 +18,6 @@ void Map::insertMapPoint ( const MapPoint::Ptr& map_point )
     unique_lock<mutex> lck(data_mutex_);
     mapPoints[map_point->getID()] = map_point;
     activeMapPoints_[map_point->getID()] = map_point;
-}
-
-void Map::removeOldKeyframe( const Frame::Ptr& curr_frame ) {
-
-    double max_dis = 0, min_dis = 9999;
-    unsigned long max_kf_id = 0, min_kf_id = 0;
-    auto Twc = curr_frame->getPose().inverse();
-    for (auto& kf : activeKeyFrames_) {
-        if (kf.first == curr_frame->getID()) 
-            continue;
-
-        auto dis = (kf.second->getPose() * Twc).log().norm();
-        if (dis > max_dis) {
-            max_dis = dis;
-            max_kf_id = kf.first;
-        }
-        if (dis < min_dis) {
-            min_dis = dis;
-            min_kf_id = kf.first;
-        }
-    }
-
-    const double min_dis_th = 0.2;
-    unsigned long id_to_remove = (min_dis < min_dis_th) ? min_kf_id : max_kf_id;
-    activeKeyFrames_.erase(id_to_remove);
 }
 
 void Map::cullNonActiveMapPoints( const Frame::Ptr& currFrame ) {

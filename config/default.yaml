@@ -3,7 +3,7 @@
 dataset_dir: ../SLAM/rgbd_dataset_freiburg1_xyz
 
 # The output trajectory file directory
-output_file: ./output/estimated_trajectory_xyz.txt
+output_file: ./output/output.txt
 
 # camera intrinsics
 # Freiburg 1 RGB
@@ -14,7 +14,7 @@ camera.cy: 255.3
 
 camera.depth_scale: 5000
 
-# VO paras
+# frontend paras
 number_of_features: 500
 scale_factor: 1.2
 level_pyramid: 8
@@ -27,6 +27,3 @@ map_point_erase_ratio: 0.1
 
 # backend paras
 enable_local_optimization: 0
-
-# Max active keyframes to keep, only useful when local optimization is enabled
-active_keyframes_num: 5

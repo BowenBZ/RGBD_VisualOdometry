@@ -36,9 +36,7 @@ public:
     typedef unordered_map<unsigned long, Frame::Ptr > KeyframeDict;
 
     Map() {   
-        maxActiveKeyFrameNum_ = Config::get<int> ( "active_keyframes_num" );
         mapPointEraseRatio_ = Config::get<double> ( "map_point_erase_ratio" );
-        cout << "Keep "<< maxActiveKeyFrameNum_ << " active keyframes in map\n";
     }
     
     void insertKeyFrame( const Frame::Ptr& frame );
@@ -72,11 +70,6 @@ public:
         return activeMapPoints_;
     }
 
-    KeyframeDict getActiveKeyFrames() {
-        unique_lock<mutex> lck(data_mutex_);
-        return activeKeyFrames_;
-    }
-
     void resetActiveMappoints() {
         unique_lock<mutex> lck(data_mutex_);
         activeMapPoints_ = mapPoints;
@@ -89,9 +82,6 @@ private:
     KeyframeDict  keyFrames_;         // all key-frames
 
     MappointDict  activeMapPoints_;        // active mappoints, used for feature matching in frontend
-    KeyframeDict  activeKeyFrames_;         // active keyframes
-
-    int maxActiveKeyFrameNum_;
 
     float mapPointEraseRatio_;
 
