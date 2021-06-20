@@ -14,3 +14,5 @@ _deps
 build/
 bin/
 lib/
+
+output/
