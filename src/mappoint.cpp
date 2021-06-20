@@ -23,35 +23,27 @@
 namespace myslam
 {
 
-MapPoint::MapPoint()
-: id_(-1), pos_(Vector3d(0,0,0)), norm_(Vector3d(0,0,0)), triangulated_(false), visibleTimes_(0), matchedTimes_(0)
-{
-
-}
-
-
-MapPoint::MapPoint ( long unsigned int id, const Vector3d& position, const Vector3d& norm, 
-                     const cv::Point2f& pixel_pos, const Mat& descriptor )
+MapPoint::MapPoint ( 
+    long unsigned int id, 
+    const Vector3d& position, 
+    const Vector3d& norm, 
+    const Mat& descriptor,
+    const weak_ptr<Frame>& observedByKeyFrame,
+    const cv::Point2f& pixelPos)
 : id_(id), pos_(position), norm_(norm), triangulated_(false), visibleTimes_(1), matchedTimes_(1), descriptor_(descriptor), outlier_(false)
 {
-
-}
-
-MapPoint::Ptr MapPoint::createMapPoint()
-{
-    return MapPoint::Ptr( 
-        new MapPoint( factoryId_++, Vector3d(0,0,0), Vector3d(0,0,0), cv::Point2f(0, 0) )
-    );
+    addKeyFrameObservation(observedByKeyFrame, pixelPos);
 }
 
 MapPoint::Ptr MapPoint::createMapPoint ( 
     const Vector3d& posWorld, 
     const Vector3d& norm,
-    const cv::Point2f& pixel_pos, 
-    const Mat& descriptor )
+    const Mat& descriptor,
+    const weak_ptr<Frame>& observedByKeyFrame,
+    const cv::Point2f& pixelPos)
 {
     return MapPoint::Ptr( 
-        new MapPoint( factoryId_++, posWorld, norm, pixel_pos, descriptor )
+        new MapPoint( factoryId_++, posWorld, norm, descriptor, observedByKeyFrame, pixelPos)
     );
 }
 
