@@ -76,13 +76,19 @@ namespace myslam
             // set estimated pose to current frame
             frameCurr_->setPose(estimatedPoseCurr_);
 
-            // remove non-active mappoints, may add new mappoints if map size is too small
-            updateActiveMapPointsMap();
+            // remove non-active mappoints
+            cullNonActiveMapPoints();
 
             if ( isKeyFrame() )
             {
                 cout << "  Current frame is a new keyframe" << endl;
                 map_->insertKeyFrame(frameCurr_);
+
+                // Add this keyframe as the observation of observed mappoints
+                addKeyframeObservationToOldMapPoints();
+
+                // Add some new mappoints since current frame is keyframe
+                addNewMapPoints();
 
                 // Optimize active mappoints since has a new keyframe
                 triangulateActiveMapPoints();
@@ -121,11 +127,10 @@ namespace myslam
         auto activeMpts = map_->getActiveMappoints();
         if (activeMpts.size() < 100)
         {
-            activeMpts = map_->getAllMappoints();
             map_->resetActiveMappoints();
+            activeMpts = map_->getAllMappoints();
             cout << " Not enough active mappoints, reset activie mappoints to all mappoints" << endl;
         }
-        // auto activeMpts = map_->getAllMappoints();
 
         // Select the good mappoints candidates
         vector<MapPoint::Ptr> mptCandidates;
@@ -282,6 +287,14 @@ namespace myslam
         }
     }
 
+    void FrontEnd::cullNonActiveMapPoints()
+    {
+        map_->cullNonActiveMapPoints(frameCurr_);
+        map_->updateMappointEraseRatio();
+
+        cout << "  Active mappoints size after culling: " << map_->getActiveMappoints().size() << endl;
+    }
+
     void FrontEnd::addNewMapPoints()
     {
         for (size_t i = 0; i < keypointsCurr_.size(); i++)
@@ -292,6 +305,8 @@ namespace myslam
                 addNewMapPoint(i);
             }
         }
+        map_->updateMappointEraseRatio();
+        cout << "  Active mappoints size after adding: " << map_->getActiveMappoints().size() << endl;
     }
 
     void FrontEnd::addNewMapPoint(const int &idx)
@@ -305,31 +320,35 @@ namespace myslam
         Vector3d mptPos = frameCurr_->camera_->pixel2world(
             keypointsCurr_[idx], frameCurr_->getPose(), depth);
 
-        Vector3d direction = mptPos - frameCurr_->getCamCenter();
-        direction.normalize();
-
-        // deep copy the keypoints and descriptor since they will be clear in next track
+        // Create a mappoint
+        // deep copy the descriptor and keypoint position since they will be clear in next track
         MapPoint::Ptr mpt = MapPoint::createMapPoint(
-            mptPos, direction,
-            cv::Point2f(keypointsCurr_[idx].pt),
-            descriptorsCurr_.row(idx).clone());
-        map_->insertMapPoint(mpt);
+            mptPos,
+            (mptPos - frameCurr_->getCamCenter()).normalized(),
+            descriptorsCurr_.row(idx).clone(),
+            frameCurr_,
+            cv::Point2f(keypointsCurr_[idx].pt));
+
         // set this mappoint as the observed mappoints of current frame
         frameCurr_->addObservedMapPoint(mpt);
+
+        // Add mappoint into map
+        map_->insertMapPoint(mpt);
     }
 
-    void FrontEnd::updateActiveMapPointsMap()
-    {
-        map_->cullNonActiveMapPoints(frameCurr_);
+    void FrontEnd::addKeyframeObservationToOldMapPoints() {
+        for (auto& mappoint : frameCurr_ -> getObservedMapPoints()) {
+            if (mappoint.expired()) {
+                continue;
+            }
 
-        if (matchedMptKptMap_.size() < 100)
-        {
-            addNewMapPoints();
+            auto mp = mappoint.lock();
+            if (mp -> outlier_) {
+                continue;
+            }
+
+            mp -> addKeyFrameObservation(frameCurr_, cv::Point2f(matchedMptKptMap_[mp].pt));
         }
-
-        map_->updateMappointEraseRatio();
-
-        cout << "  Active mappoints size after updating: " << map_->getActiveMappoints().size() << endl;
     }
 
     void FrontEnd::triangulateActiveMapPoints()
@@ -338,32 +357,32 @@ namespace myslam
         for (auto &mappoint : map_->getActiveMappoints())
         {
             auto mp = mappoint.second;
-            // it not have matched keypoints in current keyframe, cannot be triangulated
+            if ( mp->outlier_ || mp->triangulated_) {
+                continue;
+            }
+
+            // it current keyframe doesn't observe this mappoint, it cannot be triangulated
             if ( !matchedMptKptMap_.count(mp) ) {
                 continue;
             }
 
-            // If have already triangulated, just add the new observation
-            if ( mp->triangulated_ ) {
-                mp->addKeyFrameObservation(frameCurr_, cv::Point2f(matchedMptKptMap_[mp].pt));
-                continue;
-            }
-
             // try to triangulate the mappoint
-            for (auto &refKeyFrameMap : mp->getKeyFrameObservationsMap())
+            vector<SE3> poses;
+            vector<Vec3> points;
+            for (auto &keyFrameMap : mp->getKeyFrameObservationsMap())
             {
-                if (refKeyFrameMap.first.expired()) {
+                if (keyFrameMap.first.expired()) {
                     continue;
                 }
 
-                auto refKeyFrame = refKeyFrameMap.first.lock();
+                auto keyFrame = keyFrameMap.first.lock();
+                auto keyPoint = keyFrameMap.second;
 
-                auto refKeyPoint = refKeyFrameMap.second;
-                auto curKeyPoint = matchedMptKptMap_[mp].pt;
+                poses.push_back(keyFrame->getPose());
+                points.push_back(keyFrame->camera_->pixel2camera(keyPoint));
+            }
 
-                vector<SE3> poses{refKeyFrame->getPose(), frameCurr_->getPose()};
-                vector<Vec3> points{refKeyFrame->camera_->pixel2camera(refKeyPoint),
-                                    frameCurr_->camera_->pixel2camera(curKeyPoint)};
+            if (poses.size() >= 2) {
                 Vec3 pworld = Vec3::Zero();
                 if (triangulation(poses, points, pworld) && pworld[2] > 0)
                 {
@@ -374,8 +393,6 @@ namespace myslam
                     break;
                 }
             }
-
-            mp->addKeyFrameObservation(frameCurr_, cv::Point2f(matchedMptKptMap_[mp].pt));
         }
         cout << "  Triangulate active mappoints size: " << triangulatedCnt << endl;
     }

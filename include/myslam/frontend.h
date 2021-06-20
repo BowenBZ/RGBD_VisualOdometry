@@ -68,17 +68,22 @@ private:
     void computeDescriptors(); 
     void matchKeyPointsWithActiveMapPoints();
     void estimatePosePnP(); 
+
     // for first key-frame, add all 3d points into map
-    void initMap();
-    // remove non-active mappoints from active map, add more mappoints if the the map is small
-    void updateActiveMapPointsMap();
-    // use backend or triangulatiton to optmize the position of mappoints (and pose of frames when use backend)
-    void triangulateActiveMapPoints();
-    // add new mappoint to the map if the actvie mappoint is not enought
+    void initMap();    
+    // remove non-active mappoints
+    void cullNonActiveMapPoints();
+    // add new mappoint to the map from the observation of a keyframe
     void addNewMapPoints();     
     // really perform the adding action
-    void addNewMapPoint(const int& idx);      
+    void addNewMapPoint(const int& idx);     
 
+    // add current keyframe as the new observation of old mappoints (also observed by previous keyframes)
+    void addKeyframeObservationToOldMapPoints();
+    
+    // use triangulatiton to optmize the position of active mappoints
+    void triangulateActiveMapPoints();
+    
     bool isGoodEstimation(); 
     bool isKeyFrame();
 

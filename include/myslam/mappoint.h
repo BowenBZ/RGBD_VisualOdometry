@@ -40,22 +40,22 @@ public:
     int         visibleTimes_;         // times should in the view of current frame, but maybe cannot be matched 
     int         matchedTimes_;         // times of being an inliner in frontend P3P result
     
-    MapPoint();
+    // mappoint can only be created by a keyframe
     MapPoint( 
         unsigned long id, 
         const Vector3d& position, 
         const Vector3d& norm, 
-        const cv::Point2f& pixel_pos,
-        const Mat& descriptor=Mat()
-    );
+        const Mat& descriptor,
+        const weak_ptr<Frame>& observedByKeyFrame,
+        const cv::Point2f& pixelPos);
     
     // factory function
-    static MapPoint::Ptr createMapPoint();
     static MapPoint::Ptr createMapPoint( 
         const Vector3d& posWorld, 
         const Vector3d& norm,
-        const cv::Point2f& pixel_pos,
-        const Mat& descriptor);
+        const Mat& descriptor,
+        const weak_ptr<Frame>& observedByKeyFrame,
+        const cv::Point2f& pixelPos);
 
     Vector3d getPosition() {
         unique_lock<mutex> lock(posMutex_);
