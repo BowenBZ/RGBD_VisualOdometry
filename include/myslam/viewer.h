@@ -6,9 +6,9 @@
 #include <stdlib.h>
 #include <pangolin/pangolin.h>
 #include "myslam/common_include.h"
-#include "myslam/map.h"
 #include "myslam/frame.h"
 #include "myslam/util.h"
+#include "myslam/map.h"
 #include <opencv2/features2d/features2d.hpp>
 
 namespace myslam {
@@ -23,8 +23,6 @@ public:
         viewer_running_ = true;
         viewer_thread_ = std::thread(std::bind(&Viewer::ThreadLoop, this));
     }
-    
-    void setMap(Map::Ptr map) { map_ = map; }
 
     void Close() {
         viewer_running_ = false;
@@ -48,7 +46,6 @@ private:
     thread viewer_thread_;
     mutex viewer_data_mutex_;
 
-    Map::Ptr map_ = nullptr;
     Map::KeyframeDict all_keyframes_;
     Map::MappointDict all_mappoints_;
     Map::MappointDict active_mappoints_;

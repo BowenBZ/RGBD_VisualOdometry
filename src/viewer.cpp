@@ -8,10 +8,9 @@ namespace myslam {
 
 void Viewer::updateDrawingObjects() {
     std::unique_lock<std::mutex> lck(viewer_data_mutex_);
-    assert(map_ != nullptr);
-    all_keyframes_ = map_->getAllKeyFrames();
-    all_mappoints_ = map_->getAllMappoints();
-    active_mappoints_ = map_->getActiveMappoints();
+    all_keyframes_ = Map::getInstance().getAllKeyFrames();
+    all_mappoints_ = Map::getInstance().getAllMappoints();
+    active_mappoints_ = Map::getInstance().getActiveMappoints();
 }
 
 void Viewer::ThreadLoop() {
@@ -47,10 +46,8 @@ void Viewer::ThreadLoop() {
             cv::waitKey(1);
         }
 
-        if (map_) {
-            // DrawOtherKeyFrames();
-            DrawMapPoints();
-        }
+        // DrawOtherKeyFrames();
+        DrawMapPoints();
 
         pangolin::FinishFrame();
         usleep(5000);
@@ -61,7 +58,7 @@ void Viewer::DrawOtherKeyFrames() {
     const float normalColor[3] = {0, 0, 1.0};
 
     for (auto& kf : all_keyframes_) {
-        if(kf.first == current_frame_->getID())
+        if(kf.first == current_frame_->getId())
             continue;
 
         DrawFrame(kf.second, normalColor);

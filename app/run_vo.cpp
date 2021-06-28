@@ -62,17 +62,13 @@ int main ( int argc, char** argv )
     myslam::Camera::Ptr camera ( new myslam::Camera );
     myslam::FrontEnd::Ptr frontend ( new myslam::FrontEnd );
     myslam::Viewer::Ptr viewer (new myslam::Viewer );
-    myslam::Map::Ptr map (new myslam::Map );
 
-    frontend->setMap(map);
     frontend->setViewer(viewer);
-    viewer->setMap(map);
 
     myslam::Backend::Ptr backend;
     if (myslam::Config::get<int> ( "enable_local_optimization" )) {
         cout << "Enable local optimization" << endl;
         backend = myslam::Backend::Ptr(new myslam::Backend);
-        backend->setMap(map);
         backend->setCamera(camera);
         frontend->setBackend(backend); 
     }
@@ -109,7 +105,7 @@ int main ( int argc, char** argv )
     ofstream fout (myslam::Config::get<string> ( "output_file" ));
     fout << "# estimated trajectory format" << endl;
     fout << "# timestamp tx ty tz qx qy qz qw" << endl;
-    for(auto keyFrameMap: map->getAllKeyFrames()) {
+    for(auto keyFrameMap: myslam::Map::getInstance().getAllKeyFrames()) {
         auto keyFrame = keyFrameMap.second;
         writePosetoFile(fout, std::to_string(keyFrame->time_stamp_), keyFrame->getPose());
     }

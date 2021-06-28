@@ -30,7 +30,7 @@ MapPoint::MapPoint (
     const Mat& descriptor,
     const weak_ptr<Frame>& observedByKeyFrame,
     const cv::Point2f& pixelPos)
-: id_(id), pos_(position), norm_(norm), triangulated_(false), visibleTimes_(1), matchedTimes_(1), descriptor_(descriptor), outlier_(false)
+: id_(id), pos_(position), norm_(norm), triangulated_(false), visibleTimes_(1), matchedTimes_(1), descriptor_(descriptor), outlier_(false), optimized_(false)
 {
     addKeyFrameObservation(observedByKeyFrame, pixelPos);
 }

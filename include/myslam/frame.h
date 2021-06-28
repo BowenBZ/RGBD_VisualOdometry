@@ -35,7 +35,7 @@ class Frame
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     typedef shared_ptr<Frame> Ptr;
-    typedef unordered_map<Frame::Ptr, int> ConnectedKeyFrameMapType;
+    typedef unordered_map<unsigned long, int> ConnectedKeyFrameIdToWeight;
     double                         time_stamp_; // when it is recorded
     Camera::Ptr                    camera_;     // Pinhole RGBD Camera model 
     Mat                            color_, depth_; // color and depth image 
@@ -66,29 +66,34 @@ public:
         T_c_w_ = pose;
     }
 
-    unsigned long getID() { return id_; }
+    unsigned long getId() { return id_; }
 
     // Update the co-visible key-frames when this frame is a key-frame 
     void updateConnectedKeyFrames();
 
+    // Decrease the weight of connectedFrame by 1
+    void decreaseConnectedKeyFrameWeightByOne(const unsigned long id);
+
     // Add the connection of another frame with weight to current frame
-    void addConnectedKeyFrame(const Frame::Ptr& frame, const int& weight) {
-        unique_lock<mutex> lck(connecedMutex_);
-        connectedKeyFramesCounter_[frame] = weight;
+    void addConnectedKeyFrame(const unsigned long id, const int weight) {
+        unique_lock<mutex> lck(connectedMutex_);
+        connectedKeyFrameIdToWeight_[id] = weight;
     }
 
-    ConnectedKeyFrameMapType getConnectedKeyFrames() {
-        unique_lock<mutex> lck(connecedMutex_);
-        return connectedKeyFramesCounter_;
+    ConnectedKeyFrameIdToWeight getConnectedKeyFrames() {
+        unique_lock<mutex> lck(connectedMutex_);
+        return connectedKeyFrameIdToWeight_;
     }
 
-    void addObservedMapPoint(const weak_ptr<MapPoint>& mpt) {
-        unique_lock<mutex> lck(connecedMutex_);
+    void addObservedMapPoint(const weak_ptr<MapPoint> mpt) {
+        unique_lock<mutex> lck(observationMutex_);
         observedMapPoints_.push_back(mpt);
     }
 
+    void removeObservedMapPoint(const shared_ptr<MapPoint> mpt);
+
     list<weak_ptr<MapPoint>> getObservedMapPoints() {
-        unique_lock<mutex> lck(connecedMutex_);
+        unique_lock<mutex> lck(observationMutex_);
         return observedMapPoints_;
     }
 
@@ -99,9 +104,10 @@ private:
     mutex poseMutex_;
     SE3                         T_c_w_;      // transform from world to camera
 
-    mutex connecedMutex_;
+    mutex observationMutex_;
+    mutex connectedMutex_;
     // Connected keyframes (has same observed mappoints >= 15) and the number of mappoints
-    ConnectedKeyFrameMapType connectedKeyFramesCounter_;
+    ConnectedKeyFrameIdToWeight connectedKeyFrameIdToWeight_;
 
     list<weak_ptr<MapPoint>> observedMapPoints_;
 };
