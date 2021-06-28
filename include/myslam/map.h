@@ -35,8 +35,9 @@ public:
     typedef unordered_map<unsigned long, MapPoint::Ptr > MappointDict;
     typedef unordered_map<unsigned long, Frame::Ptr > KeyframeDict;
 
-    Map() {   
-        mapPointEraseRatio_ = Config::get<double> ( "map_point_erase_ratio" );
+    static Map& getInstance() {
+        static Map map_;
+        return map_;
     }
     
     void insertKeyFrame( const Frame::Ptr& frame );
@@ -54,6 +55,15 @@ public:
         mapPointEraseRatio_ = (activeMapPoints_.size() > 1000 ) ? 
                                     mapPointEraseRatio_ + 0.05 :
                                     0.1;
+    }
+
+    shared_ptr<Frame> getKeyFrame(unsigned long id) {
+        // unique_lock<mutex> lck(data_mutex_);
+        if (keyFrames_.count(id)) {
+            return keyFrames_[id];
+        } else {
+            return nullptr;
+        }
     }
 
     KeyframeDict getAllKeyFrames() {
@@ -76,6 +86,13 @@ public:
     }
 
 private:
+    Map() {   
+        mapPointEraseRatio_ = Config::get<double> ( "map_point_erase_ratio" );
+    }
+    ~Map() {
+        
+    }
+
     mutex data_mutex_;
 
     MappointDict  mapPoints;        // all mappoints

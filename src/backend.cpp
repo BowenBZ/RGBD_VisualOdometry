@@ -45,27 +45,39 @@ void Backend::optimize() {
     auto connectedKeyFrames = keyFrameCurr_->getConnectedKeyFrames();
 
     // Add curr KeyFrame to the KeyFrame map
-    connectedKeyFrames[keyFrameCurr_] = 0;
+    connectedKeyFrames[keyFrameCurr_->getId()] = 0;
 
     // Find all keyFrames connected with current keyFrame
-    for(auto& connectedKeyFrame: connectedKeyFrames) {
-        auto keyFrame = connectedKeyFrame.first;
+    for(auto& pair: connectedKeyFrames) {
+    
+        auto keyFrameId = pair.first;
+        auto keyFrame = Map::getInstance().getKeyFrame(keyFrameId);
+
+        if (keyFrame == nullptr) {
+            continue;
+        }
 
         // Create camera pose vertex
         VertexPose *vertexPose = new VertexPose;
         vertexPose->setId(vertexIndex++);
         vertexPose->setEstimate(keyFrame->getPose());
-        vertexPose->setFixed(keyFrame->getID() == 0);
+        vertexPose->setFixed(keyFrame->getId() == 0);
         optimizer.addVertex(vertexPose);
 
         // Record in map
-        keyFrameMap[keyFrame->getID()] = keyFrame;
-        verticesPoseMap[keyFrame->getID()] = vertexPose;
+        keyFrameMap[keyFrame->getId()] = keyFrame;
+        verticesPoseMap[keyFrame->getId()] = vertexPose;
     }
 
     // Find all mapppoints observed by keyFrameMap
     for (auto& pair : connectedKeyFrames) {
-        auto keyFrame = pair.first;
+
+        auto keyFrameId = pair.first;
+        auto keyFrame = Map::getInstance().getKeyFrame(keyFrameId);
+        
+        if (keyFrame == nullptr) {
+            continue;
+        }
 
         for(auto& mapPointPtr: keyFrame -> getObservedMapPoints()) {
             if ( mapPointPtr.expired() ) {
@@ -84,8 +96,8 @@ void Backend::optimize() {
             optimizer.addVertex(vertexMapPoint);
             
             // Record in map
-            mapPointMap[mapPoint -> getID()] = mapPoint;
-            verticesMappointMap[mapPoint->getID()] = vertexMapPoint;
+            mapPointMap[mapPoint -> getId()] = mapPoint;
+            verticesMappointMap[mapPoint->getId()] = vertexMapPoint;
         }
     }
 
@@ -107,10 +119,10 @@ void Backend::optimize() {
 
             VertexPose* edgePoseVertex;
             // If is connected keyFrame
-            if ( keyFrameMap.count(keyFrame -> getID()) ) {
-                edgePoseVertex = verticesPoseMap[keyFrame->getID()];
+            if ( keyFrameMap.count(keyFrame -> getId()) ) {
+                edgePoseVertex = verticesPoseMap[keyFrame->getId()];
             } else { // else is fixed keyFrame
-                fixedKeyFrameMap[keyFrame -> getID()] = keyFrame;
+                fixedKeyFrameMap[keyFrame -> getId()] = keyFrame;
 
                 // Create fixed pose vertex
                 VertexPose* vertexPose = new VertexPose;
@@ -120,7 +132,7 @@ void Backend::optimize() {
                 optimizer.addVertex(vertexPose);
 
                 // Record in map
-                fixedPoseVerticesMap[keyFrame->getID()] = vertexPose;
+                fixedPoseVerticesMap[keyFrame->getId()] = vertexPose;
 
                 edgePoseVertex = vertexPose;
             }
@@ -129,7 +141,7 @@ void Backend::optimize() {
             BinaryEdgeProjection* edge = new BinaryEdgeProjection(camera_);
 
             edge->setVertex(0, edgePoseVertex);
-            edge->setVertex(1, verticesMappointMap[mapPoint->getID()]);
+            edge->setVertex(1, verticesMappointMap[mapPoint->getId()]);
             edge->setId(edgeIndex++);
             edge->setMeasurement(toVec2d(observedPixelPos));
             edge->setInformation(Eigen::Matrix<double, 2, 2>::Identity());
@@ -155,6 +167,7 @@ void Backend::optimize() {
         edge->computeError();
         if (edge->chi2() > chi2_th) {
             edges_and_mappoint[edge]->removeKeyFrameObservation(ef.second);
+            edges_and_frames[edge]->removeObservedMapPoint(edges_and_mappoint[edge]);
             edge->setLevel(1);
             outlierCnt++;
         } 
@@ -163,6 +176,18 @@ void Backend::optimize() {
 
     optimizer.initializeOptimization();
     optimizer.optimize(10);
+
+    // Set outlier again
+    for (auto &ef : edges_and_frames) {
+        auto edge = ef.first;
+        edge->computeError();
+        if (edge->chi2() > chi2_th) {
+            edges_and_mappoint[edge]->removeKeyFrameObservation(ef.second);
+            edges_and_frames[edge]->removeObservedMapPoint(edges_and_mappoint[edge]);
+            outlierCnt++;
+        } 
+        edges_and_mappoint[edge]->optimized_ = true;
+    }
 
     cout << "\nBackend:" << endl;
     cout << "  optimized pose number: " << verticesPoseMap.size() << endl;

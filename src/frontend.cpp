@@ -12,6 +12,8 @@
 #include "myslam/frontend.h"
 #include "myslam/g2o_types.h"
 #include "myslam/util.h"
+#include "myslam/map.h"
+
 
 namespace myslam
 {
@@ -47,7 +49,7 @@ namespace myslam
             extractKeyPointsAndComputeDescriptors();
 
             // the first frame is a key-frame
-            map_->insertKeyFrame(frameCurr_);
+            Map::getInstance().insertKeyFrame(frameCurr_);
             initMap();
             frameRef_ = frame;
             break;
@@ -82,7 +84,7 @@ namespace myslam
             if ( isKeyFrame() )
             {
                 cout << "  Current frame is a new keyframe" << endl;
-                map_->insertKeyFrame(frameCurr_);
+                Map::getInstance().insertKeyFrame(frameCurr_);
 
                 // Add this keyframe as the observation of observed mappoints
                 addKeyframeObservationToOldMapPoints();
@@ -124,11 +126,11 @@ namespace myslam
     void FrontEnd::matchKeyPointsWithActiveMapPoints()
     {
         // get the active mappoints candidates from map
-        auto activeMpts = map_->getActiveMappoints();
+        auto activeMpts = Map::getInstance().getActiveMappoints();
         if (activeMpts.size() < 100)
         {
-            map_->resetActiveMappoints();
-            activeMpts = map_->getAllMappoints();
+            Map::getInstance().resetActiveMappoints();
+            activeMpts = Map::getInstance().getAllMappoints();
             cout << " Not enough active mappoints, reset activie mappoints to all mappoints" << endl;
         }
 
@@ -289,10 +291,10 @@ namespace myslam
 
     void FrontEnd::cullNonActiveMapPoints()
     {
-        map_->cullNonActiveMapPoints(frameCurr_);
-        map_->updateMappointEraseRatio();
+        Map::getInstance().cullNonActiveMapPoints(frameCurr_);
+        Map::getInstance().updateMappointEraseRatio();
 
-        cout << "  Active mappoints size after culling: " << map_->getActiveMappoints().size() << endl;
+        cout << "  Active mappoints size after culling: " << Map::getInstance().getActiveMappoints().size() << endl;
     }
 
     void FrontEnd::addNewMapPoints()
@@ -305,8 +307,8 @@ namespace myslam
                 addNewMapPoint(i);
             }
         }
-        map_->updateMappointEraseRatio();
-        cout << "  Active mappoints size after adding: " << map_->getActiveMappoints().size() << endl;
+        Map::getInstance().updateMappointEraseRatio();
+        cout << "  Active mappoints size after adding: " << Map::getInstance().getActiveMappoints().size() << endl;
     }
 
     void FrontEnd::addNewMapPoint(const int &idx)
@@ -333,7 +335,7 @@ namespace myslam
         frameCurr_->addObservedMapPoint(mpt);
 
         // Add mappoint into map
-        map_->insertMapPoint(mpt);
+        Map::getInstance().insertMapPoint(mpt);
     }
 
     void FrontEnd::addKeyframeObservationToOldMapPoints() {
@@ -354,10 +356,10 @@ namespace myslam
     void FrontEnd::triangulateActiveMapPoints()
     {
         int triangulatedCnt = 0;
-        for (auto &mappoint : map_->getActiveMappoints())
+        for (auto &mappoint : Map::getInstance().getActiveMappoints())
         {
             auto mp = mappoint.second;
-            if ( mp->outlier_ || mp->triangulated_) {
+            if ( mp->outlier_ || mp->triangulated_ || mp->optimized_) {
                 continue;
             }
 

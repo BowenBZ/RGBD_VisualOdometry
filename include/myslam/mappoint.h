@@ -32,8 +32,18 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     typedef shared_ptr<MapPoint> Ptr;
     typedef list<pair<weak_ptr<Frame>, cv::Point2f>> ObservationType;
-    bool        triangulated_;          // whether have been triangulated
+
+    // Usages
+    // 1. whether match with new mappoints in front end
+    // 2. whether will be triangulated
+    // 3. whether add new observation keyframe 
+    // 4. whether update in co-visibility graph
+    // 5. whether add into backend
     bool        outlier_;               // whether this is an outlider
+
+    bool        optimized_;             // whether is optimized by backend
+
+    bool        triangulated_;          // whether have been triangulated
     Vector3d    norm_;                  // Normal of viewing direction 
 
     Mat         descriptor_;            // Descriptor for matching 
@@ -67,7 +77,7 @@ public:
         pos_ = pos;
     }
 
-    unsigned long getID() { return id_; }
+    unsigned long getId() { return id_; }
 
     void addKeyFrameObservation(const weak_ptr<Frame>& frame, const cv::Point2f& pixel_pos) {
         unique_lock<mutex> lock(observationMutex_);

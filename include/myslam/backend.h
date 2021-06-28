@@ -30,8 +30,6 @@ public:
         mapUpdate_.notify_one();
     }
 
-    void setMap(const Map::Ptr& map) { map_ = map; }
-
     void setCamera(const Camera::Ptr& camera) { camera_ = camera; }
 
 private:
@@ -44,7 +42,6 @@ private:
 
     void optimize();
 
-    Map::Ptr map_;
     Camera::Ptr camera_;
     Frame::Ptr keyFrameCurr_;
 

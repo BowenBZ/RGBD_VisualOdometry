@@ -10,14 +10,14 @@ namespace myslam
 void Map::insertKeyFrame ( const Frame::Ptr& frame )
 {
     unique_lock<mutex> lck(data_mutex_);
-    keyFrames_[ frame->getID() ] = frame;
+    keyFrames_[ frame->getId() ] = frame;
 }
 
 void Map::insertMapPoint ( const MapPoint::Ptr& map_point )
 {
     unique_lock<mutex> lck(data_mutex_);
-    mapPoints[map_point->getID()] = map_point;
-    activeMapPoints_[map_point->getID()] = map_point;
+    mapPoints[map_point->getId()] = map_point;
+    activeMapPoints_[map_point->getId()] = map_point;
 }
 
 void Map::cullNonActiveMapPoints( const Frame::Ptr& currFrame ) {

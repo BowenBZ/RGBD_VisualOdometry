@@ -8,7 +8,6 @@
 #include <opencv2/features2d/features2d.hpp>
 #include <bits/stdc++.h>
 #include "myslam/common_include.h"
-#include "myslam/map.h"
 #include "myslam/viewer.h"
 #include "myslam/frame.h"
 #include "myslam/backend.h"
@@ -31,8 +30,6 @@ public:
     
     bool addFrame( Frame::Ptr frame );      // add a new frame 
 
-    void setMap(Map::Ptr map) {map_ = map;}
-
     void setViewer(Viewer::Ptr viewer) {viewer_ = viewer;}
 
     void setBackend(Backend::Ptr backend) {backend_ = backend;}
@@ -40,7 +37,6 @@ public:
     VOState getState() { return state_;}
     
 private:  
-    Map::Ptr    map_;       // map with all frames and map points
     Frame::Ptr  frameRef_;       // reference key frame
     Frame::Ptr  frameCurr_;      // current frame 
     VOState     state_;     // current VO status

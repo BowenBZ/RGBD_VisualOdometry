@@ -19,6 +19,7 @@
 
 #include "myslam/frame.h"
 #include "myslam/mappoint.h"
+#include "myslam/map.h"
 
 namespace myslam
 {
@@ -90,13 +91,52 @@ bool Frame::isInFrame ( const Vector3d& pt_world )
         && pixel(1,0)<color_.rows;
 }
 
+void Frame::removeObservedMapPoint(const shared_ptr<MapPoint> mpt) {
+    unique_lock<mutex> lck(observationMutex_);
+
+    bool flag = false;
+    for (auto iter = observedMapPoints_.begin(); iter != observedMapPoints_.end(); iter++) {
+        if (iter->lock() == mpt) {
+            observedMapPoints_.erase(iter);
+            flag = true;
+            break;
+        }
+    }
+
+    if (flag) {
+        for (auto& pair: mpt->getKeyFrameObservationsMap()) {
+            if (pair.first.expired()) {
+                continue;
+            }
+
+            auto otherKF = pair.first.lock();
+            if (otherKF->getId() != this->id_) {
+                this->decreaseConnectedKeyFrameWeightByOne(otherKF->getId());
+                otherKF->decreaseConnectedKeyFrameWeightByOne(this->id_);
+            }
+        }
+    }
+
+    // if all the observations has been removed, consider this keyframe as outlier?
+}
+
+void Frame::decreaseConnectedKeyFrameWeightByOne(const unsigned long id) {
+    if (connectedKeyFrameIdToWeight_.count(id)) {
+        connectedKeyFrameIdToWeight_[id]--;
+        if (connectedKeyFrameIdToWeight_[id] < 15 
+            && connectedKeyFrameIdToWeight_.size() >= 2) {
+                connectedKeyFrameIdToWeight_.erase(id);
+            }
+    }
+}
+
 void Frame::updateConnectedKeyFrames() {
-    unique_lock<mutex> lck(connecedMutex_);
+    unique_lock<mutex> lck(connectedMutex_);
 
     // Calcualte the co-visibliblity keyframes' weight
-    ConnectedKeyFrameMapType connectedKeyFrameCandidates;
+    ConnectedKeyFrameIdToWeight connectedKeyFrameCandidates;
     for(auto& mapPoint : observedMapPoints_) {
-        if (mapPoint.expired()) {
+        if (mapPoint.expired() || mapPoint.lock()->outlier_) {
             continue;
         }
 
@@ -104,35 +144,36 @@ void Frame::updateConnectedKeyFrames() {
 
             auto keyFrame = keyFrameMap.first;
 
-            if (!keyFrame.expired() && keyFrame.lock()->getID() != id_) {
-                connectedKeyFrameCandidates[keyFrame.lock()]++;
+            if (!keyFrame.expired() && keyFrame.lock()->getId() != id_) {
+                connectedKeyFrameCandidates[keyFrame.lock()->getId()]++;
             }
         }
     }
        
     // Filter the connections whose weight larger than 15
-    connectedKeyFramesCounter_.clear();
-    int maxCount = 0;
-    Frame::Ptr maxCountKeyFrame;
+    connectedKeyFrameIdToWeight_.clear();
+    int maxWeight = 0;
+    unsigned long maxWeightConnectedKeyFrameId;
 
-    for(auto& connectedKeyFrameMap : connectedKeyFrameCandidates) {
-        auto connectedKeyFrame = connectedKeyFrameMap.first;
-        auto connectedMapPointsNum = connectedKeyFrameMap.second;
-        if(connectedMapPointsNum >= 15) {
-            connectedKeyFramesCounter_[connectedKeyFrame] = connectedMapPointsNum;
-            connectedKeyFrame->addConnectedKeyFrame(Ptr(this), connectedMapPointsNum);
+    for(auto& pair : connectedKeyFrameCandidates) {
+        auto connectedKeyFrameId = pair.first;
+        auto connectedMapPointsCnt = pair.second;
+
+        if(connectedMapPointsCnt >= 15) {
+            connectedKeyFrameIdToWeight_[connectedKeyFrameId] = connectedMapPointsCnt;
+            Map::getInstance().getKeyFrame(connectedKeyFrameId)->addConnectedKeyFrame(this->id_, connectedMapPointsCnt);
         }
 
-        if(connectedMapPointsNum> maxCount) {
-            maxCountKeyFrame = connectedKeyFrame;
-            maxCount = connectedMapPointsNum;
+        if(connectedMapPointsCnt > maxWeight) {
+            maxWeightConnectedKeyFrameId = connectedKeyFrameId;
+            maxWeight = connectedMapPointsCnt;
         }
     }
 
     // In case there is no weight larger than 15
-    if(connectedKeyFramesCounter_.empty() && maxCount != 0 ) {
-        connectedKeyFramesCounter_[maxCountKeyFrame] = maxCount;
-        maxCountKeyFrame->addConnectedKeyFrame(Ptr(this), maxCount);
+    if(connectedKeyFrameIdToWeight_.empty() && maxWeight != 0) {
+        connectedKeyFrameIdToWeight_[maxWeightConnectedKeyFrameId] = maxWeight;
+        Map::getInstance().getKeyFrame(maxWeightConnectedKeyFrameId)->addConnectedKeyFrame(this->id_, maxWeight);
     }    
 }
 
