@@ -16,6 +16,7 @@ public:
     Backend() {
         backendRunning_ = true;
         backendThread_ = std::thread(std::bind(&Backend::backendLoop, this));
+        chi2_th_ = Config::get<float>("chi2_th");
     }
 
     void Stop() {
@@ -44,6 +45,8 @@ private:
 
     Camera::Ptr camera_;
     Frame::Ptr keyFrameCurr_;
+
+    float chi2_th_;
 
 }; // class Backend
 

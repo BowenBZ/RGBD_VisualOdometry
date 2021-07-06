@@ -9,7 +9,10 @@ void Backend::backendLoop() {
         unique_lock<mutex> lock(backendMutex_);
         mapUpdate_.wait(lock);
 
-        optimize();
+        // Need to check again because this will be trigger during the deconstruction
+        if (backendRunning_) {
+            optimize();
+        }
     }
 }
 
@@ -159,13 +162,12 @@ void Backend::optimize() {
     optimizer.initializeOptimization();
     optimizer.optimize(5);
 
-    const float chi2_th = 7.815;
     // Remove outlier and do second round optimization
     int outlierCnt = 0;
     for (auto &ef : edges_and_frames) {
         auto edge = ef.first;
         edge->computeError();
-        if (edge->chi2() > chi2_th) {
+        if (edge->chi2() > chi2_th_) {
             edges_and_mappoint[edge]->removeKeyFrameObservation(ef.second);
             edges_and_frames[edge]->removeObservedMapPoint(edges_and_mappoint[edge]);
             edge->setLevel(1);
@@ -181,7 +183,7 @@ void Backend::optimize() {
     for (auto &ef : edges_and_frames) {
         auto edge = ef.first;
         edge->computeError();
-        if (edge->chi2() > chi2_th) {
+        if (edge->chi2() > chi2_th_ || edge->level() == 1) {
             edges_and_mappoint[edge]->removeKeyFrameObservation(ef.second);
             edges_and_frames[edge]->removeObservedMapPoint(edges_and_mappoint[edge]);
             outlierCnt++;
