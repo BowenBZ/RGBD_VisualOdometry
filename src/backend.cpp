@@ -110,14 +110,12 @@ void Backend::optimize() {
         auto mapPoint = pair.second;
 
         for(auto& observation: mapPoint->getKeyFrameObservationsMap()) {
-            auto keyFramePtr = observation.first;
+            auto keyFrame = Map::getInstance().getKeyFrame(observation.first);
             auto observedPixelPos = observation.second;
 
-            if ( keyFramePtr.expired() ) {
+            if ( keyFrame == nullptr ) {
                 continue;
-            }
-            auto keyFrame = keyFramePtr.lock();
-            
+            }            
             // TODO: check is keyframe is outlier
 
             VertexPose* edgePoseVertex;
@@ -168,7 +166,7 @@ void Backend::optimize() {
         auto edge = ef.first;
         edge->computeError();
         if (edge->chi2() > chi2_th_) {
-            edges_and_mappoint[edge]->removeKeyFrameObservation(ef.second);
+            edges_and_mappoint[edge]->removeKeyFrameObservation(ef.second->getId());
             edges_and_frames[edge]->removeObservedMapPoint(edges_and_mappoint[edge]);
             edge->setLevel(1);
             outlierCnt++;
@@ -184,7 +182,7 @@ void Backend::optimize() {
         auto edge = ef.first;
         edge->computeError();
         if (edge->chi2() > chi2_th_ || edge->level() == 1) {
-            edges_and_mappoint[edge]->removeKeyFrameObservation(ef.second);
+            edges_and_mappoint[edge]->removeKeyFrameObservation(ef.second->getId());
             edges_and_frames[edge]->removeObservedMapPoint(edges_and_mappoint[edge]);
             outlierCnt++;
         } 

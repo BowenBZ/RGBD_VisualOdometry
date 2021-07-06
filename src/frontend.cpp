@@ -328,7 +328,7 @@ namespace myslam
             mptPos,
             (mptPos - frameCurr_->getCamCenter()).normalized(),
             descriptorsCurr_.row(idx).clone(),
-            frameCurr_,
+            frameCurr_->getId(),
             cv::Point2f(keypointsCurr_[idx].pt));
 
         // set this mappoint as the observed mappoints of current frame
@@ -349,7 +349,7 @@ namespace myslam
                 continue;
             }
 
-            mp -> addKeyFrameObservation(frameCurr_, cv::Point2f(matchedMptKptMap_[mp].pt));
+            mp -> addKeyFrameObservation(frameCurr_->getId(), cv::Point2f(matchedMptKptMap_[mp].pt));
         }
     }
 
@@ -373,12 +373,12 @@ namespace myslam
             vector<Vec3> points;
             for (auto &keyFrameMap : mp->getKeyFrameObservationsMap())
             {
-                if (keyFrameMap.first.expired()) {
-                    continue;
-                }
-
-                auto keyFrame = keyFrameMap.first.lock();
+                auto keyFrame = Map::getInstance().getKeyFrame(keyFrameMap.first);
                 auto keyPoint = keyFrameMap.second;
+
+                if ( keyFrame == nullptr ) {
+                    continue;
+                } 
 
                 poses.push_back(keyFrame->getPose());
                 points.push_back(keyFrame->camera_->pixel2camera(keyPoint));
