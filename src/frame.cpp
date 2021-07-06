@@ -105,15 +105,14 @@ void Frame::removeObservedMapPoint(const shared_ptr<MapPoint> mpt) {
 
     if (flag) {
         for (auto& pair: mpt->getKeyFrameObservationsMap()) {
-            if (pair.first.expired()) {
+            auto otherKF = Map::getInstance().getKeyFrame(pair.first);
+
+            if ( otherKF == nullptr || otherKF->getId() == this->id_ ) {
                 continue;
             }
 
-            auto otherKF = pair.first.lock();
-            if (otherKF->getId() != this->id_) {
-                this->decreaseConnectedKeyFrameWeightByOne(otherKF->getId());
-                otherKF->decreaseConnectedKeyFrameWeightByOne(this->id_);
-            }
+            this->decreaseConnectedKeyFrameWeightByOne(otherKF->getId());
+            otherKF->decreaseConnectedKeyFrameWeightByOne(this->id_);
         }
     }
 
@@ -142,11 +141,13 @@ void Frame::updateConnectedKeyFrames() {
 
         for(auto& keyFrameMap : (mapPoint.lock())->getKeyFrameObservationsMap()) {
 
-            auto keyFrame = keyFrameMap.first;
+            auto keyFrame = Map::getInstance().getKeyFrame(keyFrameMap.first);
 
-            if (!keyFrame.expired() && keyFrame.lock()->getId() != id_) {
-                connectedKeyFrameCandidates[keyFrame.lock()->getId()]++;
+            if ( keyFrame == nullptr || keyFrame->getId() == id_) {
+                continue;
             }
+
+            connectedKeyFrameCandidates[keyFrame->getId()]++;
         }
     }
        
@@ -174,7 +175,13 @@ void Frame::updateConnectedKeyFrames() {
     if(connectedKeyFrameIdToWeight_.empty() && maxWeight != 0) {
         connectedKeyFrameIdToWeight_[maxWeightConnectedKeyFrameId] = maxWeight;
         Map::getInstance().getKeyFrame(maxWeightConnectedKeyFrameId)->addConnectedKeyFrame(this->id_, maxWeight);
-    }    
+    }
+
+    // cout << "Current Keyframe Id: " << this->id_ << endl;
+    // cout << "Connected Keyframe counts: " << connectedKeyFrameIdToWeight_.size() << endl;
+    // for(auto& pair: connectedKeyFrameIdToWeight_) {
+    //     cout << "Id: " << pair.first << " Weight: " << pair.second << endl;
+    // }    
 }
 
 
