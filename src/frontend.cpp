@@ -1,5 +1,12 @@
 /*
- * 
+ * Fontend which tracks camera poses on frames
+ *
+ * The entry point is the AddFrame function, which gets a frame pointer and computes the camera pose on that frame. Return false if the tracking fails.
+ *
+ * Frontend is also reponsible for the other functions
+ * 1. create keyframe
+ * 2. invoke backend (if there is) to optimize
+ * 3. invoke reviewer (if there is) to show the image frames, real-time poses and maps
  */
 
 #include <opencv2/highgui/highgui.hpp>
@@ -13,7 +20,6 @@
 #include "myslam/g2o_types.h"
 #include "myslam/util.h"
 #include "myslam/map.h"
-
 
 namespace myslam
 {
@@ -42,26 +48,31 @@ namespace myslam
         {
         case INITIALIZING:
         {
-            // RGBD camera only needs 1 frame to configure since it could get the depth information
-            state_ = TRACKING;
-
             // extract features from frameCurr_
             extractKeyPointsAndComputeDescriptors();
 
             // the first frame is a key-frame
             Map::getInstance().insertKeyFrame(frameCurr_);
-            initMap();
+            for (size_t i = 0; i < keypointsCurr_.size(); i++)
+            {
+                addNewMapPoint(i);
+            }
+
+            // RGBD camera only needs 1 frame to configure since it could get the depth information
+            state_ = TRACKING;
             frameRef_ = frame;
             break;
         }
         case TRACKING:
         {
-            // set an initial pose, used for looking for map points in current view
+            // set an initial pose to the pose of previous pose, used for looking for map points in current view
             frameCurr_->setPose(frameRef_->getPose());
 
             extractKeyPointsAndComputeDescriptors();
+
             matchKeyPointsWithActiveMapPoints();
             estimatePosePnP();
+            // TODO: do above seteps again
 
             // bad estimation due to various reasons
             if (!isGoodEstimation())
@@ -81,7 +92,7 @@ namespace myslam
             // remove non-active mappoints
             cullNonActiveMapPoints();
 
-            if ( isKeyFrame() )
+            if (isKeyFrame())
             {
                 cout << "  Current frame is a new keyframe" << endl;
                 Map::getInstance().insertKeyFrame(frameCurr_);
@@ -94,9 +105,10 @@ namespace myslam
 
                 // Optimize active mappoints since has a new keyframe
                 triangulateActiveMapPoints();
-                
+
                 // if have backend, use backend to optimize mappoints position and frame pose
-                if (backend_) {
+                if (backend_)
+                {
                     frameCurr_->updateConnectedKeyFrames();
                     backend_->optimizeCovisibilityGraph(frameCurr_);
                 }
@@ -108,11 +120,12 @@ namespace myslam
         case LOST:
         {
             cout << "Tracking has lost" << endl;
-            break;
+            return false;
         }
         }
 
-        if (viewer_) {
+        if (viewer_)
+        {
             viewer_->setCurrentFrame(frameCurr_, matchedKptSet_);
             viewer_->updateDrawingObjects();
         }
@@ -138,47 +151,56 @@ namespace myslam
 
         // Select the good mappoints candidates
         vector<MapPoint::Ptr> mptCandidates;
-        Mat descriptorCandidates;
+        Mat mptCandidatesDescriptors;
         for (auto &mappoint : activeMpts)
         {
             auto mp = mappoint.second;
 
             // If considered as outlier by backend
+            // TODO: should remove this mappoint from the active mappoint
             if (mp->outlier_)
             {
                 continue;
             }
 
-            if (frameCurr_->isInFrame(mp->getPosition()))
+            // If cannot be viewed by current frame
+            // TODO: should remove this mappoint from the active mappoint
+            if (!frameCurr_->isInFrame(mp->getPosition()))
             {
-                // add to candidate
-                mp->visibleTimes_++;
-                mptCandidates.push_back(mp);
-                descriptorCandidates.push_back(mp->descriptor_);
+                continue;
             }
+
+            // add as a candidate
+            mp->visibleTimes_++;
+            mptCandidates.push_back(mp);
+            mptCandidatesDescriptors.push_back(mp->descriptor_);
         }
 
         vector<cv::DMatch> matches;
-        flannMatcher_.match(descriptorCandidates, descriptorsCurr_, matches);
-        // select the best matches
+        flannMatcher_.match(mptCandidatesDescriptors, descriptorsCurr_, matches);
+
+        // compute the min distance of the best match
         float min_dis = std::min_element(
                             matches.begin(),
                             matches.end(),
-                            [](const cv::DMatch &m1, const cv::DMatch &m2) { return m1.distance < m2.distance; })
+                            [](const cv::DMatch &m1, const cv::DMatch &m2)
+                            { return m1.distance < m2.distance; })
                             ->distance;
 
         matchedMptKptMap_.clear();
         matchedKptSet_.clear();
         for (cv::DMatch &m : matches)
         {
+            // filter out the matches whose distance is large
             if (m.distance < max<float>(min_dis * minDisRatio_, 30.0))
             {
                 matchedMptKptMap_[mptCandidates[m.queryIdx]] = keypointsCurr_[m.trainIdx];
                 matchedKptSet_.insert(keypointsCurr_[m.trainIdx]);
             }
         }
-        cout << "  Active mappoints size: " << mptCandidates.size() << endl;
-        cout << "  Matched feature paris size: " << matchedMptKptMap_.size() << endl;
+        cout << "  Active mappoints size: " << activeMpts.size() << endl;
+        cout << "  Candidate mappoints size: " << mptCandidates.size() << endl;
+        cout << "  Matched <mappoint, keypoint> paris size: " << matchedMptKptMap_.size() << endl;
     }
 
     void FrontEnd::estimatePosePnP()
@@ -198,6 +220,8 @@ namespace myslam
         // use P3P wih Ransac to solve an intial value of the pose
         Mat K = frameCurr_->camera_->getCameraMatrix();
         Mat rvec, tvec, inliers;
+
+        // TODO: set initial pose
         cv::solvePnPRansac(pts3d, pts2d, K, Mat(), rvec, tvec, false, 100, 4.0, 0.99, inliers, cv::SOLVEPNP_P3P);
 
         num_inliers_ = inliers.rows;
@@ -250,6 +274,8 @@ namespace myslam
         optimizer.optimize(10);
 
         estimatedPoseCurr_ = pose->estimate();
+
+        // TODO: remove the outliers from active map?
     }
 
     bool FrontEnd::isGoodEstimation()
@@ -277,18 +303,11 @@ namespace myslam
         Sophus::Vector6d d = T_r_c.log();
         Vector3d trans = d.head<3>();
         Vector3d rot = d.tail<3>();
-        if (rot.norm() > keyFrameMinRot_ || trans.norm() > keyFrameMinTrans_) {
+        if (rot.norm() > keyFrameMinRot_ || trans.norm() > keyFrameMinTrans_)
+        {
             return true;
         }
         return false;
-    }
-
-    void FrontEnd::initMap()
-    {
-        for (size_t i = 0; i < keypointsCurr_.size(); i++)
-        {
-            addNewMapPoint(i);
-        }
     }
 
     void FrontEnd::cullNonActiveMapPoints()
@@ -304,7 +323,7 @@ namespace myslam
         for (size_t i = 0; i < keypointsCurr_.size(); i++)
         {
             // if the keypoint doesn't match with previous mappoints, this is a new mappoint
-            if ( !matchedKptSet_.count(keypointsCurr_[i]) )
+            if (!matchedKptSet_.count(keypointsCurr_[i]))
             {
                 addNewMapPoint(i);
             }
@@ -315,9 +334,9 @@ namespace myslam
 
     void FrontEnd::addNewMapPoint(const int &idx)
     {
-
         double depth = frameCurr_->findDepth(keypointsCurr_[idx]);
-        if (depth < 0) {
+        if (depth < 0)
+        {
             return;
         }
 
@@ -325,7 +344,7 @@ namespace myslam
             keypointsCurr_[idx], frameCurr_->getPose(), depth);
 
         // Create a mappoint
-        // deep copy the descriptor and keypoint position since they will be clear in next track
+        // deep copy the descriptor and keypoint position since they will be clear in next loop
         MapPoint::Ptr mpt = MapPoint::createMapPoint(
             mptPos,
             (mptPos - frameCurr_->getCamCenter()).normalized(),
@@ -340,18 +359,22 @@ namespace myslam
         Map::getInstance().insertMapPoint(mpt);
     }
 
-    void FrontEnd::addKeyframeObservationToOldMapPoints() {
-        for (auto& mappoint : frameCurr_ -> getObservedMapPoints()) {
-            if (mappoint.expired()) {
+    void FrontEnd::addKeyframeObservationToOldMapPoints()
+    {
+        for (auto &mappoint : frameCurr_->getObservedMapPoints())
+        {
+            if (mappoint.expired())
+            {
                 continue;
             }
 
             auto mp = mappoint.lock();
-            if (mp -> outlier_) {
+            if (mp->outlier_)
+            {
                 continue;
             }
 
-            mp -> addKeyFrameObservation(frameCurr_->getId(), cv::Point2f(matchedMptKptMap_[mp].pt));
+            mp->addKeyFrameObservation(frameCurr_->getId(), cv::Point2f(matchedMptKptMap_[mp].pt));
         }
     }
 
@@ -361,12 +384,14 @@ namespace myslam
         for (auto &mappoint : Map::getInstance().getActiveMappoints())
         {
             auto mp = mappoint.second;
-            if ( mp->outlier_ || mp->triangulated_ || mp->optimized_) {
+            if (mp->outlier_ || mp->triangulated_ || mp->optimized_)
+            {
                 continue;
             }
 
             // it current keyframe doesn't observe this mappoint, it cannot be triangulated
-            if ( !matchedMptKptMap_.count(mp) ) {
+            if (!matchedMptKptMap_.count(mp))
+            {
                 continue;
             }
 
@@ -378,15 +403,17 @@ namespace myslam
                 auto keyFrame = Map::getInstance().getKeyFrame(keyFrameMap.first);
                 auto keyPoint = keyFrameMap.second;
 
-                if ( keyFrame == nullptr ) {
+                if (keyFrame == nullptr)
+                {
                     continue;
-                } 
+                }
 
                 poses.push_back(keyFrame->getPose());
                 points.push_back(keyFrame->camera_->pixel2camera(keyPoint));
             }
 
-            if (poses.size() >= 2) {
+            if (poses.size() >= 2)
+            {
                 Vec3 pworld = Vec3::Zero();
                 if (triangulation(poses, points, pworld) && pworld[2] > 0)
                 {
@@ -401,4 +428,4 @@ namespace myslam
         cout << "  Triangulate active mappoints size: " << triangulatedCnt << endl;
     }
 
-} //namespace
+} // namespace

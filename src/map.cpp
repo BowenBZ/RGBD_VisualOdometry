@@ -50,14 +50,15 @@ void Map::cullNonActiveMapPoints( const Frame::Ptr& currFrame ) {
         }
 
         // not in good view
-        Vector3d direction = mp->getPosition() - currFrame->getCamCenter();
-        direction.normalize();
-        double angle = acos( direction.transpose() * mp->norm_ );
-        if ( angle > M_PI/6. )
-        {
-            remove_id.push_back(mp_id);
-            continue;
-        }
+        // TODO: update the norm_ direction of mp
+        // Vector3d direction = mp->getPosition() - currFrame->getCamCenter();
+        // direction.normalize();
+        // double angle = acos( direction.transpose() * mp->norm_ );
+        // if ( angle > M_PI/6. )
+        // {
+        //     remove_id.push_back(mp_id);
+        //     continue;
+        // }
     }
 
     for(auto& id : remove_id) {

@@ -65,8 +65,6 @@ private:
     void matchKeyPointsWithActiveMapPoints();
     void estimatePosePnP(); 
 
-    // for first key-frame, add all 3d points into map
-    void initMap();    
     // remove non-active mappoints
     void cullNonActiveMapPoints();
     // add new mappoint to the map from the observation of a keyframe
