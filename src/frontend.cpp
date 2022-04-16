@@ -112,8 +112,10 @@ namespace myslam
         }
         }
 
-        viewer_->setCurrentFrame(frameCurr_, matchedKptSet_);
-        viewer_->updateDrawingObjects();
+        if (viewer_) {
+            viewer_->setCurrentFrame(frameCurr_, matchedKptSet_);
+            viewer_->updateDrawingObjects();
+        }
 
         return true;
     }

@@ -61,9 +61,13 @@ int main ( int argc, char** argv )
 
     myslam::Camera::Ptr camera ( new myslam::Camera );
     myslam::FrontEnd::Ptr frontend ( new myslam::FrontEnd );
-    myslam::Viewer::Ptr viewer (new myslam::Viewer );
 
-    frontend->setViewer(viewer);
+    myslam::Viewer::Ptr viewer;
+    if (myslam::Config::get<int> ( "enable_viewer" )) {
+        cout << "Enable to show image" << endl; 
+        viewer = myslam::Viewer::Ptr( new myslam::Viewer );
+        frontend->setViewer(viewer);
+    }
 
     myslam::Backend::Ptr backend;
     if (myslam::Config::get<int> ( "enable_local_optimization" )) {
@@ -115,7 +119,9 @@ int main ( int argc, char** argv )
         backend->Stop();
     }
 
-    viewer->Close();
+    if (myslam::Config::get<int> ( "enable_viewer" )) {
+        viewer->Close();
+    }
 
     return 0;
 }

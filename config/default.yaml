@@ -1,6 +1,6 @@
 %YAML:1.0
 # The tum dataset directory with the associate.txt fiel, change it to yours! 
-dataset_dir: ../SLAM/rgbd_dataset_freiburg1_xyz
+dataset_dir: ../dataset/rgbd_dataset_freiburg1_xyz
 
 # The output trajectory file directory
 output_file: ./output/output.txt
@@ -28,3 +28,6 @@ map_point_erase_ratio: 0.1
 # backend paras
 enable_local_optimization: 1
 chi2_th: 1
+
+# viewer paras
+enable_viewer: 0
