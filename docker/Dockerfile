@@ -25,7 +25,7 @@ RUN apt-get update \
 && git checkout 13fb328 \
 && mkdir build \
 && cd build \
-&& cmake -DCMAKE_BUILD_TYPE=RELEASE .. \
+&& cmake -DCMAKE_BUILD_TYPE=RELEASE -DCMAKE_INSTALL_PREFIX=/usr/local .. \
 && make -j4 \
 && make install \
 && cd /root/dependencies \
@@ -36,7 +36,7 @@ RUN apt-get update \
 && git checkout 9b41a4e \
 && mkdir build \
 && cd build \
-&& cmake -DCMAKE_BUILD_TYPE=RELEASE .. \
+&& cmake -DCMAKE_BUILD_TYPE=RELEASE -DCMAKE_INSTALL_PREFIX=/usr/local .. \
 && make -j4 \
 && make install \
 && cd /root/dependencies \
@@ -48,7 +48,7 @@ RUN apt-get update \
 && patch src/display/device/display_x11.cpp ../display_x11.patch \
 && mkdir build \
 && cd build \
-&& cmake -DCMAKE_BUILD_TYPE=RELEASE .. \
+&& cmake -DCMAKE_BUILD_TYPE=RELEASE -DCMAKE_INSTALL_PREFIX=/usr/local .. \
 && make -j4 \
 && make install \
 && cd /root \
