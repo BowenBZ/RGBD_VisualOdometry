@@ -25,7 +25,66 @@ You could refers to the `docker/dockerfile` for commands of how to install the d
 
 **Note**. the dockerfile contains a `display_x11.patch` file for Pangolin package, it is mainly for the docker usage because docker requires X11 to run the GUI application. If you don't develope in the docker, you don't need to apply this patch.
 
-### Use Docker
+
+## Build repo
+
+Clone and build this repo with CMake
+
+```
+git clone https://github.com/BerwinZ/RGBD_VisualOdometry.git
+cd RGBD_VisualOdometry
+mkdir build
+cd build
+cmake ..
+make
+```
+
+This will build the library file into `<repo_path>/lib/libmyslam.so`, and a sample VO executable in `<repo_path>/bin/run_vo`. 
+
+## Run sample application
+
+### Prepare dataset
+
+This repo uses [TUM dataset](https://vision.in.tum.de/data/datasets/rgbd-dataset/download) to test. Download one of the dataset from the website. e.g.
+
+```
+cd <your_dataset_folder>
+wget https://vision.in.tum.de/rgbd/dataset/freiburg1/rgbd_dataset_freiburg1_xyz.tgz
+tar zxvf rgbd_dataset_freiburg1_xyz.tgz
+```
+
+In order to process the dataset, following packages should be installed. 
+
+* Python3
+  * Numpy module
+  * Matplotlib module
+
+In order to generate a file to align the RGB images and the depth images for VO to use, you need to modify the paths in the `tools/run_associate.sh` file, and run it with `sh run_associate.sh`. This will generate the `associate.txt` file in the dataset folder.
+
+Then modify the `dataset_dir` setting in `config/default.yml` to the generated `associate.txt` file.
+
+### Run sample VO
+
+```
+cd <repo_path>
+mkdir output
+bin/run_vo config/default.yml
+```
+
+### Evaluation
+
+The TUM dataset also provides the tools to evaluate the estimated trajectory. Those scripts are also placed in the `tools` folder. 
+
+The `run_vo` app will save the estiamted trajectory to a `.txt` file. Then you can use the scripts to compute ATE (accumulated trajectory error) or RPE (relative pose error) based on the output file and `groundtruth.txt` provided by dataset. 
+
+You can also generate the trajectory in plane or the drift error per second. This requires Python3 with matplotlib module installed. 
+
+<p float="left">
+  <img src="pngs/plot_ate.png" width="300"/>
+  <img src="pngs/plot_rpe.png" width="300"/>
+</p>
+
+## Use repo with Docker
 
 If you plan to use docker to develop, follows the following steps
 
@@ -53,28 +112,7 @@ docker -t myslam /path-to-this-repo/docker/
 
 **Note**. For docker development, only running in Windows with `VcXsrv Windows X Server` to support the GUI is tested. There might be driver issues for other platforms. If this happens, you could refers to this [link](https://gernotklingler.com/blog/howto-get-hardware-accelerated-opengl-support-docker/).
 
-## Dataset
-
-### Preparation
-
-[TUM dataset](https://vision.in.tum.de/data/datasets/rgbd-dataset/download)
-
-To process the TUM dataset, use the `tools/associate.py` to generate the `associate.txt` file and place it into the dataset folder. This requires Python3 with Numpy module installed.
-
-### Evaluation
-
-The TUM dataset also provides the tools to evaluate the estimated trajectory. Those scripts are also placed in the `tools` folder. 
-
-The `run_vo` app will save the estiamted trajectory to a `.txt` file. Then you can use the scripts to compute ATE (accumulated trajectory error) or RPE (relative pose error) based on the output file and `groundtruth.txt` provided by dataset. 
-
-You can also generate the trajectory in plane or the drift error per second. This requires Python3 with matplotlib module installed. 
-
-<p float="left">
-  <img src="pngs/plot_ate.png" width="300"/>
-  <img src="pngs/plot_rpe.png" width="300"/>
-</p>
-
-## Work Flow
+## Explanation of VO work flow
 
 This repos is only a VO. It uses the following techniques. 
 
