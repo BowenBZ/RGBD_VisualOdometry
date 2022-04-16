@@ -56,8 +56,8 @@ tar zxvf rgbd_dataset_freiburg1_xyz.tgz
 In order to process the dataset, following packages should be installed. 
 
 * Python3
-  * Numpy module
-  * Matplotlib module
+  * Numpy module with `pip3 install numpy`
+  * Matplotlib module with `pip3 install matplotlib`
 
 In order to generate a file to align the RGB images and the depth images for VO to use, you need to modify the paths in the `tools/run_associate.sh` file, and run it with `sh run_associate.sh`. This will generate the `associate.txt` file in the dataset folder.
 
