@@ -9,6 +9,9 @@
  * 3. invoke reviewer (if there is) to show the image frames, real-time poses and maps
  */
 
+#include "myslam/frontend.h"
+
+#include <opencv2/core/eigen.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
@@ -16,7 +19,6 @@
 #include <boost/timer.hpp>
 
 #include "myslam/config.h"
-#include "myslam/frontend.h"
 #include "myslam/g2o_types.h"
 #include "myslam/util.h"
 #include "myslam/map.h"
@@ -70,9 +72,17 @@ namespace myslam
 
             extractKeyPointsAndComputeDescriptors();
 
+            // Corase compute pose
+            cout << "Corase computing...\n";
             matchKeyPointsWithActiveMapPoints();
             estimatePosePnP();
-            // TODO: do above seteps again
+            frameCurr_->setPose(estimatedPoseCurr_);
+
+            // Since the pose of frame is updated, try again to get more matches
+            cout << "Fine computing...\n";
+            matchKeyPointsWithActiveMapPoints();
+            estimatePosePnP();
+            frameCurr_->setPose(estimatedPoseCurr_);
 
             // bad estimation due to various reasons
             if (!isGoodEstimation())
@@ -85,9 +95,6 @@ namespace myslam
 
             // if good estimation, reset the num of lost
             accuLostFrameNums_ = 0;
-
-            // set estimated pose to current frame
-            frameCurr_->setPose(estimatedPoseCurr_);
 
             // remove non-active mappoints
             cullNonActiveMapPoints();
@@ -187,6 +194,9 @@ namespace myslam
                             { return m1.distance < m2.distance; })
                             ->distance;
 
+        cout << "Minimum distance of matches " << min_dis << endl;
+        cout << "Largest distance of matches " << max<float>(min_dis * minDisRatio_, 30.0) << endl;
+
         matchedMptKptMap_.clear();
         matchedKptSet_.clear();
         for (cv::DMatch &m : matches)
@@ -217,26 +227,29 @@ namespace myslam
             pts2d.push_back(pair.second.pt);
         }
 
-        // use P3P wih Ransac to solve an intial value of the pose
-        Mat K = frameCurr_->camera_->getCameraMatrix();
-        Mat rvec, tvec, inliers;
+        // use PNP to compute the initial pose
+        Mat initRotMat, rotVec, tranVec, inliers;
+        cv::eigen2cv(frameCurr_->getPose().rotationMatrix(), initRotMat);
+        cv::Rodrigues(initRotMat, rotVec);
+        cv::eigen2cv(frameCurr_->getPose().translation(), tranVec);
 
-        // TODO: set initial pose
-        cv::solvePnPRansac(pts3d, pts2d, K, Mat(), rvec, tvec, false, 100, 4.0, 0.99, inliers, cv::SOLVEPNP_P3P);
-
+        cv::solvePnPRansac(pts3d, pts2d, frameCurr_->camera_->getCameraMatrix(), Mat(),
+                           rotVec, tranVec, true,
+                           100, 4.0, 0.99,
+                           inliers, cv::SOLVEPNP_P3P);
         num_inliers_ = inliers.rows;
         cout << "  PNP results inlier size: " << num_inliers_ << endl;
 
         // Covert rotation vector to matrix
-        Mat R;
-        cv::Rodrigues(rvec, R);
-        Eigen::Matrix3d R_eigen;
-        R_eigen << R.at<double>(0, 0), R.at<double>(0, 1), R.at<double>(0, 2),
-            R.at<double>(1, 0), R.at<double>(1, 1), R.at<double>(1, 2),
-            R.at<double>(2, 0), R.at<double>(2, 1), R.at<double>(2, 2);
+        Mat rotMat;
+        cv::Rodrigues(rotVec, rotMat);
+        Eigen::Matrix3d rotMat_eigen;
+        rotMat_eigen << rotMat.at<double>(0, 0), rotMat.at<double>(0, 1), rotMat.at<double>(0, 2),
+            rotMat.at<double>(1, 0), rotMat.at<double>(1, 1), rotMat.at<double>(1, 2),
+            rotMat.at<double>(2, 0), rotMat.at<double>(2, 1), rotMat.at<double>(2, 2);
         estimatedPoseCurr_ = SE3(
-            R_eigen,
-            Vector3d(tvec.at<double>(0, 0), tvec.at<double>(1, 0), tvec.at<double>(2, 0)));
+            rotMat_eigen,
+            Vector3d(tranVec.at<double>(0, 0), tranVec.at<double>(1, 0), tranVec.at<double>(2, 0)));
 
         // using motion-only bundle adjustment to optimize the pose
         typedef g2o::BlockSolver_6_3 BlockSolverType;
