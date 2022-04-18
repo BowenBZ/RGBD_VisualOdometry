@@ -75,13 +75,13 @@ namespace myslam
             // Corase compute pose
             cout << "Corase computing...\n";
             matchKeyPointsWithActiveMapPoints();
-            estimatePosePnP();
+            estimatePosePnP(false);
             frameCurr_->setPose(estimatedPoseCurr_);
 
             // Since the pose of frame is updated, try again to get more matches
             cout << "Fine computing...\n";
             matchKeyPointsWithActiveMapPoints();
-            estimatePosePnP();
+            estimatePosePnP(true);
             frameCurr_->setPose(estimatedPoseCurr_);
 
             // bad estimation due to various reasons
@@ -213,7 +213,7 @@ namespace myslam
         cout << "  Matched <mappoint, keypoint> paris size: " << matchedMptKptMap_.size() << endl;
     }
 
-    void FrontEnd::estimatePosePnP()
+    void FrontEnd::estimatePosePnP(bool addObservation)
     {
         // construct the 3d 2d observations
         vector<MapPoint::Ptr> mpts3d;
@@ -267,21 +267,53 @@ namespace myslam
         optimizer.addVertex(pose);
 
         // edges
-        for (int i = 0; i < inliers.rows; i++)
+        vector<UnaryEdgeProjection *> edges;
+
+        for (size_t i = 0; i < inliers.rows; i++)
         {
             int index = inliers.at<int>(i, 0);
             // 3D -> 2D projection
             UnaryEdgeProjection *edge = new UnaryEdgeProjection(toVec3d(pts3d[index]), frameCurr_->camera_);
+
             edge->setId(i);
             edge->setVertex(0, pose);
             edge->setMeasurement(toVec2d(pts2d[index]));
             edge->setInformation(Eigen::Matrix2d::Identity());
+            auto rk = new g2o::RobustKernelHuber();
+            rk->setDelta(sqrt(7.815));
+            edge->setRobustKernel(rk);
+
+            edges.push_back(edge);
             optimizer.addEdge(edge);
-            // increase the inlier mappoints matched times
-            mpts3d[index]->matchedTimes_++;
-            // set this mappoint as the observed mappoints of current frame
-            frameCurr_->addObservedMapPoint(mpts3d[index]);
         }
+
+        // first round optimization
+        optimizer.initializeOptimization();
+        optimizer.optimize(10);
+
+        // remove edge outliers
+        int outlierCnt = 0;
+        for (size_t i = 0; i < edges.size(); i++)
+        {
+            auto edge = edges[i];
+            edge->computeError();
+
+            if (edge->chi2() > 1)
+            {
+                edge->setLevel(1);
+                outlierCnt++;
+            }
+            else
+            {
+                auto mpt = mpts3d[inliers.at<int>(i, 0)];
+                mpt->matchedTimes_++;
+                if (addObservation) {
+                    frameCurr_->addObservedMapPoint(mpt);
+                }
+            }
+            edge->setRobustKernel(0);
+        }
+        cout << "got outliders after first round BA: " << outlierCnt << endl;
 
         optimizer.initializeOptimization();
         optimizer.optimize(10);

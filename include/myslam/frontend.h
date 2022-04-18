@@ -63,7 +63,7 @@ private:
     void extractKeyPointsAndComputeDescriptors();
     void computeDescriptors(); 
     void matchKeyPointsWithActiveMapPoints();
-    void estimatePosePnP(); 
+    void estimatePosePnP(bool addObservation); 
 
     // remove non-active mappoints
     void cullNonActiveMapPoints();
