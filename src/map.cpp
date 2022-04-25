@@ -66,6 +66,41 @@ void Map::cullNonActiveMapPoints( const Frame::Ptr& currFrame ) {
     }
 }
 
+Map::MappointDict Map::getLocalMappoints( const Frame::Ptr& keyFrame ) {
+    unique_lock<mutex> lck(data_mutex_);
+
+    auto connectedKeyFrames = keyFrame->getConnectedKeyFrames();
+    // Add this keyFrame to the connected keyframe map
+    connectedKeyFrames[keyFrame->getId()] = 0;
+
+    unordered_map<uint64_t, MapPoint::Ptr> mapPointMap;
+
+    // Find all mappoints observed by connected keyframes
+    for(auto& pair: connectedKeyFrames) {
+    
+        auto keyFrameId = pair.first;
+        auto keyFrame = getKeyFrame(keyFrameId);
+
+        if (keyFrame == nullptr) {
+            continue;
+        }
+
+        for(auto& mapPointPtr: keyFrame -> getObservedMapPoints()) {
+            if ( mapPointPtr.expired() ) {
+                continue;
+            }
+            auto mapPoint = mapPointPtr.lock();
+            if(mapPoint->outlier_) {
+                continue;
+            }
+
+            mapPointMap[mapPoint -> getId()] = mapPoint;
+        }
+    }
+
+    return mapPointMap;
+}
+
 inline double getViewAngle ( const Frame::Ptr& frame, const MapPoint::Ptr& point )
 {
     Vector3d n = point->getPosition() - frame->getCamCenter();

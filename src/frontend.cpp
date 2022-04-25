@@ -150,13 +150,14 @@ namespace myslam
     void FrontEnd::matchKeyPointsWithActiveMapPoints()
     {
         // get the active mappoints candidates from map
-        auto activeMpts = Map::getInstance().getActiveMappoints();
-        if (activeMpts.size() < 100)
-        {
-            Map::getInstance().resetActiveMappoints();
-            activeMpts = Map::getInstance().getAllMappoints();
-            cout << " Not enough active mappoints, reset activie mappoints to all mappoints" << endl;
-        }
+        // auto activeMpts = Map::getInstance().getActiveMappoints();
+        // if (activeMpts.size() < 100)
+        // {
+        //     Map::getInstance().resetActiveMappoints();
+        //     activeMpts = Map::getInstance().getAllMappoints();
+        //     cout << " Not enough active mappoints, reset activie mappoints to all mappoints" << endl;
+        // }
+        auto activeMpts = Map::getInstance().getLocalMappoints(keyFrameRef_);
 
         // Select the good mappoints candidates
         vector<MapPoint::Ptr> mptCandidates;

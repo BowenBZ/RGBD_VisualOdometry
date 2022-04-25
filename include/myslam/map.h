@@ -85,6 +85,8 @@ public:
         activeMapPoints_ = mapPoints;
     }
 
+    MappointDict getLocalMappoints( const Frame::Ptr& keyFrame );
+
 private:
     Map() {   
         mapPointEraseRatio_ = Config::get<double> ( "map_point_erase_ratio" );
