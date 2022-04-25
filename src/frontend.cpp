@@ -26,7 +26,7 @@
 namespace myslam
 {
 
-    FrontEnd::FrontEnd() : state_(INITIALIZING), frameRef_(nullptr), frameCurr_(nullptr), accuLostFrameNums_(0), num_inliers_(0),
+    FrontEnd::FrontEnd() : state_(INITIALIZING), framePrev_(nullptr), frameCurr_(nullptr), accuLostFrameNums_(0), num_inliers_(0),
                            flannMatcher_(new cv::flann::LshIndexParams(5, 10, 2))
     {
         orb_ = cv::ORB::create(Config::get<int>("number_of_features"),
@@ -62,13 +62,14 @@ namespace myslam
 
             // RGBD camera only needs 1 frame to configure since it could get the depth information
             state_ = TRACKING;
-            frameRef_ = frame;
+            framePrev_ = frame;
+            keyFrameRef_ = frame;
             break;
         }
         case TRACKING:
         {
             // set an initial pose to the pose of previous pose, used for looking for map points in current view
-            frameCurr_->setPose(frameRef_->getPose());
+            frameCurr_->setPose(framePrev_->getPose());
 
             extractKeyPointsAndComputeDescriptors();
 
@@ -120,7 +121,8 @@ namespace myslam
                     backend_->optimizeCovisibilityGraph(frameCurr_);
                 }
 
-                frameRef_ = frameCurr_;
+                framePrev_ = frameCurr_;
+                keyFrameRef_ = frame;
             }
             break;
         }
@@ -332,7 +334,7 @@ namespace myslam
             return false;
         }
         // check if the motion is too large
-        SE3 T_r_c = frameRef_->getPose() * estimatedPoseCurr_.inverse();
+        SE3 T_r_c = framePrev_->getPose() * estimatedPoseCurr_.inverse();
         Sophus::Vector6d d = T_r_c.log();
         if (d.norm() > 5.0)
         {
@@ -344,7 +346,7 @@ namespace myslam
 
     bool FrontEnd::isKeyFrame()
     {
-        SE3 T_r_c = frameRef_->getPose() * estimatedPoseCurr_.inverse();
+        SE3 T_r_c = framePrev_->getPose() * estimatedPoseCurr_.inverse();
         Sophus::Vector6d d = T_r_c.log();
         Vector3d trans = d.head<3>();
         Vector3d rot = d.tail<3>();

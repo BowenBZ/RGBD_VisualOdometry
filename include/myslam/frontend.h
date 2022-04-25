@@ -37,28 +37,32 @@ public:
     VOState getState() { return state_;}
     
 private:  
-    Frame::Ptr  frameRef_;       // reference key frame
-    Frame::Ptr  frameCurr_;      // current frame 
-    VOState     state_;     // current VO status
-    cv::Ptr<cv::ORB> orb_;  // orb detector and computer 
+    Frame::Ptr              keyFrameRef_;   // reference keyframe
+    Frame::Ptr              framePrev_;     // last frame
+    Frame::Ptr              frameCurr_;     // current frame 
+    VOState                 state_;         // current VO status
+    cv::Ptr<cv::ORB>        orb_;           // orb detector and computer 
     vector<cv::KeyPoint>    keypointsCurr_;    // keypoints in current frame
     Mat                     descriptorsCurr_;  // descriptor in current frame 
     cv::FlannBasedMatcher   flannMatcher_;     // flann matcher
     unordered_map<MapPoint::Ptr, cv::KeyPoint>  matchedMptKptMap_;   // matched map points and keypoints
-    KeyPointSet  matchedKptSet_; // set of matched keypoint
+    KeyPointSet             matchedKptSet_; // set of matched keypoint
    
-    SE3 estimatedPoseCurr_;    // the estimated pose of current frame 
+    SE3                     estimatedPoseCurr_; // the estimated pose of current frame 
  
-    int num_inliers_;        // number of inlier features in pnp
-    int accuLostFrameNums_;           // number of lost times
+    int                     num_inliers_;       // number of inlier features in pnp
+    int                     accuLostFrameNums_; // number of lost times
     
     // parameters, see config/default.yaml
-    float minDisRatio_;      // ratio for selecting good matches
-    int maxLostFrames_;      // max number of continuous lost times
-    int min_inliers_;       // minimum inliers
-    double keyFrameMinRot_;   // minimal rotation of two key-frames
-    double keyFrameMinTrans_; // minimal translation of two key-frames
+    float                   minDisRatio_;   // ratio for selecting good matches
+    int                     maxLostFrames_; // max number of continuous lost times
+    int                     min_inliers_;   // minimum inliers
+    double                  keyFrameMinRot_;    // minimal rotation of two key-frames
+    double                  keyFrameMinTrans_;  // minimal translation of two key-frames
     
+    Viewer::Ptr             viewer_;
+    Backend::Ptr            backend_;
+
     // inner operation 
     void extractKeyPointsAndComputeDescriptors();
     void computeDescriptors(); 
@@ -80,11 +84,6 @@ private:
     
     bool isGoodEstimation(); 
     bool isKeyFrame();
-
-    Viewer::Ptr viewer_;
-
-    Backend::Ptr backend_;
-
 };
 }
 
