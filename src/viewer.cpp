@@ -8,9 +8,9 @@ namespace myslam {
 
 void Viewer::updateDrawingObjects() {
     std::unique_lock<std::mutex> lck(viewer_data_mutex_);
-    all_keyframes_ = Map::getInstance().getAllKeyFrames();
-    all_mappoints_ = Map::getInstance().getAllMappoints();
-    active_mappoints_ = Map::getInstance().getActiveMappoints();
+    all_keyframes_ = MapManager::GetInstance().GetAllKeyframes();
+    all_mappoints_ = MapManager::GetInstance().GetAllMappoints();
+    active_mappoints_ = all_mappoints_;
 }
 
 void Viewer::ThreadLoop() {

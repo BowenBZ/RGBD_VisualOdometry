@@ -54,7 +54,7 @@ void Backend::optimize() {
     for(auto& pair: connectedKeyFrames) {
     
         auto keyFrameId = pair.first;
-        auto keyFrame = Map::getInstance().getKeyFrame(keyFrameId);
+        auto keyFrame = MapManager::GetInstance().GetKeyframe(keyFrameId);
 
         if (keyFrame == nullptr) {
             continue;
@@ -76,7 +76,7 @@ void Backend::optimize() {
     for (auto& pair : connectedKeyFrames) {
 
         auto keyFrameId = pair.first;
-        auto keyFrame = Map::getInstance().getKeyFrame(keyFrameId);
+        auto keyFrame = MapManager::GetInstance().GetKeyframe(keyFrameId);
         
         if (keyFrame == nullptr) {
             continue;
@@ -110,7 +110,7 @@ void Backend::optimize() {
         auto mapPoint = pair.second;
 
         for(auto& observation: mapPoint->getKeyFrameObservationsMap()) {
-            auto keyFrame = Map::getInstance().getKeyFrame(observation.first);
+            auto keyFrame = MapManager::GetInstance().GetKeyframe(observation.first);
             auto observedPixelPos = observation.second;
 
             if ( keyFrame == nullptr ) {

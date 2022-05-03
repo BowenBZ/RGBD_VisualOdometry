@@ -10,7 +10,7 @@
 #include "myslam/config.h"
 #include "myslam/frontend.h"
 #include "myslam/viewer.h"
-#include "myslam/map.h"
+#include "myslam/mapmanager.h"
 #include "myslam/backend.h"
 #include "myslam/frame.h"
 
@@ -109,7 +109,7 @@ int main ( int argc, char** argv )
     ofstream fout (myslam::Config::get<string> ( "output_file" ));
     fout << "# estimated trajectory format" << endl;
     fout << "# timestamp tx ty tz qx qy qz qw" << endl;
-    for(auto keyFrameMap: myslam::Map::getInstance().getAllKeyFrames()) {
+    for(auto keyFrameMap: myslam::MapManager::GetInstance().GetAllKeyframes()) {
         auto keyFrame = keyFrameMap.second;
         writePosetoFile(fout, std::to_string(keyFrame->time_stamp_), keyFrame->getPose());
     }

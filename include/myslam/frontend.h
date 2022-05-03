@@ -70,17 +70,17 @@ private:
     void estimatePosePnP(bool addObservation); 
 
     // remove non-active mappoints
-    void cullNonActiveMapPoints();
+    // void cullNonActiveMapPoints();
     // add new mappoint to the map from the observation of a keyframe
     void addNewMapPoints();     
     // really perform the adding action
-    void addNewMapPoint(const int& idx);     
+    void addNewMapPoint(int idx);     
 
     // add current keyframe as the new observation of old mappoints (also observed by previous keyframes)
     void addKeyframeObservationToOldMapPoints();
     
     // use triangulatiton to optmize the position of active mappoints
-    void triangulateActiveMapPoints();
+    // void triangulateActiveMapPoints();
     
     bool isGoodEstimation(); 
     bool isKeyFrame();

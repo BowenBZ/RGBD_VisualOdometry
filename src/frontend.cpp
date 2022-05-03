@@ -21,7 +21,7 @@
 #include "myslam/config.h"
 #include "myslam/g2o_types.h"
 #include "myslam/util.h"
-#include "myslam/map.h"
+#include "myslam/mapmanager.h"
 
 namespace myslam
 {
@@ -54,7 +54,7 @@ namespace myslam
             extractKeyPointsAndComputeDescriptors();
 
             // the first frame is a key-frame
-            Map::getInstance().insertKeyFrame(frameCurr_);
+            MapManager::GetInstance().InsertKeyframe(frameCurr_);
             for (size_t i = 0; i < keypointsCurr_.size(); i++)
             {
                 addNewMapPoint(i);
@@ -98,12 +98,12 @@ namespace myslam
             accuLostFrameNums_ = 0;
 
             // remove non-active mappoints
-            cullNonActiveMapPoints();
+            // cullNonActiveMapPoints();
 
             if (isKeyFrame())
             {
                 cout << "  Current frame is a new keyframe" << endl;
-                Map::getInstance().insertKeyFrame(frameCurr_);
+                MapManager::GetInstance().InsertKeyframe(frameCurr_);
 
                 // Add this keyframe as the observation of observed mappoints
                 addKeyframeObservationToOldMapPoints();
@@ -112,7 +112,7 @@ namespace myslam
                 addNewMapPoints();
 
                 // Optimize active mappoints since has a new keyframe
-                triangulateActiveMapPoints();
+                // triangulateActiveMapPoints();
 
                 // if have backend, use backend to optimize mappoints position and frame pose
                 if (backend_)
@@ -149,15 +149,14 @@ namespace myslam
 
     void FrontEnd::matchKeyPointsWithActiveMapPoints()
     {
-        // get the active mappoints candidates from map
-        // auto activeMpts = Map::getInstance().getActiveMappoints();
-        // if (activeMpts.size() < 100)
-        // {
-        //     Map::getInstance().resetActiveMappoints();
-        //     activeMpts = Map::getInstance().getAllMappoints();
-        //     cout << " Not enough active mappoints, reset activie mappoints to all mappoints" << endl;
-        // }
-        auto activeMpts = Map::getInstance().getLocalMappoints(keyFrameRef_);
+        // Get the local mappoints from map
+        cout << "test";
+        auto activeMpts = MapManager::GetInstance().GetMappointsAroundKeyframe(keyFrameRef_);
+        cout << "test2";
+        if (activeMpts.size() < 100) {
+            activeMpts = MapManager::GetInstance().GetAllMappoints();
+            cout << " Not enough active mappoints, reset activie mappoints to all mappoints" << endl;
+        }
 
         // Select the good mappoints candidates
         vector<MapPoint::Ptr> mptCandidates;
@@ -358,14 +357,6 @@ namespace myslam
         return false;
     }
 
-    void FrontEnd::cullNonActiveMapPoints()
-    {
-        Map::getInstance().cullNonActiveMapPoints(frameCurr_);
-        Map::getInstance().updateMappointEraseRatio();
-
-        cout << "  Active mappoints size after culling: " << Map::getInstance().getActiveMappoints().size() << endl;
-    }
-
     void FrontEnd::addNewMapPoints()
     {
         for (size_t i = 0; i < keypointsCurr_.size(); i++)
@@ -376,11 +367,11 @@ namespace myslam
                 addNewMapPoint(i);
             }
         }
-        Map::getInstance().updateMappointEraseRatio();
-        cout << "  Active mappoints size after adding: " << Map::getInstance().getActiveMappoints().size() << endl;
+        // MapManager::GetInstance().updateMappointEraseRatio();
+        // cout << "  Active mappoints size after adding: " << MapManager::GetInstance().getActiveMappoints().size() << endl;
     }
 
-    void FrontEnd::addNewMapPoint(const int &idx)
+    void FrontEnd::addNewMapPoint(int idx)
     {
         double depth = frameCurr_->findDepth(keypointsCurr_[idx]);
         if (depth < 0)
@@ -404,7 +395,7 @@ namespace myslam
         frameCurr_->addObservedMapPoint(mpt);
 
         // Add mappoint into map
-        Map::getInstance().insertMapPoint(mpt);
+        MapManager::GetInstance().InsertMappoint(mpt);
     }
 
     void FrontEnd::addKeyframeObservationToOldMapPoints()
@@ -426,54 +417,54 @@ namespace myslam
         }
     }
 
-    void FrontEnd::triangulateActiveMapPoints()
-    {
-        int triangulatedCnt = 0;
-        for (auto &mappoint : Map::getInstance().getActiveMappoints())
-        {
-            auto mp = mappoint.second;
-            if (mp->outlier_ || mp->triangulated_ || mp->optimized_)
-            {
-                continue;
-            }
+    // void FrontEnd::triangulateActiveMapPoints()
+    // {
+    //     int triangulatedCnt = 0;
+    //     for (auto &mappoint : MapManager::GetInstance().getActiveMappoints())
+    //     {
+    //         auto mp = mappoint.second;
+    //         if (mp->outlier_ || mp->triangulated_ || mp->optimized_)
+    //         {
+    //             continue;
+    //         }
 
-            // it current keyframe doesn't observe this mappoint, it cannot be triangulated
-            if (!matchedMptKptMap_.count(mp))
-            {
-                continue;
-            }
+    //         // it current keyframe doesn't observe this mappoint, it cannot be triangulated
+    //         if (!matchedMptKptMap_.count(mp))
+    //         {
+    //             continue;
+    //         }
 
-            // try to triangulate the mappoint
-            vector<SE3> poses;
-            vector<Vec3> points;
-            for (auto &keyFrameMap : mp->getKeyFrameObservationsMap())
-            {
-                auto keyFrame = Map::getInstance().getKeyFrame(keyFrameMap.first);
-                auto keyPoint = keyFrameMap.second;
+    //         // try to triangulate the mappoint
+    //         vector<SE3> poses;
+    //         vector<Vec3> points;
+    //         for (auto &keyFrameMap : mp->getKeyFrameObservationsMap())
+    //         {
+    //             auto keyFrame = MapManager::GetInstance().GetKeyframe(keyFrameMap.first);
+    //             auto keyPoint = keyFrameMap.second;
 
-                if (keyFrame == nullptr)
-                {
-                    continue;
-                }
+    //             if (keyFrame == nullptr)
+    //             {
+    //                 continue;
+    //             }
 
-                poses.push_back(keyFrame->getPose());
-                points.push_back(keyFrame->camera_->pixel2camera(keyPoint));
-            }
+    //             poses.push_back(keyFrame->getPose());
+    //             points.push_back(keyFrame->camera_->pixel2camera(keyPoint));
+    //         }
 
-            if (poses.size() >= 2)
-            {
-                Vec3 pworld = Vec3::Zero();
-                if (triangulation(poses, points, pworld) && pworld[2] > 0)
-                {
-                    // if triangulate successfully
-                    mp->setPosition(pworld);
-                    mp->triangulated_ = true;
-                    triangulatedCnt++;
-                    break;
-                }
-            }
-        }
-        cout << "  Triangulate active mappoints size: " << triangulatedCnt << endl;
-    }
+    //         if (poses.size() >= 2)
+    //         {
+    //             Vec3 pworld = Vec3::Zero();
+    //             if (triangulation(poses, points, pworld) && pworld[2] > 0)
+    //             {
+    //                 // if triangulate successfully
+    //                 mp->setPosition(pworld);
+    //                 mp->triangulated_ = true;
+    //                 triangulatedCnt++;
+    //                 break;
+    //             }
+    //         }
+    //     }
+    //     cout << "  Triangulate active mappoints size: " << triangulatedCnt << endl;
+    // }
 
 } // namespace

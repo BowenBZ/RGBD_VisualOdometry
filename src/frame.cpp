@@ -19,7 +19,7 @@
 
 #include "myslam/frame.h"
 #include "myslam/mappoint.h"
-#include "myslam/map.h"
+#include "myslam/mapmanager.h"
 
 namespace myslam
 {
@@ -105,7 +105,7 @@ void Frame::removeObservedMapPoint(const shared_ptr<MapPoint> mpt) {
 
     if (flag) {
         for (auto& pair: mpt->getKeyFrameObservationsMap()) {
-            auto otherKF = Map::getInstance().getKeyFrame(pair.first);
+            auto otherKF = MapManager::GetInstance().GetKeyframe(pair.first);
 
             if ( otherKF == nullptr || otherKF->getId() == this->id_ ) {
                 continue;
@@ -141,7 +141,7 @@ void Frame::updateConnectedKeyFrames() {
 
         for(auto& keyFrameMap : (mapPoint.lock())->getKeyFrameObservationsMap()) {
 
-            auto keyFrame = Map::getInstance().getKeyFrame(keyFrameMap.first);
+            auto keyFrame = MapManager::GetInstance().GetKeyframe(keyFrameMap.first);
 
             if ( keyFrame == nullptr || keyFrame->getId() == id_) {
                 continue;
@@ -162,7 +162,7 @@ void Frame::updateConnectedKeyFrames() {
 
         if(connectedMapPointsCnt >= 15) {
             connectedKeyFrameIdToWeight_[connectedKeyFrameId] = connectedMapPointsCnt;
-            Map::getInstance().getKeyFrame(connectedKeyFrameId)->addConnectedKeyFrame(this->id_, connectedMapPointsCnt);
+            MapManager::GetInstance().GetKeyframe(connectedKeyFrameId)->addConnectedKeyFrame(this->id_, connectedMapPointsCnt);
         }
 
         if(connectedMapPointsCnt > maxWeight) {
@@ -174,7 +174,7 @@ void Frame::updateConnectedKeyFrames() {
     // In case there is no weight larger than 15
     if(connectedKeyFrameIdToWeight_.empty() && maxWeight != 0) {
         connectedKeyFrameIdToWeight_[maxWeightConnectedKeyFrameId] = maxWeight;
-        Map::getInstance().getKeyFrame(maxWeightConnectedKeyFrameId)->addConnectedKeyFrame(this->id_, maxWeight);
+        MapManager::GetInstance().GetKeyframe(maxWeightConnectedKeyFrameId)->addConnectedKeyFrame(this->id_, maxWeight);
     }
 
     // cout << "Current Keyframe Id: " << this->id_ << endl;

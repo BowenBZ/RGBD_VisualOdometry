@@ -2,7 +2,7 @@
 #define MYSLAM_BACKEND_H
 
 #include "myslam/common_include.h"
-#include "myslam/map.h"
+#include "myslam/mapmanager.h"
 #include "myslam/camera.h"
 #include "myslam/frame.h"
 
