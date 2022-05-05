@@ -63,7 +63,7 @@ namespace myslam
             // RGBD camera only needs 1 frame to configure since it could get the depth information
             state_ = TRACKING;
             framePrev_ = frame;
-            keyFrameRef_ = frame;
+            keyframeRef_ = frame;
             break;
         }
         case TRACKING:
@@ -122,7 +122,7 @@ namespace myslam
                 }
 
                 framePrev_ = frameCurr_;
-                keyFrameRef_ = frame;
+                keyframeRef_ = frame;
             }
             break;
         }
@@ -149,31 +149,32 @@ namespace myslam
 
     void FrontEnd::matchKeyPointsWithActiveMapPoints()
     {
-        // Get the local mappoints from map
-        cout << "test";
-        auto activeMpts = MapManager::GetInstance().GetMappointsAroundKeyframe(keyFrameRef_);
-        cout << "test2";
-        if (activeMpts.size() < 100) {
-            activeMpts = MapManager::GetInstance().GetAllMappoints();
+        // Update the tracking map
+        if (keyframeForTrackingMap_ != keyframeRef_) {
+            keyframeForTrackingMap_ = keyframeRef_;
+            trackingMap_ = MapManager::GetInstance().GetMappointsAroundKeyframe(keyframeRef_);
+        }
+        if (trackingMap_.size() < 100) {
+            trackingMap_ = MapManager::GetInstance().GetAllMappoints();
             cout << " Not enough active mappoints, reset activie mappoints to all mappoints" << endl;
         }
 
         // Select the good mappoints candidates
         vector<MapPoint::Ptr> mptCandidates;
         Mat mptCandidatesDescriptors;
-        for (auto &mappoint : activeMpts)
+        for (auto &mappoint : trackingMap_)
         {
             auto mp = mappoint.second;
 
             // If considered as outlier by backend
-            // TODO: should remove this mappoint from the active mappoint
+            // TODO: should remove this mappoint from the trackingMap_
             if (mp->outlier_)
             {
                 continue;
             }
 
             // If cannot be viewed by current frame
-            // TODO: should remove this mappoint from the active mappoint
+            // TODO: should remove this mappoint from the trackingMap_
             if (!frameCurr_->isInFrame(mp->getPosition()))
             {
                 continue;
@@ -210,7 +211,7 @@ namespace myslam
                 matchedKptSet_.insert(keypointsCurr_[m.trainIdx]);
             }
         }
-        cout << "  Active mappoints size: " << activeMpts.size() << endl;
+        cout << "  Active mappoints size: " << trackingMap_.size() << endl;
         cout << "  Candidate mappoints size: " << mptCandidates.size() << endl;
         cout << "  Matched <mappoint, keypoint> paris size: " << matchedMptKptMap_.size() << endl;
     }

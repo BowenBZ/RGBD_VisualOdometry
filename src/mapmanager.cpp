@@ -64,18 +64,18 @@ MapManager::MappointDict MapManager::GetMappointsAroundKeyframe( const Frame::Pt
     // Add this keyFrame to the connected keyframe map
     connectedKeyFrames[keyframe->getId()] = 0;
 
-    unordered_map<uint64_t, MapPoint::Ptr> localMappointsDict;
+    unordered_map<size_t, MapPoint::Ptr> localMappointsDict;
 
     // Find all mappoints observed by connected keyframes
     for(auto& pair: connectedKeyFrames) {
     
-        auto connectedKeyframeId = pair.first;
-        if (!keyframesDict_.count(connectedKeyframeId)) {
+        auto localKeyframeId = pair.first;
+        if (!keyframesDict_.count(localKeyframeId)) {
             continue;
         }
-        auto connectedKeyFrame = keyframesDict_[connectedKeyframeId];
+        auto localKeyframe = keyframesDict_[localKeyframeId];
 
-        for(auto& mappointPtr: connectedKeyFrame -> getObservedMapPoints()) {
+        for(auto& mappointPtr: localKeyframe -> getObservedMapPoints()) {
             if ( mappointPtr.expired() ) {
                 continue;
             }

@@ -37,13 +37,19 @@ public:
     VOState getState() { return state_;}
     
 private:  
-    Frame::Ptr              keyFrameRef_;   // reference keyframe
+    Frame::Ptr              keyframeRef_;   // reference keyframe
     Frame::Ptr              framePrev_;     // last frame
     Frame::Ptr              frameCurr_;     // current frame 
+    
     VOState                 state_;         // current VO status
+
     cv::Ptr<cv::ORB>        orb_;           // orb detector and computer 
     vector<cv::KeyPoint>    keypointsCurr_;    // keypoints in current frame
     Mat                     descriptorsCurr_;  // descriptor in current frame 
+
+    unordered_map<size_t, MapPoint::Ptr> trackingMap_;  // the map fount end track in
+    Frame::Ptr              keyframeForTrackingMap_;   // the keyframe which is used to identify the tracking map
+
     cv::FlannBasedMatcher   flannMatcher_;     // flann matcher
     unordered_map<MapPoint::Ptr, cv::KeyPoint>  matchedMptKptMap_;   // matched map points and keypoints
     KeyPointSet             matchedKptSet_; // set of matched keypoint
