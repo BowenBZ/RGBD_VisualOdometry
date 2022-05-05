@@ -21,10 +21,11 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     typedef shared_ptr<FrontEnd> Ptr;
     enum VOState {
-        INITIALIZING=-1,
-        TRACKING=0,
+        INITIALIZING=0,
+        TRACKING,
         LOST
     };
+    vector<string> VOStateStr {"Initializing", "Tracking", "Lost"};    // used for logging
     
     FrontEnd();
     

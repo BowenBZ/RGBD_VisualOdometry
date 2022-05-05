@@ -43,7 +43,7 @@ namespace myslam
 
     bool FrontEnd::addFrame(Frame::Ptr frame)
     {
-        cout << "Frontend status: " << state_ << endl;
+        cout << "Frontend status: " << VOStateStr[state_] << endl;
         frameCurr_ = frame;
 
         switch (state_)
