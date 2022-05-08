@@ -1,20 +1,4 @@
 /*
- * <one line to give the program's name and a brief idea of what it does.>
- * Copyright (C) 2016  <copyright holder> <email>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 
 #ifndef MAPPOINT_H
@@ -30,10 +14,19 @@ class MapPoint
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     typedef shared_ptr<MapPoint> Ptr;
     typedef list<pair<unsigned long, cv::Point2f>> ObservedKFtoPixelPos;
 
-    // Usages
+    Mat         descriptor_;            // Descriptor for matching 
+    Vector3d    norm_;                  // Normal of viewing direction 
+    int         visibleTimes_;          // times should in the view of current frame, but maybe cannot be matched 
+    int         matchedTimes_;          // times of being an inliner in frontend P3P result
+
+    bool        triangulated_;          // whether have been triangulated in frontend
+    bool        optimized_;             // whether is optimized by backend
+
+    // Usages 
     // 1. whether match with new mappoints in front end
     // 2. whether will be triangulated
     // 3. whether add new observation keyframe 
@@ -41,36 +34,29 @@ public:
     // 5. whether add into backend
     bool        outlier_;               // whether this is an outlider
 
-    bool        optimized_;             // whether is optimized by backend
-
-    bool        triangulated_;          // whether have been triangulated
-    Vector3d    norm_;                  // Normal of viewing direction 
-
-    Mat         descriptor_;            // Descriptor for matching 
-    int         visibleTimes_;          // times should in the view of current frame, but maybe cannot be matched 
-    int         matchedTimes_;          // times of being an inliner in frontend P3P result
-    
-    // factory function
-    static MapPoint::Ptr createMapPoint( 
+    // factory function to create mappoint
+    static MapPoint::Ptr CreateMappoint( 
         const Vector3d posWorld, 
         const Vector3d norm,
         const Mat descriptor,
-        const unsigned long observedKeyFrameId,
+        const size_t observedKeyFrameId,
         const cv::Point2f pixelPos);
 
-    Vector3d getPosition() {
+    Vector3d GetPosition() {
         unique_lock<mutex> lock(posMutex_);
         return pos_;
     }
 
-    void setPosition(const Vector3d& pos) {
+    void SetPosition(const Vector3d& pos) {
         unique_lock<mutex> lock(posMutex_);
         pos_ = pos;
     }
 
-    unsigned long getId() { return id_; }
+    size_t getId() { 
+        return id_; 
+    }
 
-    void addKeyFrameObservation(const unsigned long keyFrameId, const cv::Point2f& pixel_pos) {
+    void AddKeyframeObservation(size_t keyFrameId, const cv::Point2f& pixel_pos) {
         unique_lock<mutex> lock(observationMutex_);
         observedKeyFrameMap_.push_back(make_pair(keyFrameId, pixel_pos));
     }

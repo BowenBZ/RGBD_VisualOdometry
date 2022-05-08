@@ -79,7 +79,7 @@ void Viewer::DrawMapPoints() {
         else {
             glColor3f(normalColor[0], normalColor[1], normalColor[2]);
         }
-        auto pos = mappoint.second->getPosition();
+        auto pos = mappoint.second->GetPosition();
         glVertex3d(pos[0], pos[1], pos[2]);
     }
     glEnd();

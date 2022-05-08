@@ -93,7 +93,7 @@ void Backend::optimize() {
 
             // Create mapPoint vertex
             VertexMappoint *vertexMapPoint = new VertexMappoint;
-            vertexMapPoint->setEstimate(mapPoint->getPosition());
+            vertexMapPoint->setEstimate(mapPoint->GetPosition());
             vertexMapPoint->setId(vertexIndex++);
             vertexMapPoint->setMarginalized(true);
             optimizer.addVertex(vertexMapPoint);
@@ -202,7 +202,7 @@ void Backend::optimize() {
     }
     for (auto& v : verticesMappointMap) {
         if (!mapPointMap[v.first]->outlier_) {
-            mapPointMap[v.first]->setPosition(v.second->estimate());
+            mapPointMap[v.first]->SetPosition(v.second->estimate());
         }
     }
 }

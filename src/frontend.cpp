@@ -175,7 +175,7 @@ namespace myslam
 
             // If cannot be viewed by current frame
             // TODO: should remove this mappoint from the trackingMap_
-            if (!frameCurr_->isInFrame(mp->getPosition()))
+            if (!frameCurr_->isInFrame(mp->GetPosition()))
             {
                 continue;
             }
@@ -226,7 +226,7 @@ namespace myslam
         for (auto &pair : matchedMptKptMap_)
         {
             mpts3d.push_back(pair.first);
-            pts3d.push_back(toPoint3f(pair.first->getPosition()));
+            pts3d.push_back(toPoint3f(pair.first->GetPosition()));
             pts2d.push_back(pair.second.pt);
         }
 
@@ -385,7 +385,7 @@ namespace myslam
 
         // Create a mappoint
         // deep copy the descriptor and keypoint position since they will be clear in next loop
-        MapPoint::Ptr mpt = MapPoint::createMapPoint(
+        MapPoint::Ptr mpt = MapPoint::CreateMappoint(
             mptPos,
             (mptPos - frameCurr_->getCamCenter()).normalized(),
             descriptorsCurr_.row(idx).clone(),
@@ -414,7 +414,7 @@ namespace myslam
                 continue;
             }
 
-            mp->addKeyFrameObservation(frameCurr_->getId(), cv::Point2f(matchedMptKptMap_[mp].pt));
+            mp->AddKeyframeObservation(frameCurr_->getId(), cv::Point2f(matchedMptKptMap_[mp].pt));
         }
     }
 
@@ -458,7 +458,7 @@ namespace myslam
     //             if (triangulation(poses, points, pworld) && pworld[2] > 0)
     //             {
     //                 // if triangulate successfully
-    //                 mp->setPosition(pworld);
+    //                 mp->SetPosition(pworld);
     //                 mp->triangulated_ = true;
     //                 triangulatedCnt++;
     //                 break;

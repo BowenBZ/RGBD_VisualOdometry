@@ -27,7 +27,7 @@ namespace myslam
 //         }
 
 //         // if not in current view
-//         if ( !currFrame->isInFrame(mp->getPosition()) ) {
+//         if ( !currFrame->isInFrame(mp->GetPosition()) ) {
 //             remove_id.push_back(mp_id);
 //             continue;
 //         }
@@ -42,7 +42,7 @@ namespace myslam
 
 //         // not in good view
 //         // TODO: update the norm_ direction of mp
-//         // Vector3d direction = mp->getPosition() - currFrame->getCamCenter();
+//         // Vector3d direction = mp->GetPosition() - currFrame->getCamCenter();
 //         // direction.normalize();
 //         // double angle = acos( direction.transpose() * mp->norm_ );
 //         // if ( angle > M_PI/6. )
@@ -93,7 +93,7 @@ MapManager::MappointDict MapManager::GetMappointsAroundKeyframe( const Frame::Pt
 
 inline double getViewAngle ( const Frame::Ptr& frame, const MapPoint::Ptr& point )
 {
-    Vector3d n = point->getPosition() - frame->getCamCenter();
+    Vector3d n = point->GetPosition() - frame->getCamCenter();
     n.normalize();
     return acos( n.transpose()*point->norm_ );
 }

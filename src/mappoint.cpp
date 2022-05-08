@@ -13,10 +13,10 @@ MapPoint::MapPoint (
     const cv::Point2f& pixelPos)
 : id_(id), pos_(position), norm_(norm), triangulated_(false), visibleTimes_(1), matchedTimes_(1), descriptor_(descriptor), outlier_(false), optimized_(false)
 {
-    addKeyFrameObservation(observedKeyFrameId, pixelPos);
+    AddKeyframeObservation(observedKeyFrameId, pixelPos);
 }
 
-MapPoint::Ptr MapPoint::createMapPoint ( 
+MapPoint::Ptr MapPoint::CreateMappoint ( 
     const Vector3d posWorld, 
     const Vector3d norm,
     const Mat descriptor,
