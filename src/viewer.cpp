@@ -58,7 +58,7 @@ void Viewer::DrawOtherKeyFrames() {
     const float normalColor[3] = {0, 0, 1.0};
 
     for (auto& kf : all_keyframes_) {
-        if(kf.first == current_frame_->getId())
+        if(kf.first == current_frame_->GetId())
             continue;
 
         DrawFrame(kf.second, normalColor);

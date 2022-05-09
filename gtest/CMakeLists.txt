@@ -12,13 +12,14 @@ FetchContent_MakeAvailable(googletest)
 enable_testing()
 
 add_executable(
-  hello_test
-  ${PROJECT_SOURCE_DIR}/gtest/hello_test.cpp
+  basis_test
+  ${PROJECT_SOURCE_DIR}/gtest/basis_test.cpp
 )
 target_link_libraries(
-  hello_test
+  basis_test
   gtest_main
+  ${THIRD_PARTY_LIBS}
 )
 
 include(GoogleTest)
-gtest_discover_tests(hello_test)
+gtest_discover_tests(basis_test)

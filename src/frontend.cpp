@@ -389,7 +389,7 @@ namespace myslam
             mptPos,
             (mptPos - frameCurr_->getCamCenter()).normalized(),
             descriptorsCurr_.row(idx).clone(),
-            frameCurr_->getId(),
+            frameCurr_->GetId(),
             cv::Point2f(keypointsCurr_[idx].pt));
 
         // set this mappoint as the observed mappoints of current frame
@@ -414,7 +414,7 @@ namespace myslam
                 continue;
             }
 
-            mp->AddKeyframeObservation(frameCurr_->getId(), cv::Point2f(matchedMptKptMap_[mp].pt));
+            mp->AddKeyframeObservation(frameCurr_->GetId(), cv::Point2f(matchedMptKptMap_[mp].pt));
         }
     }
 
@@ -438,7 +438,7 @@ namespace myslam
     //         // try to triangulate the mappoint
     //         vector<SE3> poses;
     //         vector<Vec3> points;
-    //         for (auto &keyFrameMap : mp->getKeyFrameObservationsMap())
+    //         for (auto &keyFrameMap : mp->GetObservedByKeyframesMap())
     //         {
     //             auto keyFrame = MapManager::GetInstance().GetKeyframe(keyFrameMap.first);
     //             auto keyPoint = keyFrameMap.second;

@@ -4,44 +4,47 @@
 namespace myslam
 {
 
-MapPoint::MapPoint ( 
-    long unsigned int id, 
-    const Vector3d& position, 
-    const Vector3d& norm, 
-    const Mat& descriptor,
-    const unsigned long observedKeyFrameId,
-    const cv::Point2f& pixelPos)
-: id_(id), pos_(position), norm_(norm), triangulated_(false), visibleTimes_(1), matchedTimes_(1), descriptor_(descriptor), outlier_(false), optimized_(false)
-{
-    AddKeyframeObservation(observedKeyFrameId, pixelPos);
-}
+size_t MapPoint::factoryId_ = 0;
 
 MapPoint::Ptr MapPoint::CreateMappoint ( 
-    const Vector3d posWorld, 
-    const Vector3d norm,
-    const Mat descriptor,
-    const unsigned long observedKeyFrameId,
-    const cv::Point2f pixelPos)
+    const Vector3d&     position, 
+    const Vector3d&     norm,
+    const Mat           descriptor,
+    size_t              observedByKeyframeId,
+    const cv::Point2f&  pixelPos)
 {
+    // Mat is defaultly shadow copy
     return MapPoint::Ptr( 
-        new MapPoint( factoryId_++, posWorld, norm, descriptor, observedKeyFrameId, pixelPos)
+        new MapPoint( factoryId_++, position, norm, descriptor.clone(), observedByKeyframeId, pixelPos)
     );
 }
 
-unsigned long MapPoint::factoryId_ = 0;
+
+MapPoint::MapPoint ( 
+    size_t              id, 
+    const Vector3d&     position, 
+    const Vector3d&     norm, 
+    const Mat           descriptor,
+    size_t              observedByKeyframeId,
+    const cv::Point2f&  pixelPos)
+: id_(id), pos_(position), norm_(norm), descriptor_(descriptor), 
+    triangulated_(false), optimized_(false), outlier_(false), visibleTimes_(1), matchedTimes_(1)
+{
+    AddKeyframeObservation(observedByKeyframeId, pixelPos);
+}
 
 
-void MapPoint::removeKeyFrameObservation(const unsigned long keyFrameId) {
+void MapPoint::RemoveObservedByKeyframe(const unsigned long keyFrameId) {
     unique_lock<mutex> lck(observationMutex_);
-    for (auto iter = observedKeyFrameMap_.begin(); iter != observedKeyFrameMap_.end(); iter++) {
+    for (auto iter = observedByKeyframeMap_.begin(); iter != observedByKeyframeMap_.end(); iter++) {
         if (iter->first == keyFrameId) {
-            observedKeyFrameMap_.erase(iter);
+            observedByKeyframeMap_.erase(iter);
             break;
         }
     }
 
     // if all the observations has been removed
-    if(observedKeyFrameMap_.size() == 0) {
+    if(observedByKeyframeMap_.size() == 0) {
         // cout << "Mark as outlier mappint: " << id_ << endl;
         outlier_ = true;
     }

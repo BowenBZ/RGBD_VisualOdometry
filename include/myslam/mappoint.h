@@ -16,7 +16,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     typedef shared_ptr<MapPoint> Ptr;
-    typedef list<pair<unsigned long, cv::Point2f>> ObservedKFtoPixelPos;
+    typedef list<pair<size_t, cv::Point2f>> ObservedByKFIdtoPixelPos;
 
     Mat         descriptor_;            // Descriptor for matching 
     Vector3d    norm_;                  // Normal of viewing direction 
@@ -36,11 +36,11 @@ public:
 
     // factory function to create mappoint
     static MapPoint::Ptr CreateMappoint( 
-        const Vector3d posWorld, 
-        const Vector3d norm,
-        const Mat descriptor,
-        const size_t observedKeyFrameId,
-        const cv::Point2f pixelPos);
+        const Vector3d&     position, 
+        const Vector3d&     norm,
+        const Mat           descriptor,
+        size_t              observedByKeyframeId,
+        const cv::Point2f&  pixelPos);
 
     Vector3d GetPosition() {
         unique_lock<mutex> lock(posMutex_);
@@ -52,40 +52,40 @@ public:
         pos_ = pos;
     }
 
-    size_t getId() { 
+    size_t GetId() { 
         return id_; 
     }
 
     void AddKeyframeObservation(size_t keyFrameId, const cv::Point2f& pixel_pos) {
         unique_lock<mutex> lock(observationMutex_);
-        observedKeyFrameMap_.push_back(make_pair(keyFrameId, pixel_pos));
+        observedByKeyframeMap_.push_back(make_pair(keyFrameId, pixel_pos));
     }
 
-    ObservedKFtoPixelPos getKeyFrameObservationsMap() {
+    ObservedByKFIdtoPixelPos GetObservedByKeyframesMap() {
         unique_lock<mutex> lock(observationMutex_);
-        return observedKeyFrameMap_;
+        return observedByKeyframeMap_;
     }
 
-    void removeKeyFrameObservation(const unsigned long keyFrameId);
+    void RemoveObservedByKeyframe(size_t keyFrameId);
 
 private:
-    static unsigned long factoryId_;    // factory id
-    unsigned long      id_; // ID
+    static size_t               factoryId_;
+    size_t                      id_;
 
-    mutex posMutex_;
-    Vector3d    pos_;       // Position in world
+    mutex                       posMutex_;
+    Vector3d                    pos_;       // Position in world reference frame
 
-    mutex observationMutex_;
-    ObservedKFtoPixelPos observedKeyFrameMap_;
+    mutex                       observationMutex_;
+    ObservedByKFIdtoPixelPos    observedByKeyframeMap_;
 
     // mappoint can only be created by factory
     MapPoint( 
-        unsigned long id, 
-        const Vector3d& position, 
-        const Vector3d& norm, 
-        const Mat& descriptor,
-        const unsigned long observedKeyFrameId,
-        const cv::Point2f& pixelPos);
+        size_t              id, 
+        const Vector3d&     position, 
+        const Vector3d&     norm, 
+        const Mat           descriptor,
+        size_t              observedByKeyframeId,
+        const cv::Point2f&  pixelPos);
 };
 
 } // namespace

@@ -62,7 +62,7 @@ MapManager::MappointDict MapManager::GetMappointsAroundKeyframe( const Frame::Pt
 
     auto connectedKeyFrames = keyframe->getConnectedKeyFrames();
     // Add this keyFrame to the connected keyframe map
-    connectedKeyFrames[keyframe->getId()] = 0;
+    connectedKeyFrames[keyframe->GetId()] = 0;
 
     unordered_map<size_t, MapPoint::Ptr> localMappointsDict;
 
@@ -84,7 +84,7 @@ MapManager::MappointDict MapManager::GetMappointsAroundKeyframe( const Frame::Pt
                 continue;
             }
 
-            localMappointsDict[mappoint -> getId()] = mappoint;
+            localMappointsDict[mappoint -> GetId()] = mappoint;
         }
     }
 

@@ -66,7 +66,7 @@ public:
         T_c_w_ = pose;
     }
 
-    unsigned long getId() { return id_; }
+    unsigned long GetId() { return id_; }
 
     // Update the co-visible key-frames when this frame is a key-frame 
     void updateConnectedKeyFrames();

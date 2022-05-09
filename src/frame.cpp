@@ -104,14 +104,14 @@ void Frame::removeObservedMapPoint(const shared_ptr<MapPoint> mpt) {
     }
 
     if (flag) {
-        for (auto& pair: mpt->getKeyFrameObservationsMap()) {
+        for (auto& pair: mpt->GetObservedByKeyframesMap()) {
             auto otherKF = MapManager::GetInstance().GetKeyframe(pair.first);
 
-            if ( otherKF == nullptr || otherKF->getId() == this->id_ ) {
+            if ( otherKF == nullptr || otherKF->GetId() == this->id_ ) {
                 continue;
             }
 
-            this->decreaseConnectedKeyFrameWeightByOne(otherKF->getId());
+            this->decreaseConnectedKeyFrameWeightByOne(otherKF->GetId());
             otherKF->decreaseConnectedKeyFrameWeightByOne(this->id_);
         }
     }
@@ -139,15 +139,15 @@ void Frame::updateConnectedKeyFrames() {
             continue;
         }
 
-        for(auto& keyFrameMap : (mapPoint.lock())->getKeyFrameObservationsMap()) {
+        for(auto& keyFrameMap : (mapPoint.lock())->GetObservedByKeyframesMap()) {
 
             auto keyFrame = MapManager::GetInstance().GetKeyframe(keyFrameMap.first);
 
-            if ( keyFrame == nullptr || keyFrame->getId() == id_) {
+            if ( keyFrame == nullptr || keyFrame->GetId() == id_) {
                 continue;
             }
 
-            connectedKeyFrameCandidates[keyFrame->getId()]++;
+            connectedKeyFrameCandidates[keyFrame->GetId()]++;
         }
     }
        
