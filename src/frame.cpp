@@ -91,7 +91,7 @@ bool Frame::isInFrame ( const Vector3d& pt_world )
         && pixel(1,0)<color_.rows;
 }
 
-void Frame::removeObservedMapPoint(const shared_ptr<MapPoint> mpt) {
+void Frame::removeObservedMapPoint(const shared_ptr<Mappoint> mpt) {
     unique_lock<mutex> lck(observationMutex_);
 
     bool flag = false;

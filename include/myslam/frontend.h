@@ -49,11 +49,11 @@ private:
     vector<cv::KeyPoint>    keypointsCurr_;    // keypoints in current frame
     Mat                     descriptorsCurr_;  // descriptor in current frame 
 
-    unordered_map<size_t, MapPoint::Ptr> trackingMap_;  // the map fount end track in
+    unordered_map<size_t, Mappoint::Ptr> trackingMap_;  // the map fount end track in
     Frame::Ptr              keyframeForTrackingMap_;   // the keyframe which is used to identify the tracking map
 
     cv::FlannBasedMatcher   flannMatcher_;     // flann matcher
-    unordered_map<MapPoint::Ptr, cv::KeyPoint>  matchedMptKptMap_;   // matched map points and keypoints
+    unordered_map<Mappoint::Ptr, cv::KeyPoint>  matchedMptKptMap_;   // matched map points and keypoints
     KeyPointSet             matchedKptSet_; // set of matched keypoint
    
     SE3                     estimatedPoseCurr_; // the estimated pose of current frame 

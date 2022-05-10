@@ -16,7 +16,7 @@ class MapManager
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     typedef shared_ptr<MapManager> Ptr;
-    typedef unordered_map<size_t, MapPoint::Ptr > MappointDict;
+    typedef unordered_map<size_t, Mappoint::Ptr > MappointDict;
     typedef unordered_map<size_t, Frame::Ptr > KeyframeDict;
 
     static MapManager& GetInstance() {
@@ -29,7 +29,7 @@ public:
         keyframesDict_[ frame->GetId() ] = std::move(frame);
     }
 
-    void InsertMappoint( MapPoint::Ptr map_point ) {
+    void InsertMappoint( Mappoint::Ptr map_point ) {
         unique_lock<mutex> lck(dataMutex_);
         mappointsDict_[map_point->GetId()] = std::move(map_point);
     }

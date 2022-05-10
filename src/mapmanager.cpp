@@ -64,7 +64,7 @@ MapManager::MappointDict MapManager::GetMappointsAroundKeyframe( const Frame::Pt
     // Add this keyFrame to the connected keyframe map
     connectedKeyFrames[keyframe->GetId()] = 0;
 
-    unordered_map<size_t, MapPoint::Ptr> localMappointsDict;
+    unordered_map<size_t, Mappoint::Ptr> localMappointsDict;
 
     // Find all mappoints observed by connected keyframes
     for(auto& pair: connectedKeyFrames) {
@@ -91,7 +91,7 @@ MapManager::MappointDict MapManager::GetMappointsAroundKeyframe( const Frame::Pt
     return localMappointsDict;
 }
 
-inline double getViewAngle ( const Frame::Ptr& frame, const MapPoint::Ptr& point )
+inline double getViewAngle ( const Frame::Ptr& frame, const Mappoint::Ptr& point )
 {
     Vector3d n = point->GetPosition() - frame->getCamCenter();
     n.normalize();

@@ -160,7 +160,7 @@ namespace myslam
         }
 
         // Select the good mappoints candidates
-        vector<MapPoint::Ptr> mptCandidates;
+        vector<Mappoint::Ptr> mptCandidates;
         Mat mptCandidatesDescriptors;
         for (auto &mappoint : trackingMap_)
         {
@@ -219,7 +219,7 @@ namespace myslam
     void FrontEnd::estimatePosePnP(bool addObservation)
     {
         // construct the 3d 2d observations
-        vector<MapPoint::Ptr> mpts3d;
+        vector<Mappoint::Ptr> mpts3d;
         vector<cv::Point3f> pts3d;
         vector<cv::Point2f> pts2d;
 
@@ -385,7 +385,7 @@ namespace myslam
 
         // Create a mappoint
         // all parameters will have a deep copy inside the constructor
-        MapPoint::Ptr mpt = MapPoint::CreateMappoint(
+        Mappoint::Ptr mpt = Mappoint::CreateMappoint(
             mptPos,
             (mptPos - frameCurr_->getCamCenter()).normalized(),
             descriptorsCurr_.row(idx),

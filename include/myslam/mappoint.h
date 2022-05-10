@@ -10,12 +10,12 @@ namespace myslam
 {
 class Frame;
 
-class MapPoint
+class Mappoint
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    typedef shared_ptr<MapPoint> Ptr;
+    typedef shared_ptr<Mappoint> Ptr;
     typedef list<pair<size_t, cv::Point2f>> ObservedByKFIdtoPixelPos;
 
     Mat         descriptor_;            // Descriptor for matching 
@@ -36,7 +36,7 @@ public:
 
     // factory function to create mappoint
     // there will be only 1 time copy of parameters happening in the private constructor
-    static MapPoint::Ptr CreateMappoint( 
+    static Mappoint::Ptr CreateMappoint( 
         const Vector3d&     position, 
         const Vector3d&     norm,
         const Mat           descriptor,
@@ -80,7 +80,7 @@ private:
     ObservedByKFIdtoPixelPos    observedByKeyframeMap_;
 
     // mappoint can only be created by factory
-    MapPoint( 
+    Mappoint( 
         const size_t        id, 
         const Vector3d&     position, 
         const Vector3d&     norm, 

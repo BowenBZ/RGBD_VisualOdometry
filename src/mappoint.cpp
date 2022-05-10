@@ -1,12 +1,20 @@
+/*
+ * Mappoint can only be created by factory function
+ *
+ * Mappoint maintain the relationship with keyframes who observe this mappoint
+ *  
+ * Mappoint uses different mutex when modifying the position or the observedBy relationships
+ */
+
 #include "myslam/common_include.h"
 #include "myslam/mappoint.h"
 
 namespace myslam
 {
 
-size_t MapPoint::factoryId_ = 0;
+size_t Mappoint::factoryId_ = 0;
 
-MapPoint::Ptr MapPoint::CreateMappoint ( 
+Mappoint::Ptr Mappoint::CreateMappoint ( 
     const Vector3d&     position, 
     const Vector3d&     norm,
     const Mat           descriptor,
@@ -14,13 +22,13 @@ MapPoint::Ptr MapPoint::CreateMappoint (
     const cv::Point2f&  pixelPos)
 {
     // Mat is defaultly shadow copy
-    return MapPoint::Ptr( 
-        new MapPoint( factoryId_++, position, norm, descriptor, observedByKeyframeId, pixelPos)
+    return Mappoint::Ptr( 
+        new Mappoint( factoryId_++, position, norm, descriptor, observedByKeyframeId, pixelPos)
     );
 }
 
 
-MapPoint::MapPoint ( 
+Mappoint::Mappoint ( 
     const size_t        id, 
     const Vector3d&     position, 
     const Vector3d&     norm, 
@@ -34,7 +42,7 @@ MapPoint::MapPoint (
 }
 
 
-void MapPoint::RemoveObservedByKeyframe(const unsigned long keyFrameId) {
+void Mappoint::RemoveObservedByKeyframe(const unsigned long keyFrameId) {
     unique_lock<mutex> lck(observationMutex_);
     for (auto iter = observedByKeyframeMap_.begin(); iter != observedByKeyframeMap_.end(); iter++) {
         if (iter->first == keyFrameId) {

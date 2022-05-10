@@ -28,7 +28,7 @@ namespace myslam
 {
     
 // forward declare 
-class MapPoint;
+class Mappoint;
 
 class Frame
 {
@@ -85,14 +85,14 @@ public:
         return connectedKeyFrameIdToWeight_;
     }
 
-    void addObservedMapPoint(const weak_ptr<MapPoint> mpt) {
+    void addObservedMapPoint(const weak_ptr<Mappoint> mpt) {
         unique_lock<mutex> lck(observationMutex_);
         observedMapPoints_.push_back(mpt);
     }
 
-    void removeObservedMapPoint(const shared_ptr<MapPoint> mpt);
+    void removeObservedMapPoint(const shared_ptr<Mappoint> mpt);
 
-    list<weak_ptr<MapPoint>> getObservedMapPoints() {
+    list<weak_ptr<Mappoint>> getObservedMapPoints() {
         unique_lock<mutex> lck(observationMutex_);
         return observedMapPoints_;
     }
@@ -109,7 +109,7 @@ private:
     // Connected keyframes (has same observed mappoints >= 15) and the number of mappoints
     ConnectedKeyFrameIdToWeight connectedKeyFrameIdToWeight_;
 
-    list<weak_ptr<MapPoint>> observedMapPoints_;
+    list<weak_ptr<Mappoint>> observedMapPoints_;
 };
 
 }

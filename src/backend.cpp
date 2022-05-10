@@ -28,7 +28,7 @@ void Backend::optimize() {
 
     // <Id, Frame::Ptr>
     unordered_map<uint64_t, Frame::Ptr> keyFrameMap;
-    unordered_map<uint64_t, MapPoint::Ptr> mapPointMap;
+    unordered_map<uint64_t, Mappoint::Ptr> mapPointMap;
     unordered_map<uint64_t, Frame::Ptr> fixedKeyFrameMap;
     
     // Optmized pose vertices
@@ -40,7 +40,7 @@ void Backend::optimize() {
 
     // Record edges
     unordered_map<BinaryEdgeProjection*, Frame::Ptr> edges_and_frames;
-    unordered_map<BinaryEdgeProjection*, MapPoint::Ptr> edges_and_mappoint;
+    unordered_map<BinaryEdgeProjection*, Mappoint::Ptr> edges_and_mappoint;
 
     int vertexIndex = 1;
     int edgeIndex = 1;
