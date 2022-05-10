@@ -10,24 +10,24 @@ MapPoint::Ptr MapPoint::CreateMappoint (
     const Vector3d&     position, 
     const Vector3d&     norm,
     const Mat           descriptor,
-    size_t              observedByKeyframeId,
+    const size_t        observedByKeyframeId,
     const cv::Point2f&  pixelPos)
 {
     // Mat is defaultly shadow copy
     return MapPoint::Ptr( 
-        new MapPoint( factoryId_++, position, norm, descriptor.clone(), observedByKeyframeId, pixelPos)
+        new MapPoint( factoryId_++, position, norm, descriptor, observedByKeyframeId, pixelPos)
     );
 }
 
 
 MapPoint::MapPoint ( 
-    size_t              id, 
+    const size_t        id, 
     const Vector3d&     position, 
     const Vector3d&     norm, 
     const Mat           descriptor,
-    size_t              observedByKeyframeId,
+    const size_t        observedByKeyframeId,
     const cv::Point2f&  pixelPos)
-: id_(id), pos_(position), norm_(norm), descriptor_(descriptor), 
+: id_(id), pos_(position), norm_(norm), descriptor_(descriptor.clone()), 
     triangulated_(false), optimized_(false), outlier_(false), visibleTimes_(1), matchedTimes_(1)
 {
     AddKeyframeObservation(observedByKeyframeId, pixelPos);

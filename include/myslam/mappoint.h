@@ -35,11 +35,12 @@ public:
     bool        outlier_;               // whether this is an outlider
 
     // factory function to create mappoint
+    // there will be only 1 time copy of parameters happening in the private constructor
     static MapPoint::Ptr CreateMappoint( 
         const Vector3d&     position, 
         const Vector3d&     norm,
         const Mat           descriptor,
-        size_t              observedByKeyframeId,
+        const size_t        observedByKeyframeId,
         const cv::Point2f&  pixelPos);
 
     Vector3d GetPosition() {
@@ -80,11 +81,11 @@ private:
 
     // mappoint can only be created by factory
     MapPoint( 
-        size_t              id, 
+        const size_t        id, 
         const Vector3d&     position, 
         const Vector3d&     norm, 
         const Mat           descriptor,
-        size_t              observedByKeyframeId,
+        const size_t        observedByKeyframeId,
         const cv::Point2f&  pixelPos);
 };
 

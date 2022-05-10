@@ -384,13 +384,13 @@ namespace myslam
             keypointsCurr_[idx], frameCurr_->getPose(), depth);
 
         // Create a mappoint
-        // deep copy the descriptor and keypoint position since they will be clear in next loop
+        // all parameters will have a deep copy inside the constructor
         MapPoint::Ptr mpt = MapPoint::CreateMappoint(
             mptPos,
             (mptPos - frameCurr_->getCamCenter()).normalized(),
-            descriptorsCurr_.row(idx).clone(),
+            descriptorsCurr_.row(idx),
             frameCurr_->GetId(),
-            cv::Point2f(keypointsCurr_[idx].pt));
+            keypointsCurr_[idx].pt);
 
         // set this mappoint as the observed mappoints of current frame
         frameCurr_->addObservedMapPoint(mpt);
