@@ -34,6 +34,10 @@ public:
     // 5. whether add into backend
     bool        outlier_;               // whether this is an outlider
 
+    ~Mappoint() {
+        observedByKeyframeMap_.clear();
+    }
+    
     // factory function to create mappoint
     // there will be only 1 time copy of parameters happening in the private constructor
     static Mappoint::Ptr CreateMappoint( 

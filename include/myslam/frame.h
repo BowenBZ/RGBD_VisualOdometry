@@ -26,12 +26,18 @@ public:
     Camera::Ptr         camera_;        // Pinhole RGBD Camera model 
     Mat                 color_, depth_; // color and depth image 
     
-    Frame();
-    Frame( long id, double time_stamp=0, SE3 T_c_w=SE3(), Camera::Ptr camera=nullptr, Mat color=Mat(), Mat depth=Mat() );
-    ~Frame();
+    ~Frame() {
+        covisibleKeyframeIdToWeight_.clear();
+        observedMappointIds_.clear();
+    }
 
     // factory function
-    static Frame::Ptr CreateFrame(); 
+    static Frame::Ptr CreateFrame(
+        const double timestamp, 
+        const Camera::Ptr camera, 
+        const Mat color, 
+        const Mat depth
+    ); 
 
     size_t GetId() { 
         return id_; 
@@ -58,7 +64,7 @@ public:
 
     // Update the co-visible keyframes when this frame is a keyframe 
     void UpdateCovisibleKeyFrames();
-    
+
     // Decrease the weight of connectedFrame by 1
     void DecreaseCovisibleKeyFrameWeightByOne(const size_t id);
 
@@ -96,6 +102,12 @@ private:
 
     mutex                   observationMutex_;
     unordered_set<size_t>   observedMappointIds_;
+
+    Frame(  const size_t id, 
+            const double timestamp, 
+            const Camera::Ptr camera, 
+            const Mat color, 
+            const Mat depth );
 };
 
 }

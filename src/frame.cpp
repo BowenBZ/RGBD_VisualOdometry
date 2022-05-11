@@ -23,28 +23,32 @@
 
 namespace myslam
 {
-Frame::Frame()
-: id_(-1), timestamp_(-1), camera_(nullptr)
+
+size_t Frame::factoryId_ = 0;
+
+Frame::Frame (  const size_t id, 
+                const double timestamp, 
+                const Camera::Ptr camera, 
+                const Mat color, 
+                const Mat depth )
+: id_(move(id)), timestamp_(move(timestamp)), camera_(move(camera)), color_(color.clone()), depth_(depth.clone()), T_c_w_(SE3())
 {
 
 }
 
-Frame::Frame ( long id, double time_stamp, SE3 T_c_w, Camera::Ptr camera, Mat color, Mat depth )
-: id_(id), timestamp_(time_stamp), T_c_w_(T_c_w), camera_(camera), color_(color), depth_(depth)
+Frame::Ptr Frame::CreateFrame(
+    const double timestamp, 
+    const Camera::Ptr camera, 
+    const Mat color, 
+    const Mat depth)
 {
-
-}
-
-Frame::~Frame()
-{
-
-}
-
-unsigned long Frame::factoryId_ = 0;
-
-Frame::Ptr Frame::CreateFrame()
-{
-    return Frame::Ptr( new Frame(factoryId_++) );
+    return Frame::Ptr( new Frame(
+        factoryId_++,
+        move(timestamp),
+        move(camera),
+        color,
+        depth) 
+    );
 }
 
 double Frame::FindDepth ( const cv::KeyPoint& kp )

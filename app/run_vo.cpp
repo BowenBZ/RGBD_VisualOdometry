@@ -86,11 +86,11 @@ int main ( int argc, char** argv )
         Mat depth = cv::imread ( depth_files[i], -1 );
         if ( color.data==nullptr || depth.data==nullptr )
             break;
-        myslam::Frame::Ptr pFrame = myslam::Frame::CreateFrame();
-        pFrame->camera_ = camera;
-        pFrame->color_ = color;
-        pFrame->depth_ = depth;
-        pFrame->timestamp_ = rgb_times[i];
+        myslam::Frame::Ptr pFrame = myslam::Frame::CreateFrame(
+            rgb_times[i],
+            camera,
+            color,
+            depth);
 
         cout << "Image #" << i << endl;
         boost::timer timer;
