@@ -45,7 +45,7 @@ void Backend::optimize() {
     int vertexIndex = 1;
     int edgeIndex = 1;
 
-    auto connectedKeyFrames = keyFrameCurr_->getConnectedKeyFrames();
+    auto connectedKeyFrames = keyFrameCurr_->GetCovisibleKeyframes();
 
     // Add curr KeyFrame to the KeyFrame map
     connectedKeyFrames[keyFrameCurr_->GetId()] = 0;
@@ -63,7 +63,7 @@ void Backend::optimize() {
         // Create camera pose vertex
         VertexPose *vertexPose = new VertexPose;
         vertexPose->setId(vertexIndex++);
-        vertexPose->setEstimate(keyFrame->getPose());
+        vertexPose->setEstimate(keyFrame->GetPose());
         vertexPose->setFixed(keyFrame->GetId() == 0);
         optimizer.addVertex(vertexPose);
 
@@ -82,25 +82,23 @@ void Backend::optimize() {
             continue;
         }
 
-        for(auto& mapPointPtr: keyFrame -> getObservedMapPoints()) {
-            if ( mapPointPtr.expired() ) {
-                continue;
-            }
-            auto mapPoint = mapPointPtr.lock();
-            if(mapPoint->outlier_) {
+        for(auto& mappointId: keyFrame -> GetObservedMappointIds()) {
+            auto mappoint = MapManager::GetInstance().GetMappoint(mappointId);
+
+            if ( mappoint == nullptr || mappoint->outlier_ ) {
                 continue;
             }
 
-            // Create mapPoint vertex
+            // Create mappoint vertex
             VertexMappoint *vertexMapPoint = new VertexMappoint;
-            vertexMapPoint->setEstimate(mapPoint->GetPosition());
+            vertexMapPoint->setEstimate(mappoint->GetPosition());
             vertexMapPoint->setId(vertexIndex++);
             vertexMapPoint->setMarginalized(true);
             optimizer.addVertex(vertexMapPoint);
             
             // Record in map
-            mapPointMap[mapPoint -> GetId()] = mapPoint;
-            verticesMappointMap[mapPoint->GetId()] = vertexMapPoint;
+            mapPointMap[mappointId] = mappoint;
+            verticesMappointMap[mappointId] = vertexMapPoint;
         }
     }
 
@@ -128,7 +126,7 @@ void Backend::optimize() {
                 // Create fixed pose vertex
                 VertexPose* vertexPose = new VertexPose;
                 vertexPose->setId(vertexIndex++);
-                vertexPose->setEstimate(keyFrame->getPose());
+                vertexPose->setEstimate(keyFrame->GetPose());
                 vertexPose->setFixed(true);
                 optimizer.addVertex(vertexPose);
 
@@ -167,7 +165,7 @@ void Backend::optimize() {
         edge->computeError();
         if (edge->chi2() > chi2_th_) {
             edges_and_mappoint[edge]->RemoveObservedByKeyframe(ef.second->GetId());
-            edges_and_frames[edge]->removeObservedMapPoint(edges_and_mappoint[edge]);
+            edges_and_frames[edge]->RemoveObservedMappoint(edges_and_mappoint[edge]->GetId());
             edge->setLevel(1);
             outlierCnt++;
         } 
@@ -183,7 +181,7 @@ void Backend::optimize() {
         edge->computeError();
         if (edge->chi2() > chi2_th_ || edge->level() == 1) {
             edges_and_mappoint[edge]->RemoveObservedByKeyframe(ef.second->GetId());
-            edges_and_frames[edge]->removeObservedMapPoint(edges_and_mappoint[edge]);
+            edges_and_frames[edge]->RemoveObservedMappoint(edges_and_mappoint[edge]->GetId());
             outlierCnt++;
         } 
         edges_and_mappoint[edge]->optimized_ = true;
@@ -198,7 +196,7 @@ void Backend::optimize() {
 
     // Set pose and mappoint position
     for (auto& v : verticesPoseMap) {
-        keyFrameMap[v.first]->setPose(v.second->estimate());
+        keyFrameMap[v.first]->SetPose(v.second->estimate());
     }
     for (auto& v : verticesMappointMap) {
         if (!mapPointMap[v.first]->outlier_) {

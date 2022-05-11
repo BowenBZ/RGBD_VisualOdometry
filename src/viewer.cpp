@@ -87,7 +87,7 @@ void Viewer::DrawMapPoints() {
 
 
 void Viewer::DrawFrame(Frame::Ptr frame, const float* color) {
-    SE3 Twc = frame->getPose().inverse();
+    SE3 Twc = frame->GetPose().inverse();
     const float sz = 1.0;
     const int line_width = 2.0;
     const float fx = 400;
@@ -136,7 +136,7 @@ void Viewer::DrawFrame(Frame::Ptr frame, const float* color) {
 }
 
 void Viewer::FollowCurrentFrame(pangolin::OpenGlRenderState& vis_camera) {
-    SE3 Twc = current_frame_->getPose().inverse();
+    SE3 Twc = current_frame_->GetPose().inverse();
     pangolin::OpenGlMatrix m(Twc.matrix());
     vis_camera.Follow(m, true);
 }

@@ -29,9 +29,9 @@ public:
         keyframesDict_[ frame->GetId() ] = std::move(frame);
     }
 
-    void InsertMappoint( Mappoint::Ptr map_point ) {
+    Frame::Ptr GetKeyframe( const size_t id ) {
         unique_lock<mutex> lck(dataMutex_);
-        mappointsDict_[map_point->GetId()] = std::move(map_point);
+        return (keyframesDict_.count(id)) ? keyframesDict_[id] : nullptr;
     }
 
     KeyframeDict GetAllKeyframes() {
@@ -39,17 +39,23 @@ public:
         return keyframesDict_;
     }
 
+    void InsertMappoint( Mappoint::Ptr map_point ) {
+        unique_lock<mutex> lck(dataMutex_);
+        mappointsDict_[map_point->GetId()] = std::move(map_point);
+    }
+
+    Mappoint::Ptr GetMappoint( const size_t id ) {
+        unique_lock<mutex> lck(dataMutex_);
+        return (mappointsDict_.count(id)) ? mappointsDict_[id] : nullptr;
+    }
+
     MappointDict GetAllMappoints() {
         unique_lock<mutex> lck(dataMutex_);
         return mappointsDict_;
     }
 
-    Frame::Ptr GetKeyframe(size_t id) {
-        unique_lock<mutex> lck(dataMutex_);
-        return (keyframesDict_.count(id)) ? keyframesDict_[id] : nullptr;
-    }
-
     MappointDict GetMappointsAroundKeyframe( const Frame::Ptr& keyframe );
+
 
     // // cull the hardly seen and no visible points of current frame from active mappoints
     // void cullNonActiveMapPoints( const Frame::Ptr& currFrame );

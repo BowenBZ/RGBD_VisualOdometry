@@ -86,11 +86,11 @@ int main ( int argc, char** argv )
         Mat depth = cv::imread ( depth_files[i], -1 );
         if ( color.data==nullptr || depth.data==nullptr )
             break;
-        myslam::Frame::Ptr pFrame = myslam::Frame::createFrame();
+        myslam::Frame::Ptr pFrame = myslam::Frame::CreateFrame();
         pFrame->camera_ = camera;
         pFrame->color_ = color;
         pFrame->depth_ = depth;
-        pFrame->time_stamp_ = rgb_times[i];
+        pFrame->timestamp_ = rgb_times[i];
 
         cout << "Image #" << i << endl;
         boost::timer timer;
@@ -111,7 +111,7 @@ int main ( int argc, char** argv )
     fout << "# timestamp tx ty tz qx qy qz qw" << endl;
     for(auto keyFrameMap: myslam::MapManager::GetInstance().GetAllKeyframes()) {
         auto keyFrame = keyFrameMap.second;
-        writePosetoFile(fout, std::to_string(keyFrame->time_stamp_), keyFrame->getPose());
+        writePosetoFile(fout, std::to_string(keyFrame->timestamp_), keyFrame->GetPose());
     }
     fout.close();
 

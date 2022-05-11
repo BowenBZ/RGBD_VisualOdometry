@@ -27,7 +27,7 @@ namespace myslam
 //         }
 
 //         // if not in current view
-//         if ( !currFrame->isInFrame(mp->GetPosition()) ) {
+//         if ( !currFrame->IsInFrame(mp->GetPosition()) ) {
 //             remove_id.push_back(mp_id);
 //             continue;
 //         }
@@ -42,7 +42,7 @@ namespace myslam
 
 //         // not in good view
 //         // TODO: update the norm_ direction of mp
-//         // Vector3d direction = mp->GetPosition() - currFrame->getCamCenter();
+//         // Vector3d direction = mp->GetPosition() - currFrame->GetCamCenter();
 //         // direction.normalize();
 //         // double angle = acos( direction.transpose() * mp->norm_ );
 //         // if ( angle > M_PI/6. )
@@ -60,31 +60,25 @@ namespace myslam
 MapManager::MappointDict MapManager::GetMappointsAroundKeyframe( const Frame::Ptr& keyframe ) {
     unique_lock<mutex> lck(dataMutex_);
 
-    auto connectedKeyFrames = keyframe->getConnectedKeyFrames();
+    auto localKeyframes = keyframe->GetCovisibleKeyframes();
     // Add this keyFrame to the connected keyframe map
-    connectedKeyFrames[keyframe->GetId()] = 0;
+    localKeyframes[keyframe->GetId()] = 0;
 
     unordered_map<size_t, Mappoint::Ptr> localMappointsDict;
 
     // Find all mappoints observed by connected keyframes
-    for(auto& pair: connectedKeyFrames) {
-    
-        auto localKeyframeId = pair.first;
-        if (!keyframesDict_.count(localKeyframeId)) {
+    for(auto& idToWeight: localKeyframes) {
+        if (!keyframesDict_.count(idToWeight.first)) {
             continue;
         }
-        auto localKeyframe = keyframesDict_[localKeyframeId];
+        auto localKeyframe = keyframesDict_[idToWeight.first];
 
-        for(auto& mappointPtr: localKeyframe -> getObservedMapPoints()) {
-            if ( mappointPtr.expired() ) {
-                continue;
-            }
-            auto mappoint = mappointPtr.lock();
-            if(mappoint->outlier_) {
+        for(auto& mappointId: localKeyframe -> GetObservedMappointIds()) {
+            if (!mappointsDict_.count(mappointId) || mappointsDict_[mappointId] -> outlier_) {
                 continue;
             }
 
-            localMappointsDict[mappoint -> GetId()] = mappoint;
+            localMappointsDict[mappointId] = mappointsDict_[mappointId];
         }
     }
 
@@ -93,7 +87,7 @@ MapManager::MappointDict MapManager::GetMappointsAroundKeyframe( const Frame::Pt
 
 inline double getViewAngle ( const Frame::Ptr& frame, const Mappoint::Ptr& point )
 {
-    Vector3d n = point->GetPosition() - frame->getCamCenter();
+    Vector3d n = point->GetPosition() - frame->GetCamCenter();
     n.normalize();
     return acos( n.transpose()*point->norm_ );
 }

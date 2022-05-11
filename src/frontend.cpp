@@ -69,7 +69,7 @@ namespace myslam
         case TRACKING:
         {
             // set an initial pose to the pose of previous pose, used for looking for map points in current view
-            frameCurr_->setPose(framePrev_->getPose());
+            frameCurr_->SetPose(framePrev_->GetPose());
 
             extractKeyPointsAndComputeDescriptors();
 
@@ -77,13 +77,13 @@ namespace myslam
             cout << "Corase computing...\n";
             matchKeyPointsWithActiveMapPoints();
             estimatePosePnP(false);
-            frameCurr_->setPose(estimatedPoseCurr_);
+            frameCurr_->SetPose(estimatedPoseCurr_);
 
             // Since the pose of frame is updated, try again to get more matches
             cout << "Fine computing...\n";
             matchKeyPointsWithActiveMapPoints();
             estimatePosePnP(true);
-            frameCurr_->setPose(estimatedPoseCurr_);
+            frameCurr_->SetPose(estimatedPoseCurr_);
 
             // bad estimation due to various reasons
             if (!isGoodEstimation())
@@ -117,7 +117,7 @@ namespace myslam
                 // if have backend, use backend to optimize mappoints position and frame pose
                 if (backend_)
                 {
-                    frameCurr_->updateConnectedKeyFrames();
+                    frameCurr_->UpdateCovisibleKeyFrames();
                     backend_->optimizeCovisibilityGraph(frameCurr_);
                 }
 
@@ -175,7 +175,7 @@ namespace myslam
 
             // If cannot be viewed by current frame
             // TODO: should remove this mappoint from the trackingMap_
-            if (!frameCurr_->isInFrame(mp->GetPosition()))
+            if (!frameCurr_->IsInFrame(mp->GetPosition()))
             {
                 continue;
             }
@@ -232,9 +232,9 @@ namespace myslam
 
         // use PNP to compute the initial pose
         Mat initRotMat, rotVec, tranVec, inliers;
-        cv::eigen2cv(frameCurr_->getPose().rotationMatrix(), initRotMat);
+        cv::eigen2cv(frameCurr_->GetPose().rotationMatrix(), initRotMat);
         cv::Rodrigues(initRotMat, rotVec);
-        cv::eigen2cv(frameCurr_->getPose().translation(), tranVec);
+        cv::eigen2cv(frameCurr_->GetPose().translation(), tranVec);
 
         cv::solvePnPRansac(pts3d, pts2d, frameCurr_->camera_->getCameraMatrix(), Mat(),
                            rotVec, tranVec, true,
@@ -311,7 +311,7 @@ namespace myslam
                 auto mpt = mpts3d[inliers.at<int>(i, 0)];
                 mpt->matchedTimes_++;
                 if (addObservation) {
-                    frameCurr_->addObservedMapPoint(mpt);
+                    frameCurr_->AddObservedMappoint(mpt->GetId());
                 }
             }
             edge->setRobustKernel(0);
@@ -335,7 +335,7 @@ namespace myslam
             return false;
         }
         // check if the motion is too large
-        SE3 T_r_c = framePrev_->getPose() * estimatedPoseCurr_.inverse();
+        SE3 T_r_c = framePrev_->GetPose() * estimatedPoseCurr_.inverse();
         Sophus::Vector6d d = T_r_c.log();
         if (d.norm() > 5.0)
         {
@@ -347,7 +347,7 @@ namespace myslam
 
     bool FrontEnd::isKeyFrame()
     {
-        SE3 T_r_c = framePrev_->getPose() * estimatedPoseCurr_.inverse();
+        SE3 T_r_c = framePrev_->GetPose() * estimatedPoseCurr_.inverse();
         Sophus::Vector6d d = T_r_c.log();
         Vector3d trans = d.head<3>();
         Vector3d rot = d.tail<3>();
@@ -374,26 +374,26 @@ namespace myslam
 
     void FrontEnd::addNewMapPoint(int idx)
     {
-        double depth = frameCurr_->findDepth(keypointsCurr_[idx]);
+        double depth = frameCurr_->FindDepth(keypointsCurr_[idx]);
         if (depth < 0)
         {
             return;
         }
 
         Vector3d mptPos = frameCurr_->camera_->pixel2world(
-            keypointsCurr_[idx], frameCurr_->getPose(), depth);
+            keypointsCurr_[idx], frameCurr_->GetPose(), depth);
 
         // Create a mappoint
         // all parameters will have a deep copy inside the constructor
         Mappoint::Ptr mpt = Mappoint::CreateMappoint(
             mptPos,
-            (mptPos - frameCurr_->getCamCenter()).normalized(),
+            (mptPos - frameCurr_->GetCamCenter()).normalized(),
             descriptorsCurr_.row(idx),
             frameCurr_->GetId(),
             keypointsCurr_[idx].pt);
 
         // set this mappoint as the observed mappoints of current frame
-        frameCurr_->addObservedMapPoint(mpt);
+        frameCurr_->AddObservedMappoint(mpt->GetId());
 
         // Add mappoint into map
         MapManager::GetInstance().InsertMappoint(mpt);
@@ -401,20 +401,15 @@ namespace myslam
 
     void FrontEnd::addKeyframeObservationToOldMapPoints()
     {
-        for (auto &mappoint : frameCurr_->getObservedMapPoints())
+        for (auto &mappointId : frameCurr_->GetObservedMappointIds())
         {
-            if (mappoint.expired())
+            auto mappoint = MapManager::GetInstance().GetMappoint(mappointId);
+            if (mappoint == nullptr || mappoint -> outlier_)
             {
                 continue;
             }
 
-            auto mp = mappoint.lock();
-            if (mp->outlier_)
-            {
-                continue;
-            }
-
-            mp->AddKeyframeObservation(frameCurr_->GetId(), cv::Point2f(matchedMptKptMap_[mp].pt));
+            mappoint->AddKeyframeObservation(frameCurr_->GetId(), matchedMptKptMap_[mappoint].pt);
         }
     }
 
@@ -448,7 +443,7 @@ namespace myslam
     //                 continue;
     //             }
 
-    //             poses.push_back(keyFrame->getPose());
+    //             poses.push_back(keyFrame->GetPose());
     //             points.push_back(keyFrame->camera_->pixel2camera(keyPoint));
     //         }
 

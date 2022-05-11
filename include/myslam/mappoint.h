@@ -57,7 +57,7 @@ public:
         return id_; 
     }
 
-    void AddKeyframeObservation(size_t keyFrameId, const cv::Point2f& pixel_pos) {
+    void AddKeyframeObservation(const size_t keyFrameId, const cv::Point2f& pixel_pos) {
         unique_lock<mutex> lock(observationMutex_);
         observedByKeyframeMap_.push_back(make_pair(keyFrameId, pixel_pos));
     }
