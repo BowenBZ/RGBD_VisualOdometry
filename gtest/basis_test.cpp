@@ -2,7 +2,9 @@
 #include <iostream>
 #include <list>
 #include <Eigen/Core>
+#include <Eigen/Geometry>
 #include <opencv2/core/core.hpp>
+#include <sophus/se3.hpp>
 
 // Demonstrate deep copy of Vector3d
 TEST(BASISTEST, CopyOfVector3d) {
@@ -78,4 +80,22 @@ TEST(BASISTEST, PassOfMat_originReset) {
   a.at<double>(0, 0) = 5;
    
   EXPECT_EQ(a.at<double>(0, 0), b.mem.at<double>(0, 0));
+}
+
+// Demonstrate deep copy of SE3
+TEST(BASISTEST, CopyOfSE3) {
+  Eigen::Matrix3d aR = Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d(0, 0, 1)).toRotationMatrix();
+  Eigen::Vector3d aT (0, 0, 1);
+
+  Sophus::SE3d a(aR, aT);
+  Sophus::SE3d b = a;
+
+  EXPECT_EQ(a.rotationMatrix(), b.rotationMatrix());
+  a.setRotationMatrix(Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d(0, 1, 0)).toRotationMatrix());
+  EXPECT_NE(a.rotationMatrix(), b.rotationMatrix());
+}
+
+// Demonstrate size of size_t
+TEST(BASISTEST, SIZE_T) {
+  EXPECT_EQ(sizeof(size_t), sizeof(size_t*));
 }
