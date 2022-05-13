@@ -15,9 +15,10 @@ class MapManager
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     typedef shared_ptr<MapManager> Ptr;
-    typedef unordered_map<size_t, Mappoint::Ptr > MappointDict;
-    typedef unordered_map<size_t, Frame::Ptr > KeyframeDict;
+    typedef unordered_map<size_t, Mappoint::Ptr > MappointIdToPtr;
+    typedef unordered_map<size_t, Frame::Ptr > KeyframeIdToPtr;
 
     static MapManager& GetInstance() {
         static MapManager map_;
@@ -34,7 +35,7 @@ public:
         return (keyframesDict_.count(id)) ? keyframesDict_[id] : nullptr;
     }
 
-    KeyframeDict GetAllKeyframes() {
+    KeyframeIdToPtr GetAllKeyframes() {
         unique_lock<mutex> lck(dataMutex_);
         return keyframesDict_;
     }
@@ -49,12 +50,12 @@ public:
         return (mappointsDict_.count(id)) ? mappointsDict_[id] : nullptr;
     }
 
-    MappointDict GetAllMappoints() {
+    MappointIdToPtr GetAllMappoints() {
         unique_lock<mutex> lck(dataMutex_);
         return mappointsDict_;
     }
 
-    MappointDict GetMappointsAroundKeyframe( const Frame::Ptr& keyframe );
+    MappointIdToPtr GetMappointsAroundKeyframe( const Frame::Ptr& keyframe );
 
 
     // // cull the hardly seen and no visible points of current frame from active mappoints
@@ -72,12 +73,12 @@ private:
         mapPointEraseRatio_ = Config::get<double> ( "map_point_erase_ratio" );
     }
 
-    mutex           dataMutex_;
+    mutex               dataMutex_;
 
-    MappointDict    mappointsDict_;       // all mappoints
-    KeyframeDict    keyframesDict_;       // all key-frames
+    MappointIdToPtr     mappointsDict_;       // all mappoints
+    KeyframeIdToPtr     keyframesDict_;       // all key-frames
 
-    float mapPointEraseRatio_;
+    float               mapPointEraseRatio_;
 };
 
 } //namespace

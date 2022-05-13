@@ -57,7 +57,7 @@ namespace myslam
 //     }
 // }
 
-MapManager::MappointDict MapManager::GetMappointsAroundKeyframe( const Frame::Ptr& keyframe ) {
+MapManager::MappointIdToPtr MapManager::GetMappointsAroundKeyframe( const Frame::Ptr& keyframe ) {
     unique_lock<mutex> lck(dataMutex_);
 
     auto localKeyframes = keyframe->GetCovisibleKeyframes();

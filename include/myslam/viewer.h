@@ -46,9 +46,9 @@ private:
     thread viewer_thread_;
     mutex viewer_data_mutex_;
 
-    MapManager::KeyframeDict all_keyframes_;
-    MapManager::MappointDict all_mappoints_;
-    MapManager::MappointDict active_mappoints_;
+    MapManager::KeyframeIdToPtr all_keyframes_;
+    MapManager::MappointIdToPtr all_mappoints_;
+    MapManager::MappointIdToPtr active_mappoints_;
     Frame::Ptr current_frame_;
     KeyPointSet keypointsCurr_;
 
