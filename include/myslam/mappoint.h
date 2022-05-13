@@ -16,7 +16,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     typedef shared_ptr<Mappoint> Ptr;
-    typedef list<pair<size_t, Point2f>> ObservedByKFIdtoPixelPos;
+    typedef unordered_map<size_t, Point2f> ObservedByKeyframeIdtoPixelPos;
 
     Mat         descriptor_;            // Descriptor for matching 
     Vector3d    norm_;                  // Normal of viewing direction 
@@ -57,17 +57,18 @@ public:
         return id_; 
     }
 
-    void AddKeyframeObservation(const size_t keyFrameId, const Point2f& pixel_pos) {
+    void AddKeyframeObservation(const size_t keyframeId, const Point2f pixel_pos) {
         unique_lock<mutex> lock(observationMutex_);
-        observedByKeyframeMap_.push_back(make_pair(keyFrameId, pixel_pos));
+        observedByKeyframeMap_[keyframeId] = move(pixel_pos);
     }
+    
+    void RemoveObservedByKeyframe(const size_t keyframeId);
 
-    ObservedByKFIdtoPixelPos GetObservedByKeyframesMap() {
+    ObservedByKeyframeIdtoPixelPos GetObservedByKeyframesMap() {
         unique_lock<mutex> lock(observationMutex_);
         return observedByKeyframeMap_;
     }
 
-    void RemoveObservedByKeyframe(const size_t keyFrameId);
 
 private:
     static size_t               factoryId_;
@@ -77,7 +78,7 @@ private:
     Vector3d                    pos_;       // Position in world reference frame
 
     mutex                       observationMutex_;
-    ObservedByKFIdtoPixelPos    observedByKeyframeMap_;
+    ObservedByKeyframeIdtoPixelPos    observedByKeyframeMap_;
 
     // mappoint can only be created by factory
     Mappoint( 

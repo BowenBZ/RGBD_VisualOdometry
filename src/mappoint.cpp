@@ -44,17 +44,14 @@ Mappoint::Mappoint (
 : id_(move(id)), pos_(move(position)), norm_(move(norm)), descriptor_(move(descriptor)), 
     triangulated_(false), optimized_(false), outlier_(false), visibleTimes_(1), matchedTimes_(1)
 {
-    AddKeyframeObservation(observedByKeyframeId, pixelPos);
+    AddKeyframeObservation(move(observedByKeyframeId), move(pixelPos));
 }
 
 
-void Mappoint::RemoveObservedByKeyframe(const size_t keyFrameId) {
+void Mappoint::RemoveObservedByKeyframe(const size_t keyframeId) {
     unique_lock<mutex> lck(observationMutex_);
-    for (auto iter = observedByKeyframeMap_.begin(); iter != observedByKeyframeMap_.end(); iter++) {
-        if (iter->first == keyFrameId) {
-            observedByKeyframeMap_.erase(iter);
-            break;
-        }
+    if (observedByKeyframeMap_.count(keyframeId)) {
+        observedByKeyframeMap_.erase(keyframeId);
     }
 
     // if all the observations has been removed

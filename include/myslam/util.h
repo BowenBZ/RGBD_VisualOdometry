@@ -68,31 +68,6 @@ struct KeyPointsComparision
 typedef unordered_set<KeyPoint, KeyPointHash, KeyPointsComparision> KeyPointSet;
 
 
-template<class T>
-struct WeakPtrHash
-{  
-    size_t operator()(const weak_ptr<T>& ptr) const  
-    {  
-        return (ptr.expired()) ? 0: hash<shared_ptr<T>>()(ptr.lock());
-    }  
-};
-
-template<class T>
-struct WeakPtrComparision
-{  
-    bool operator()(const weak_ptr<T>& ptr1, const weak_ptr<T>& ptr2) const  
-    {  
-        if (!ptr1.expired() && !ptr2.expired()) {
-            return hash<shared_ptr<T>>()(ptr1.lock()) == hash<shared_ptr<T>>()(ptr2.lock());
-        } else if (ptr1.expired() && ptr2.expired()) {
-            return true;
-        } else {
-            return false;
-        }
-    }  
-};
-
-
 } // namespace
 
 #endif  // MYSLAM_UTIL_H
