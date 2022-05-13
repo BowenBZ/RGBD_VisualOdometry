@@ -71,10 +71,6 @@ private:
     MapManager() {   
         mapPointEraseRatio_ = Config::get<double> ( "map_point_erase_ratio" );
     }
-    ~MapManager() {
-        mappointsDict_.clear();
-        keyframesDict_.clear();
-    }
 
     mutex           dataMutex_;
 

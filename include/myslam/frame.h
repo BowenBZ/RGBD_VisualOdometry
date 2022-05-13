@@ -25,11 +25,6 @@ public:
     double              timestamp_;     // when it is recorded
     Camera::Ptr         camera_;        // Pinhole RGBD Camera model 
     Mat                 color_, depth_; // color and depth image 
-    
-    ~Frame() {
-        covisibleKeyframeIdToWeight_.clear();
-        observedMappointIds_.clear();
-    }
 
     // factory function
     static Frame::Ptr CreateFrame(
@@ -39,7 +34,7 @@ public:
         const Mat depth
     ); 
 
-    size_t GetId() { 
+    size_t GetId() const { 
         return id_; 
     }
 
@@ -54,7 +49,7 @@ public:
     }
     
     // find the depth in depth map
-    double FindDepth( const cv::KeyPoint& kp );
+    double FindDepth( const KeyPoint& kp );
     
     // Get Camera Center
     Vector3d GetCamCenter() const;

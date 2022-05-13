@@ -33,25 +33,25 @@ inline bool triangulation(const vector<SE3> &poses,
     return false;
 }
 
-inline Vector2d toVec2d(const cv::Point2f& pt) {
+inline Vector2d toVec2d(const Point2f& pt) {
     return Vector2d ( pt.x, pt.y );
 }
 
-inline Vector2d toVec2d(const cv::KeyPoint& kp) {
+inline Vector2d toVec2d(const KeyPoint& kp) {
     return toVec2d( kp.pt );
 }
 
-inline Vector3d toVec3d(const cv::Point3f& pt) {
+inline Vector3d toVec3d(const Point3f& pt) {
     return Vector3d ( pt.x, pt.y, pt.z );
 }
 
-inline cv::Point3f toPoint3f(const Vector3d& pt) {
-    return cv::Point3f( pt(0,0), pt(1,0), pt(2,0) );
+inline Point3f toPoint3f(const Vector3d& pt) {
+    return Point3f( pt(0,0), pt(1,0), pt(2,0) );
 }
 
 struct KeyPointHash   
 {  
-    size_t operator()(const cv::KeyPoint& kpt) const  
+    size_t operator()(const KeyPoint& kpt) const  
     {  
         return kpt.hash();  
     }  
@@ -59,13 +59,13 @@ struct KeyPointHash
 
 struct KeyPointsComparision  
 {  
-    bool operator()(const cv::KeyPoint& kpt1, const cv::KeyPoint& kpt2) const  
+    bool operator()(const KeyPoint& kpt1, const KeyPoint& kpt2) const  
     {  
         return kpt1.hash() == kpt2.hash();  
     }  
 };
 
-typedef unordered_set<cv::KeyPoint, KeyPointHash, KeyPointsComparision> KeyPointSet;
+typedef unordered_set<KeyPoint, KeyPointHash, KeyPointsComparision> KeyPointSet;
 
 
 template<class T>

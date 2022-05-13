@@ -15,34 +15,40 @@ namespace myslam
 size_t Mappoint::factoryId_ = 0;
 
 Mappoint::Ptr Mappoint::CreateMappoint ( 
-    const Vector3d&     position, 
-    const Vector3d&     norm,
-    const Mat           descriptor,
-    const size_t        observedByKeyframeId,
-    const cv::Point2f&  pixelPos)
+    const Vector3d     position, 
+    const Vector3d     norm,
+    const Mat          descriptor,
+    const size_t       observedByKeyframeId,
+    const Point2f      pixelPos)
 {
     // Mat is defaultly shadow copy
     return Mappoint::Ptr( 
-        new Mappoint( factoryId_++, position, norm, descriptor, observedByKeyframeId, pixelPos)
+        new Mappoint( 
+            ++factoryId_, 
+            move(position), 
+            move(norm), 
+            descriptor.clone(), 
+            move(observedByKeyframeId), 
+            move(pixelPos))
     );
 }
 
 
 Mappoint::Mappoint ( 
-    const size_t        id, 
-    const Vector3d&     position, 
-    const Vector3d&     norm, 
-    const Mat           descriptor,
-    const size_t        observedByKeyframeId,
-    const cv::Point2f&  pixelPos)
-: id_(id), pos_(position), norm_(norm), descriptor_(descriptor.clone()), 
+    const size_t    id, 
+    const Vector3d  position, 
+    const Vector3d  norm, 
+    const Mat       descriptor,
+    const size_t    observedByKeyframeId,
+    const Point2f   pixelPos)
+: id_(move(id)), pos_(move(position)), norm_(move(norm)), descriptor_(move(descriptor)), 
     triangulated_(false), optimized_(false), outlier_(false), visibleTimes_(1), matchedTimes_(1)
 {
     AddKeyframeObservation(observedByKeyframeId, pixelPos);
 }
 
 
-void Mappoint::RemoveObservedByKeyframe(const unsigned long keyFrameId) {
+void Mappoint::RemoveObservedByKeyframe(const size_t keyFrameId) {
     unique_lock<mutex> lck(observationMutex_);
     for (auto iter = observedByKeyframeMap_.begin(); iter != observedByKeyframeMap_.end(); iter++) {
         if (iter->first == keyFrameId) {

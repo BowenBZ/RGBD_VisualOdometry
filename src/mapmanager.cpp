@@ -85,7 +85,7 @@ MapManager::MappointDict MapManager::GetMappointsAroundKeyframe( const Frame::Pt
     return localMappointsDict;
 }
 
-inline double getViewAngle ( const Frame::Ptr& frame, const Mappoint::Ptr& point )
+inline double GetViewAngle ( const Frame::Ptr& frame, const Mappoint::Ptr& point )
 {
     Vector3d n = point->GetPosition() - frame->GetCamCenter();
     n.normalize();

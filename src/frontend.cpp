@@ -220,8 +220,8 @@ namespace myslam
     {
         // construct the 3d 2d observations
         vector<Mappoint::Ptr> mpts3d;
-        vector<cv::Point3f> pts3d;
-        vector<cv::Point2f> pts2d;
+        vector<Point3f> pts3d;
+        vector<Point2f> pts2d;
 
         for (auto &pair : matchedMptKptMap_)
         {

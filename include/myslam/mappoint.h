@@ -16,7 +16,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     typedef shared_ptr<Mappoint> Ptr;
-    typedef list<pair<size_t, cv::Point2f>> ObservedByKFIdtoPixelPos;
+    typedef list<pair<size_t, Point2f>> ObservedByKFIdtoPixelPos;
 
     Mat         descriptor_;            // Descriptor for matching 
     Vector3d    norm_;                  // Normal of viewing direction 
@@ -33,35 +33,31 @@ public:
     // 4. whether update in co-visibility graph
     // 5. whether add into backend
     bool        outlier_;               // whether this is an outlider
-
-    ~Mappoint() {
-        observedByKeyframeMap_.clear();
-    }
     
     // factory function to create mappoint
     // there will be only 1 time copy of parameters happening in the private constructor
     static Mappoint::Ptr CreateMappoint( 
-        const Vector3d&     position, 
-        const Vector3d&     norm,
-        const Mat           descriptor,
-        const size_t        observedByKeyframeId,
-        const cv::Point2f&  pixelPos);
+        const Vector3d  position, 
+        const Vector3d  norm,
+        const Mat       descriptor,
+        const size_t    observedByKeyframeId,
+        const Point2f   pixelPos);
 
     Vector3d GetPosition() {
         unique_lock<mutex> lock(posMutex_);
         return pos_;
     }
 
-    void SetPosition(const Vector3d& pos) {
+    void SetPosition(const Vector3d pos) {
         unique_lock<mutex> lock(posMutex_);
-        pos_ = pos;
+        pos_ = move(pos);
     }
 
-    size_t GetId() { 
+    size_t GetId() const { 
         return id_; 
     }
 
-    void AddKeyframeObservation(const size_t keyFrameId, const cv::Point2f& pixel_pos) {
+    void AddKeyframeObservation(const size_t keyFrameId, const Point2f& pixel_pos) {
         unique_lock<mutex> lock(observationMutex_);
         observedByKeyframeMap_.push_back(make_pair(keyFrameId, pixel_pos));
     }
@@ -71,7 +67,7 @@ public:
         return observedByKeyframeMap_;
     }
 
-    void RemoveObservedByKeyframe(size_t keyFrameId);
+    void RemoveObservedByKeyframe(const size_t keyFrameId);
 
 private:
     static size_t               factoryId_;
@@ -85,12 +81,12 @@ private:
 
     // mappoint can only be created by factory
     Mappoint( 
-        const size_t        id, 
-        const Vector3d&     position, 
-        const Vector3d&     norm, 
-        const Mat           descriptor,
-        const size_t        observedByKeyframeId,
-        const cv::Point2f&  pixelPos);
+        const size_t    id, 
+        const Vector3d  position, 
+        const Vector3d  norm, 
+        const Mat       descriptor,
+        const size_t    observedByKeyframeId,
+        const Point2f   pixelPos);
 };
 
 } // namespace

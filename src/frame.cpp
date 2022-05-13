@@ -1,19 +1,4 @@
 /*
- * <one line to give the program's name and a brief idea of what it does.>
- * Copyright (C) 2016  <copyright holder> <email>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 
@@ -26,16 +11,6 @@ namespace myslam
 
 size_t Frame::factoryId_ = 0;
 
-Frame::Frame (  const size_t id, 
-                const double timestamp, 
-                const Camera::Ptr camera, 
-                const Mat color, 
-                const Mat depth )
-: id_(move(id)), timestamp_(move(timestamp)), camera_(move(camera)), color_(color.clone()), depth_(depth.clone()), T_c_w_(SE3())
-{
-
-}
-
 Frame::Ptr Frame::CreateFrame(
     const double timestamp, 
     const Camera::Ptr camera, 
@@ -43,15 +18,25 @@ Frame::Ptr Frame::CreateFrame(
     const Mat depth)
 {
     return Frame::Ptr( new Frame(
-        factoryId_++,
+        ++factoryId_,
         move(timestamp),
         move(camera),
-        color,
-        depth) 
+        color.clone(),
+        depth.clone()) 
     );
 }
 
-double Frame::FindDepth ( const cv::KeyPoint& kp )
+Frame::Frame (  const size_t id, 
+                const double timestamp, 
+                const Camera::Ptr camera, 
+                const Mat color, 
+                const Mat depth )
+: id_(move(id)), timestamp_(move(timestamp)), camera_(move(camera)), color_(move(color)), depth_(move(depth)), T_c_w_(SE3())
+{
+
+}
+
+double Frame::FindDepth ( const KeyPoint& kp )
 {
     int x = cvRound(kp.pt.x);
     int y = cvRound(kp.pt.y);
@@ -123,7 +108,7 @@ void Frame::RemoveObservedMappoint(const size_t id) {
     // if all the observations has been removed, consider this keyframe as outlier?
 }
 
-void Frame::DecreaseCovisibleKeyFrameWeightByOne(const unsigned long id) {
+void Frame::DecreaseCovisibleKeyFrameWeightByOne(const size_t id) {
     if (covisibleKeyframeIdToWeight_.count(id)) {
         covisibleKeyframeIdToWeight_[id]--;
         if (covisibleKeyframeIdToWeight_[id] < 15 
