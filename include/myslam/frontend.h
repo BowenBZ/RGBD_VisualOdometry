@@ -105,9 +105,6 @@ private:
     // use triangulatiton to optmize the position of active mappoints
     // void triangulateActiveMapPoints();
 
-    // remove non-active mappoints
-    // void cullNonActiveMapPoints();
-
 };
 }
 

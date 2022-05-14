@@ -58,27 +58,11 @@ public:
     MappointIdToPtr GetMappointsAroundKeyframe( const Frame::Ptr& keyframe );
 
 
-    // // cull the hardly seen and no visible points of current frame from active mappoints
-    // void cullNonActiveMapPoints( const Frame::Ptr& currFrame );
-
-    // void updateMappointEraseRatio() {
-    //     mapPointEraseRatio_ = (activeMapPoints_.size() > 1000 ) ? 
-    //                                 mapPointEraseRatio_ + 0.05 :
-    //                                 0.1;
-    // }
-
-
 private:
-    MapManager() {   
-        mapPointEraseRatio_ = Config::get<double> ( "map_point_erase_ratio" );
-    }
-
     mutex               dataMutex_;
 
     MappointIdToPtr     mappointsDict_;       // all mappoints
     KeyframeIdToPtr     keyframesDict_;       // all key-frames
-
-    float               mapPointEraseRatio_;
 };
 
 } //namespace

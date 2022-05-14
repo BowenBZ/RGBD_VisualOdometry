@@ -42,7 +42,7 @@ Mappoint::Mappoint (
     const size_t    observedByKeyframeId,
     const Point2f   pixelPos)
 : id_(move(id)), pos_(move(position)), norm_(move(norm)), descriptor_(move(descriptor)), 
-    triangulated_(false), optimized_(false), outlier_(false), visibleTimes_(1), matchedTimes_(1)
+    triangulated_(false), optimized_(false), outlier_(false)
 {
     AddKeyframeObservation(move(observedByKeyframeId), move(pixelPos));
 }

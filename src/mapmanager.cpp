@@ -11,52 +11,6 @@
 namespace myslam
 {
 
-// void MapManager::cullNonActiveMapPoints( const Frame::Ptr& currFrame ) {
-//     unique_lock<mutex> lck(dataMutex_);
-
-//     // remove the hardly seen and no visible points from active mappoints
-//     list<unsigned long> remove_id;
-//     for (auto& mappoint : activeMapPoints_) {
-//         auto mp_id = mappoint.first;
-//         auto mp = mappoint.second;
-
-//         // if outlider decided by backend
-//         if ( mp->outlier_ ) {
-//             remove_id.push_back(mp_id);
-//             continue;
-//         }
-
-//         // if not in current view
-//         if ( !currFrame->IsInFrame(mp->GetPosition()) ) {
-//             remove_id.push_back(mp_id);
-//             continue;
-//         }
-
-//         // not often matches
-//         float match_ratio = float(mp->matchedTimes_) / mp->visibleTimes_;
-//         if ( match_ratio < mapPointEraseRatio_ )
-//         {
-//             remove_id.push_back(mp_id);
-//             continue;
-//         }
-
-//         // not in good view
-//         // TODO: update the norm_ direction of mp
-//         // Vector3d direction = mp->GetPosition() - currFrame->GetCamCenter();
-//         // direction.normalize();
-//         // double angle = acos( direction.transpose() * mp->norm_ );
-//         // if ( angle > M_PI/6. )
-//         // {
-//         //     remove_id.push_back(mp_id);
-//         //     continue;
-//         // }
-//     }
-
-//     for(auto& id : remove_id) {
-//         activeMapPoints_.erase(id);
-//     }
-// }
-
 MapManager::MappointIdToPtr MapManager::GetMappointsAroundKeyframe( const Frame::Ptr& keyframe ) {
     unique_lock<mutex> lck(dataMutex_);
 

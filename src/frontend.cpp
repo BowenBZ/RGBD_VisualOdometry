@@ -120,9 +120,6 @@ bool FrontEnd::TrackingHandler() {
         cout << "  Current frame is a new keyframe" << endl;
     }
 
-    // remove non-active mappoints
-    // cullNonActiveMapPoints();
-
     MapManager::GetInstance().InsertKeyframe(frameCurr_);
 
     AddObservedByKeyframeToOldMappoints();
@@ -177,9 +174,6 @@ void FrontEnd::MatchKeyPointsInTrackingMap()
         if ( mp->outlier_ || !frameCurr_->IsInFrame(mp->GetPosition()) ) {
             continue;
         }
-
-        // TODO: only need to ++ once
-        ++mp->visibleTimes_;
 
         // add as a candidate
         mptCandidates.push_back(mp);
@@ -328,7 +322,6 @@ void FrontEnd::EstimatePosePnP(bool addObservation)
         }
 
         auto mpt = mpts3d[inliers.at<int>(i, 0)];
-        mpt->matchedTimes_++;
         frameCurr_->AddObservedMappoint(mpt->GetId());
     }
 
@@ -405,7 +398,7 @@ void FrontEnd::CreateNewMappoints()
             mptPos,
             (mptPos - frameCurr_->GetCamCenter()).normalized(),
             descriptorsCurr_.row(idx),
-            frameCurr_->GetId(),            // TODO:? 
+            frameCurr_->GetId(),
             keypointsCurr_[idx].pt);
 
         // set this mappoint as the observed mappoints of current frame
@@ -414,8 +407,6 @@ void FrontEnd::CreateNewMappoints()
         // Add mappoint into map
         MapManager::GetInstance().InsertMappoint(mpt);
     }
-
-    // MapManager::GetInstance().updateMappointEraseRatio();
 }
 
 // void FrontEnd::triangulateActiveMapPoints()

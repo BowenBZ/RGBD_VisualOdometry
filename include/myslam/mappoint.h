@@ -20,8 +20,6 @@ public:
 
     Mat         descriptor_;            // Descriptor for matching 
     Vector3d    norm_;                  // Normal of viewing direction 
-    int         visibleTimes_;          // times should in the view of current frame, but maybe cannot be matched 
-    int         matchedTimes_;          // times of being an inliner in frontend P3P result
 
     bool        triangulated_;          // whether have been triangulated in frontend
     bool        optimized_;             // whether is optimized by backend
