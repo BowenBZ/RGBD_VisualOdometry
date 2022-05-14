@@ -70,7 +70,7 @@ public:
     {
         const VertexPose *v = static_cast<VertexPose *> (_vertices[0]);
         SE3 T = v->estimate();
-        _error = _measurement - _camera->camera2pixel(T * _mappointPos);
+        _error = _measurement - _camera->Camera2Pixel(T * _mappointPos);
     }
 
     virtual void linearizeOplus() override
@@ -78,8 +78,8 @@ public:
         const VertexPose *v = static_cast<VertexPose *> (_vertices[0]);
         SE3 T = v->estimate();
         Vector3d pos_cam = T * _mappointPos;
-        double fx = _camera->fx_;
-        double fy = _camera->fy_;
+        double fx = _camera->GetFx();
+        double fy = _camera->GetFy();
         double X = pos_cam[0];
         double Y = pos_cam[1];
         double Z = pos_cam[2];
@@ -126,7 +126,7 @@ class BinaryEdgeProjection : public g2o::BaseBinaryEdge<2, Vector2d, VertexPose,
         const VertexPose *v0 = static_cast<VertexPose *>(_vertices[0]);
         const VertexMappoint *v1 = static_cast<VertexMappoint *>(_vertices[1]);
         SE3 T = v0->estimate();
-        _error = _measurement - _camera->camera2pixel(T * v1->estimate());
+        _error = _measurement - _camera->Camera2Pixel(T * v1->estimate());
     }
 
     virtual void linearizeOplus() override {
@@ -135,8 +135,8 @@ class BinaryEdgeProjection : public g2o::BaseBinaryEdge<2, Vector2d, VertexPose,
         SE3 T = v0->estimate();
         Vector3d pos_world = v1->estimate();
         Vector3d pos_cam = T * pos_world;
-        double fx = _camera->fx_;
-        double fy = _camera->fy_;
+        double fx = _camera->GetFx();
+        double fy = _camera->GetFy();
         double X = pos_cam[0];
         double Y = pos_cam[1];
         double Z = pos_cam[2];

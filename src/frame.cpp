@@ -1,5 +1,11 @@
 /*
+ * Class frame maintains its RGB and depth image, and its pose in world reference frame
  *
+ * When the instance is regarded as a keyframe, it will populate the observed mappoints and covisible keyframes, 
+ * where the keyframes share at least 15 covisible mappoints of this keyframe
+ * 
+ * After adding all observed mappoints, the covisible keyframes need to be called manually to be computed
+ * When removing an observed mappoints, the covisible keyframes will be updated automatically
  */
 
 #include "myslam/frame.h"
@@ -36,14 +42,14 @@ Frame::Frame (  const size_t id,
 
 }
 
-double Frame::FindDepth ( const KeyPoint& kp )
+double Frame::GetDepth ( const KeyPoint& kp )
 {
     int x = cvRound(kp.pt.x);
     int y = cvRound(kp.pt.y);
     ushort d = depth_.ptr<ushort>(y)[x];
     if ( d!=0 )
     {
-        return double(d)/camera_->depth_scale_;
+        return double(d)/camera_->GetDepthScale();
     }
     else 
     {
@@ -55,7 +61,7 @@ double Frame::FindDepth ( const KeyPoint& kp )
             d = depth_.ptr<ushort>( y+dy[i] )[x+dx[i]];
             if ( d!=0 )
             {
-                return double(d)/camera_->depth_scale_;
+                return double(d)/camera_->GetDepthScale();
             }
         }
     }
@@ -63,18 +69,13 @@ double Frame::FindDepth ( const KeyPoint& kp )
 }
 
 
-Vector3d Frame::GetCamCenter() const
-{
-    return T_c_w_.inverse().translation();
-}
-
 bool Frame::IsInFrame ( const Vector3d& pt_world )
 {
-    Vector3d p_cam = camera_->world2camera( pt_world, T_c_w_ );
+    Vector3d p_cam = camera_->World2Camera( pt_world, T_c_w_ );
     if ( p_cam(2, 0) < 0 ) {
         return false;
     } 
-    Vector2d pixel = camera_->camera2pixel ( p_cam );
+    Vector2d pixel = camera_->Camera2Pixel ( p_cam );
     return pixel(0,0)>0 && pixel(1,0)>0 
         && pixel(0,0)<color_.cols 
         && pixel(1,0)<color_.rows;
@@ -101,14 +102,20 @@ void Frame::RemoveObservedMappoint(const size_t id) {
             continue;
         }
 
-        this->DecreaseCovisibleKeyFrameWeightByOne(otherKF->GetId());
-        otherKF->DecreaseCovisibleKeyFrameWeightByOne(this->id_);
+        this->DecreaseCovisibleKeyFrameWeightByOneWithoutMutex(otherKF->GetId());
+        otherKF->DecreaseCovisibleKeyframeWeightByOne(this->id_);
     }
 
     // if all the observations has been removed, consider this keyframe as outlier?
 }
 
-void Frame::DecreaseCovisibleKeyFrameWeightByOne(const size_t id) {
+void Frame::DecreaseCovisibleKeyframeWeightByOne(const size_t id) {
+    unique_lock<mutex> lck(observationMutex_);
+
+    DecreaseCovisibleKeyFrameWeightByOneWithoutMutex(id);
+}
+
+void Frame::DecreaseCovisibleKeyFrameWeightByOneWithoutMutex(const size_t id) {
     if (covisibleKeyframeIdToWeight_.count(id)) {
         covisibleKeyframeIdToWeight_[id]--;
         if (covisibleKeyframeIdToWeight_[id] < 15 
@@ -118,8 +125,8 @@ void Frame::DecreaseCovisibleKeyFrameWeightByOne(const size_t id) {
     }
 }
 
-void Frame::UpdateCovisibleKeyFrames() {
-    unique_lock<mutex> lck(connectedMutex_);
+void Frame::ComputeCovisibleKeyframes() {
+    unique_lock<mutex> lck(observationMutex_);
 
     // Calcualte the co-visibliblity keyframes' weight
     CovisibleKeyframeIdToWeight covisibleKeyframeIdToWeightCandidates;

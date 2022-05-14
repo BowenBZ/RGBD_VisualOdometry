@@ -1,4 +1,5 @@
 /*
+ * Reprensents a camera frame 
  */
 
 #ifndef FRAME_H
@@ -6,13 +7,9 @@
 
 #include "myslam/common_include.h"
 #include "myslam/camera.h"
-#include "myslam/util.h"
 
 namespace myslam 
 {
-    
-// forward declare 
-class Mappoint;
 
 class Frame
 {
@@ -43,35 +40,22 @@ public:
         return T_c_w_;
     }
 
-    SE3 SetPose(const SE3& pose) {
+    SE3 SetPose(const SE3 pose) {
         unique_lock<mutex> lck(poseMutex_);
-        T_c_w_ = pose;
+        T_c_w_ = move(pose);
     }
     
     // find the depth in depth map
-    double FindDepth( const KeyPoint& kp );
+    double GetDepth( const KeyPoint& kp );
     
     // Get Camera Center
-    Vector3d GetCamCenter() const;
+    Vector3d GetCamCenter() const {
+        return T_c_w_.inverse().translation();
+    }
     
-    // check if a point is in this frame 
+    // check if a point is in the view of this frame 
     bool IsInFrame( const Vector3d& pt_world );
 
-    // Update the co-visible keyframes when this frame is a keyframe 
-    void UpdateCovisibleKeyFrames();
-
-    // Decrease the weight of connectedFrame by 1
-    void DecreaseCovisibleKeyFrameWeightByOne(const size_t id);
-
-    // Add the connection of another frame with weight to current frame
-    void AddCovisibleKeyframe(const size_t id, const int weight) {
-        unique_lock<mutex> lck(connectedMutex_);
-        covisibleKeyframeIdToWeight_[id] = weight;
-    }
-    CovisibleKeyframeIdToWeight GetCovisibleKeyframes() {
-        unique_lock<mutex> lck(connectedMutex_);
-        return covisibleKeyframeIdToWeight_;
-    }
 
     void AddObservedMappoint(const size_t id) {
         unique_lock<mutex> lck(observationMutex_);
@@ -85,6 +69,24 @@ public:
         return observedMappointIds_;
     }
 
+    // Update the covisible keyframes when this frame is a keyframe 
+    void ComputeCovisibleKeyframes();
+
+    // Add the connection of another frame with weight to current frame
+    void AddCovisibleKeyframe(const size_t id, const int weight) {
+        unique_lock<mutex> lck(observationMutex_);
+        covisibleKeyframeIdToWeight_[id] = weight;
+    }
+
+    // Decrease the weight of covosible keyframe by 1
+    void DecreaseCovisibleKeyframeWeightByOne(const size_t id);
+
+
+    CovisibleKeyframeIdToWeight GetCovisibleKeyframes() {
+        unique_lock<mutex> lck(observationMutex_);
+        return covisibleKeyframeIdToWeight_;
+    }
+
 private: 
     static size_t           factoryId_;
     size_t                  id_;         // id of this frame
@@ -92,17 +94,18 @@ private:
     mutex                   poseMutex_;
     SE3                     T_c_w_;      // transform from world to camera
 
-    mutex                   connectedMutex_;
-    CovisibleKeyframeIdToWeight covisibleKeyframeIdToWeight_;  // Covisible keyframes (has same observed mappoints >= 15) and the number of covisible mappoints
-
     mutex                   observationMutex_;
     unordered_set<size_t>   observedMappointIds_;
+    CovisibleKeyframeIdToWeight covisibleKeyframeIdToWeight_;  // Covisible keyframes (has same observed mappoints >= 15) and the number of covisible mappoints
+
 
     Frame(  const size_t id, 
             const double timestamp, 
             const Camera::Ptr camera, 
             const Mat color, 
             const Mat depth );
+
+    void DecreaseCovisibleKeyFrameWeightByOneWithoutMutex(const size_t id);
 };
 
 }

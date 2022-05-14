@@ -117,7 +117,7 @@ namespace myslam
                 // if have backend, use backend to optimize mappoints position and frame pose
                 if (backend_)
                 {
-                    frameCurr_->UpdateCovisibleKeyFrames();
+                    frameCurr_->ComputeCovisibleKeyframes();
                     backend_->optimizeCovisibilityGraph(frameCurr_);
                 }
 
@@ -236,7 +236,7 @@ namespace myslam
         cv::Rodrigues(initRotMat, rotVec);
         cv::eigen2cv(frameCurr_->GetPose().translation(), tranVec);
 
-        cv::solvePnPRansac(pts3d, pts2d, frameCurr_->camera_->getCameraMatrix(), Mat(),
+        cv::solvePnPRansac(pts3d, pts2d, frameCurr_->camera_->GetCameraMatrix(), Mat(),
                            rotVec, tranVec, true,
                            100, 4.0, 0.99,
                            inliers, cv::SOLVEPNP_P3P);
@@ -374,13 +374,13 @@ namespace myslam
 
     void FrontEnd::addNewMapPoint(int idx)
     {
-        double depth = frameCurr_->FindDepth(keypointsCurr_[idx]);
+        double depth = frameCurr_->GetDepth(keypointsCurr_[idx]);
         if (depth < 0)
         {
             return;
         }
 
-        Vector3d mptPos = frameCurr_->camera_->pixel2world(
+        Vector3d mptPos = frameCurr_->camera_->Pixel2World(
             keypointsCurr_[idx], frameCurr_->GetPose(), depth);
 
         // Create a mappoint
@@ -444,7 +444,7 @@ namespace myslam
     //             }
 
     //             poses.push_back(keyFrame->GetPose());
-    //             points.push_back(keyFrame->camera_->pixel2camera(keyPoint));
+    //             points.push_back(keyFrame->camera_->Pixel2Camera(keyPoint));
     //         }
 
     //         if (poses.size() >= 2)
