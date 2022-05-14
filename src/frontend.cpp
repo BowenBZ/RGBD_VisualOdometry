@@ -126,10 +126,8 @@ bool FrontEnd::TrackingHandler() {
     CreateNewMappoints();
     frameCurr_->ComputeCovisibleKeyframes();
 
-    // Optimize active mappoints since has a new keyframe
-    // triangulateActiveMapPoints();
+    TriangulateMappointsInTrackingMap();
 
-    
     // if have backend, use backend to optimize mappoints position and frame pose
     if (backend_)
     {
@@ -409,54 +407,47 @@ void FrontEnd::CreateNewMappoints()
     }
 }
 
-// void FrontEnd::triangulateActiveMapPoints()
-// {
-//     int triangulatedCnt = 0;
-//     for (auto &mappoint : MapManager::GetInstance().getActiveMappoints())
-//     {
-//         auto mp = mappoint.second;
-//         if (mp->outlier_ || mp->triangulated_ || mp->optimized_)
-//         {
-//             continue;
-//         }
+void FrontEnd::TriangulateMappointsInTrackingMap()
+{
+    int triangulatedCnt = 0;
+    for (auto &idToMappoint : trackingMap_)
+    {
+        auto mp = idToMappoint.second;
+        if (mp->outlier_ || mp->triangulated_ || mp->optimized_ || !matchedMptKptMap_.count(mp))
+        {
+            continue;
+        }
 
-//         // it current keyframe doesn't observe this mappoint, it cannot be triangulated
-//         if (!matchedMptKptMap_.count(mp))
-//         {
-//             continue;
-//         }
+        // try to triangulate the mappoint
+        vector<SE3> poses;
+        vector<Vec3> points;
+        for (auto &keyframeIdToPixelPos : mp->GetObservedByKeyframesMap())
+        {
+            auto keyframe = MapManager::GetInstance().GetKeyframe(keyframeIdToPixelPos.first);
+            auto pixelPos = keyframeIdToPixelPos.second;
 
-//         // try to triangulate the mappoint
-//         vector<SE3> poses;
-//         vector<Vec3> points;
-//         for (auto &keyFrameMap : mp->GetObservedByKeyframesMap())
-//         {
-//             auto keyFrame = MapManager::GetInstance().GetKeyframe(keyFrameMap.first);
-//             auto keyPoint = keyFrameMap.second;
+            if (keyframe == nullptr) {
+                continue;
+            }
 
-//             if (keyFrame == nullptr)
-//             {
-//                 continue;
-//             }
+            poses.push_back(keyframe->GetPose());
+            points.push_back(keyframe->camera_->Pixel2Camera(pixelPos));
+        }
 
-//             poses.push_back(keyFrame->GetPose());
-//             points.push_back(keyFrame->camera_->Pixel2Camera(keyPoint));
-//         }
-
-//         if (poses.size() >= 2)
-//         {
-//             Vec3 pworld = Vec3::Zero();
-//             if (triangulation(poses, points, pworld) && pworld[2] > 0)
-//             {
-//                 // if triangulate successfully
-//                 mp->SetPosition(pworld);
-//                 mp->triangulated_ = true;
-//                 triangulatedCnt++;
-//                 break;
-//             }
-//         }
-//     }
-//     cout << "  Triangulate active mappoints size: " << triangulatedCnt << endl;
-// }
+        if (poses.size() >= 2)
+        {
+            Vec3 pworld = Vec3::Zero();
+            if (Triangulation(poses, points, pworld) && pworld[2] > 0)
+            {
+                // if triangulate successfully
+                mp->SetPosition(pworld);
+                mp->triangulated_ = true;
+                triangulatedCnt++;
+                break;
+            }
+        }
+    }
+    cout << "  Triangulate active mappoints size: " << triangulatedCnt << endl;
+}
 
 } // namespace

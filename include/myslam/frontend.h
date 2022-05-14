@@ -100,10 +100,8 @@ private:
     void AddObservedByKeyframeToOldMappoints();
     // create mappoints from new observed keypoint of current frame
     void CreateNewMappoints();     
-
-    
-    // use triangulatiton to optmize the position of active mappoints
-    // void triangulateActiveMapPoints();
+    // use triangulatiton to optmize the position of mappoints in trackingMap
+    void TriangulateMappointsInTrackingMap();
 
 };
 }

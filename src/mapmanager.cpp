@@ -39,11 +39,4 @@ MapManager::MappointIdToPtr MapManager::GetMappointsAroundKeyframe( const Frame:
     return localMappointsDict;
 }
 
-inline double GetViewAngle ( const Frame::Ptr& frame, const Mappoint::Ptr& point )
-{
-    Vector3d n = point->GetPosition() - frame->GetCamCenter();
-    n.normalize();
-    return acos( n.transpose()*point->norm_ );
-}
-
 } //namespace
