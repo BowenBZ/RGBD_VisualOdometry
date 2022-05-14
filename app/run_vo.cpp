@@ -66,7 +66,7 @@ int main ( int argc, char** argv )
     if (myslam::Config::get<int> ( "enable_viewer" )) {
         cout << "Enable to show image" << endl; 
         viewer = myslam::Viewer::Ptr( new myslam::Viewer );
-        frontend->setViewer(viewer);
+        frontend->SetViewer(viewer);
     }
 
     myslam::Backend::Ptr backend;
@@ -74,7 +74,7 @@ int main ( int argc, char** argv )
         cout << "Enable local optimization" << endl;
         backend = myslam::Backend::Ptr(new myslam::Backend);
         backend->setCamera(camera);
-        frontend->setBackend(backend); 
+        frontend->SetBackend(backend); 
     }
 
     cout << "Finish initialization!" << endl;
@@ -94,10 +94,10 @@ int main ( int argc, char** argv )
 
         cout << "Image #" << i << endl;
         boost::timer timer;
-        frontend->addFrame ( pFrame );
+        frontend->AddFrame ( pFrame );
         cout<<"Time cost (s): "<<timer.elapsed()<<endl<<endl;
 
-        if ( frontend->getState() == myslam::FrontEnd::LOST ) {
+        if ( frontend->GetState() == myslam::FrontEnd::LOST ) {
             cout << "VO lost" << endl;
             break;        
         }
