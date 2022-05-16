@@ -41,10 +41,12 @@ namespace myslam
 /// vertex and edges used in g2o ba
 /// Sophus::SE3 with the first 3 of translation, and last 3 of rotation
 class VertexPose : public g2o::BaseVertex<6, SE3> {
-   public:
+public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
-    virtual void setToOriginImpl() override { _estimate = SE3(); }
+    virtual void setToOriginImpl() override { 
+        _estimate = SE3(); 
+    }
 
     /// left multiplication on SE3
     virtual void oplusImpl(const double *update) override {
@@ -53,9 +55,13 @@ class VertexPose : public g2o::BaseVertex<6, SE3> {
         _estimate = SE3::exp(update_eigen) * _estimate;
     }
 
-    virtual bool read(std::istream &in) override { return true; }
+    virtual bool read(std::istream &in) override { 
+        return true; 
+    }
 
-    virtual bool write(std::ostream &out) const override { return true; }
+    virtual bool write(std::ostream &out) const override { 
+        return true; 
+    }
 };
 
 // edge for pose vertex, not optimize the mappoint
@@ -64,17 +70,16 @@ class UnaryEdgeProjection : public g2o::BaseUnaryEdge<2, Vector2d, VertexPose>
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    UnaryEdgeProjection(const Vector3d &pos, const Camera::Ptr& camera) : _mappointPos(pos), _camera(camera) {}
+    UnaryEdgeProjection(const Vector3d pos, const Camera::Ptr camera) : 
+        _mappointPos(move(pos)), _camera(move(camera)) {}
 
-    virtual void computeError() override
-    {
+    virtual void computeError() override {
         const VertexPose *v = static_cast<VertexPose *> (_vertices[0]);
         SE3 T = v->estimate();
         _error = _measurement - _camera->Camera2Pixel(T * _mappointPos);
     }
 
-    virtual void linearizeOplus() override
-    {
+    virtual void linearizeOplus() override {
         const VertexPose *v = static_cast<VertexPose *> (_vertices[0]);
         SE3 T = v->estimate();
         Vector3d pos_cam = T * _mappointPos;
@@ -100,9 +105,12 @@ private:
 
 /// Vertex for mappoint
 class VertexMappoint : public g2o::BaseVertex<3, Vector3d> {
-   public:
+public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
-    virtual void setToOriginImpl() override { _estimate = Vector3d::Zero(); }
+
+    virtual void setToOriginImpl() override { 
+        _estimate = Vector3d::Zero(); 
+    }
 
     virtual void oplusImpl(const double *update) override {
         _estimate[0] += update[0];
@@ -110,9 +118,13 @@ class VertexMappoint : public g2o::BaseVertex<3, Vector3d> {
         _estimate[2] += update[2];
     }
 
-    virtual bool read(std::istream &in) override { return true; }
+    virtual bool read(std::istream &in) override { 
+        return true; 
+    }
 
-    virtual bool write(std::ostream &out) const override { return true; }
+    virtual bool write(std::ostream &out) const override { 
+        return true; 
+    }
 };
 
 // edge for pose vertex and mappoint vertex
@@ -120,7 +132,8 @@ class BinaryEdgeProjection : public g2o::BaseBinaryEdge<2, Vector2d, VertexPose,
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
-    BinaryEdgeProjection(const Camera::Ptr& camera) : _camera(camera) { }
+    BinaryEdgeProjection(const Camera::Ptr camera) : 
+        _camera(move(camera)) { }
 
     virtual void computeError() override {
         const VertexPose *v0 = static_cast<VertexPose *>(_vertices[0]);
@@ -149,11 +162,15 @@ class BinaryEdgeProjection : public g2o::BaseBinaryEdge<2, Vector2d, VertexPose,
         _jacobianOplusXj = _jacobianOplusXi.block<2, 3>(0, 0) * T.rotationMatrix();
     }
 
-    virtual bool read(std::istream &in) override { return true; }
+    virtual bool read(std::istream &in) override { 
+        return true; 
+    }
 
-    virtual bool write(std::ostream &out) const override { return true; }
+    virtual bool write(std::ostream &out) const override { 
+        return true; 
+    }
 
-   private:
+private:
     Camera::Ptr _camera;
 };
 
