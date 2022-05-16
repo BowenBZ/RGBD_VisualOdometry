@@ -18,6 +18,8 @@ void Backend::BackendLoop() {
 
 void Backend::Optimize() {
 
+    cout << "\nBackend starts optimization" << endl;
+
     typedef g2o::BlockSolver_6_3 BlockSolverType;
     typedef g2o::LinearSolverCSparse<BlockSolverType::PoseMatrixType> LinearSolverType;
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
@@ -109,7 +111,7 @@ void Backend::Optimize() {
             } else { 
                 // else needs to create a new vertex for fixed keyFrame
                 VertexPose* fixedPoseVertex = new VertexPose;
-                fixedPoseVertex->setId(vertexIndex++);
+                fixedPoseVertex->setId(++vertexIndex);
                 fixedPoseVertex->setEstimate(keyframe->GetPose());
                 fixedPoseVertex->setFixed(true);
                 optimizer.addVertex(fixedPoseVertex);
@@ -174,7 +176,7 @@ void Backend::Optimize() {
         edgeToKeyframeThenMappoint[edge].second->optimized_ = true;
     }
 
-    cout << "\nBackend:" << endl;
+    cout << "\nBackend results:" << endl;
     cout << "  optimized pose number: "     << idToCovisibleKeyframeThenVertex.size() << endl;
     cout << "  optimized mappoint number: " << idToMappointThenVertex.size() << endl;
     cout << "  fixed pose number: "         << idToFixedKeyframeThenVertex.size() << endl;
