@@ -69,6 +69,11 @@ public:
         return observedMappointIds_;
     }
 
+    bool IsObservedMappoint(const size_t id) {
+        unique_lock<mutex> lck(observationMutex_);
+        return observedMappointIds_.count(id);
+    }
+
     // Update the covisible keyframes when this frame is a keyframe 
     void ComputeCovisibleKeyframes();
 

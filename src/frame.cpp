@@ -96,13 +96,20 @@ void Frame::RemoveObservedMappoint(const size_t id) {
     }
 
     for (auto& idToPixel: mappoint->GetObservedByKeyframesMap()) {
-        auto otherKF = MapManager::GetInstance().GetKeyframe(idToPixel.first);
+        auto otherKFId = idToPixel.first;
+        auto otherKF = MapManager::GetInstance().GetKeyframe(otherKFId);
 
         if ( otherKF == nullptr || otherKF->GetId() == this->id_ ) {
             continue;
         }
 
-        this->DecreaseCovisibleKeyFrameWeightByOneWithoutMutex(otherKF->GetId());
+        // if the other keyframe has already removed the observation of this mappoint
+        if ( !otherKF->IsObservedMappoint(id) ) {
+            continue;
+        }
+
+        // update both the covisible keyframes for this keyframe and the other keyframe
+        this   ->DecreaseCovisibleKeyFrameWeightByOneWithoutMutex(otherKFId);
         otherKF->DecreaseCovisibleKeyframeWeightByOne(this->id_);
     }
 

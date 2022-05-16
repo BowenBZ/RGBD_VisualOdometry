@@ -72,8 +72,7 @@ int main ( int argc, char** argv )
     myslam::Backend::Ptr backend;
     if (myslam::Config::get<int> ( "enable_local_optimization" )) {
         cout << "Enable local optimization" << endl;
-        backend = myslam::Backend::Ptr(new myslam::Backend);
-        backend->setCamera(camera);
+        backend = myslam::Backend::Ptr(new myslam::Backend(camera));
         frontend->SetBackend(backend); 
     }
 

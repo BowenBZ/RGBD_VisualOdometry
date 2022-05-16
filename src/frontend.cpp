@@ -5,8 +5,10 @@
  *
  * Frontend is also reponsible for the other functions
  * 1. create keyframe
- * 2. invoke backend (if there is) to optimize
- * 3. invoke reviewer (if there is) to show the image frames, real-time poses and maps
+ * 2. create new mappoints for the keyframe
+ * 3. maintain the covisible graph of keyframes (consider in backend??)
+ * 4. invoke backend (if there is) to optimize
+ * 5. invoke reviewer (if there is) to show the image frames, real-time poses and maps
  */
 
 #include "myslam/frontend.h"
@@ -131,7 +133,7 @@ bool FrontEnd::TrackingHandler() {
     // if have backend, use backend to optimize mappoints position and frame pose
     if (backend_)
     {
-        backend_->optimizeCovisibilityGraph(frameCurr_);
+        backend_->OptimizeCovisibleGraphOfKeyframe(frameCurr_);
     }
 
     framePrev_ = frameCurr_;

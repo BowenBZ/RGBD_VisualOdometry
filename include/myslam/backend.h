@@ -1,3 +1,7 @@
+/*
+ * Backend for covisible graph (tracking map in frontend) optimization
+ */
+
 #ifndef MYSLAM_BACKEND_H
 #define MYSLAM_BACKEND_H
 
@@ -11,43 +15,44 @@ namespace myslam {
 class Backend {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+
     typedef std::shared_ptr<Backend> Ptr;
 
-    Backend() {
+    Backend(const Camera::Ptr camera): camera_(move(camera)) {
         backendRunning_ = true;
-        backendThread_ = std::thread(std::bind(&Backend::backendLoop, this));
-        chi2_th_ = Config::get<float>("chi2_th");
+        backendThread_ = std::thread(std::bind(&Backend::BackendLoop, this));
+        chi2Threshold_ = Config::get<float>("chi2_th");
     }
 
     void Stop() {
         backendRunning_ = false;
-        mapUpdate_.notify_one();
+        backendUpdateTrigger_.notify_one();
         backendThread_.join();
     }
 
-    void optimizeCovisibilityGraph(const Frame::Ptr& keyFrameCurr) {
+    void OptimizeCovisibleGraphOfKeyframe(const Frame::Ptr keyframeCurr) {
         unique_lock<mutex> lock(backendMutex_);
-        keyFrameCurr_ = keyFrameCurr;
-        mapUpdate_.notify_one();
+        keyframeCurr_ = move(keyframeCurr);
+        backendUpdateTrigger_.notify_one();
     }
-
-    void setCamera(const Camera::Ptr& camera) { camera_ = camera; }
 
 private:
 
-    bool backendRunning_;
-    thread backendThread_;
-    mutex backendMutex_;
-    condition_variable mapUpdate_;
-    void backendLoop();
+    thread              backendThread_;
+    bool                backendRunning_;
+    mutex               backendMutex_;
+    condition_variable  backendUpdateTrigger_;
 
-    void optimize();
+    Camera::Ptr         camera_;
+    Frame::Ptr          keyframeCurr_;
 
-    Camera::Ptr camera_;
-    Frame::Ptr keyFrameCurr_;
+    float               chi2Threshold_;
 
-    float chi2_th_;
+    // main function for backend thread
+    void BackendLoop();
 
+    // real perform the optimization
+    void Optimize();
 }; // class Backend
 
 } // namespace
