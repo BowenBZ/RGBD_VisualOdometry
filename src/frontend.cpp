@@ -126,6 +126,7 @@ bool FrontEnd::TrackingHandler() {
 
     AddObservedByKeyframeToOldMappoints();
     CreateNewMappoints();
+    AddNewObservedMappointsForKeyframes();
     frameCurr_->ComputeCovisibleKeyframes();
 
     TriangulateMappointsInTrackingMap();
@@ -377,6 +378,7 @@ void FrontEnd::AddObservedByKeyframeToOldMappoints()
 
 void FrontEnd::CreateNewMappoints()
 {
+    newMappoints_.clear();
     for (size_t idx = 0; idx < keypointsCurr_.size(); ++idx)
     {
         // the new mappoint is keypoint doesn't match with previous mappoints
@@ -392,7 +394,7 @@ void FrontEnd::CreateNewMappoints()
         Vector3d mptPos = frameCurr_->camera_->Pixel2World(
             keypointsCurr_[idx], frameCurr_->GetPose(), depth);
 
-        // create a mappoint
+        // create a mappoint and take this keyframe as the observedBy keyframe
         // all parameters will have a deep copy inside the constructor
         Mappoint::Ptr mpt = Mappoint::CreateMappoint(
             mptPos,
@@ -404,8 +406,26 @@ void FrontEnd::CreateNewMappoints()
         // set this mappoint as the observed mappoints of current frame
         frameCurr_->AddObservedMappoint(mpt->GetId());
 
-        // Add mappoint into map
+        // add mappoint into map
         MapManager::GetInstance().InsertMappoint(mpt);
+
+        // record new mappoints
+        newMappoints_.push_back(mpt);
+    }
+}
+
+void FrontEnd::AddNewObservedMappointsForKeyframes() {
+    if (newMappoints_.size() == 0) {
+        return;
+    }
+
+    auto localKeyframes = keyframeRef_->GetCovisibleKeyframes();
+    localKeyframes[keyframeRef_->GetId()] = 0;
+
+    for (auto& keyframe : localKeyframes) {
+        for (auto& mappoint : newMappoints_) {
+            // TODO: check whether keyframe could observe this mappoint
+        }
     }
 }
 

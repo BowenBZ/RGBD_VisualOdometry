@@ -71,6 +71,8 @@ private:
     unordered_map<Mappoint::Ptr, KeyPoint>  matchedMptKptMap_;   // matched map points and keypoints
     KeyPointSet             matchedKptSet_;     // set of matched keypoint
     
+    vector<Mappoint::Ptr>   newMappoints_;      // new mappoints created for new keyframe
+
     int                     numInliers_;        // number of inlier features in pnp estimation
     
     // parameters, see config/default.yaml
@@ -99,7 +101,9 @@ private:
     // add current keyframe as the observedBy keyframe of old mappoints
     void AddObservedByKeyframeToOldMappoints();
     // create mappoints from new observed keypoint of current frame
-    void CreateNewMappoints();     
+    void CreateNewMappoints();
+    // add new mappoints to the observedMappoints of keyframes in tracking map
+    void AddNewObservedMappointsForKeyframes();     
     // use triangulatiton to optmize the position of mappoints in trackingMap
     void TriangulateMappointsInTrackingMap();
 
