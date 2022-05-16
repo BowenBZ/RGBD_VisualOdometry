@@ -26,23 +26,18 @@ void Backend::Optimize() {
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(solver);
 
-    unordered_map<size_t, Frame::Ptr>       covisibleKeyframesMap;
-    unordered_map<size_t, Mappoint::Ptr>    localMappointsMap;
+    unordered_map<size_t, pair<Frame::Ptr, VertexPose*>>            idToCovisibleKeyframeThenVertex;
+    unordered_map<size_t, pair<Mappoint::Ptr, VertexMappoint*>>     idToMappointThenVertex;
     // keyframes not belonging to covisible keyframes but could observe the local mappoints
-    unordered_map<size_t, Frame::Ptr>       fixedKeyframeMap;
+    unordered_map<size_t, pair<Frame::Ptr, VertexPose*>>            idToFixedKeyframeThenVertex;
     
-    unordered_map<size_t, VertexPose*>      poseVerticesMap;
-    unordered_map<size_t, VertexMappoint*>  mappointVerticesMap;
-    unordered_map<size_t, VertexPose*>      fixedPoseVerticesMap;
-
-    unordered_map<BinaryEdgeProjection*, Frame::Ptr>    edgesToKeyframes;
-    unordered_map<BinaryEdgeProjection*, Mappoint::Ptr> edgesToMappoints;
-
-    int vertexIndex = 0;
+    unordered_map<BinaryEdgeProjection*, pair<Frame::Ptr, Mappoint::Ptr>>    edgeToKeyframeThenMappoint;
 
     auto covisibleKeyframesIdToWeight = keyframeCurr_->GetCovisibleKeyframes();
     // Add current keyframe 
     covisibleKeyframesIdToWeight[keyframeCurr_->GetId()] = 0;
+
+    int vertexIndex = 0;
 
     // Create pose vertices and mappoint vertices for covisible keyframes 
     for(auto& idToWeight: covisibleKeyframesIdToWeight) {
@@ -62,12 +57,11 @@ void Backend::Optimize() {
         optimizer.addVertex(poseVertex);
 
         // Record in map
-        covisibleKeyframesMap[keyframeId] = keyframe;
-        poseVerticesMap[keyframeId] = poseVertex;
+        idToCovisibleKeyframeThenVertex[keyframeId] = make_pair(keyframe, poseVertex);
 
         // Create mappoint vertices
         for(auto& mappointId: keyframe -> GetObservedMappointIds()) {
-            if (localMappointsMap.count(mappointId)) {
+            if (idToMappointThenVertex.count(mappointId)) {
                 continue;
             }
 
@@ -84,8 +78,7 @@ void Backend::Optimize() {
             optimizer.addVertex(mappointVertex);
             
             // Record in map
-            localMappointsMap[mappointId] = mappoint;
-            mappointVerticesMap[mappointId] = mappointVertex;
+            idToMappointThenVertex[mappointId] = make_pair(mappoint, mappointVertex);
         }
     }
 
@@ -93,9 +86,10 @@ void Backend::Optimize() {
     int edgeIndex = 0;
 
     // Create pose vertices for fixed keyframe and add all edges 
-    for (auto& pair : localMappointsMap) {
+    for (auto& pair : idToMappointThenVertex) {
         auto mappointId = pair.first;
-        auto mappoint = pair.second;
+        auto mappoint = pair.second.first;
+        auto mappointVertex = pair.second.second;
 
         for(auto& observation: mappoint->GetObservedByKeyframesMap()) {
             auto keyframeId = observation.first;
@@ -109,8 +103,8 @@ void Backend::Optimize() {
 
             VertexPose* poseVertex;
             // If the keyframe is covisible keyFrame
-            if ( covisibleKeyframesMap.count(keyframeId) ) {
-                poseVertex = poseVerticesMap[keyframeId];
+            if ( idToCovisibleKeyframeThenVertex.count(keyframeId) ) {
+                poseVertex = idToCovisibleKeyframeThenVertex[keyframeId].second;
 
             } else { 
                 // else needs to create a new vertex for fixed keyFrame
@@ -121,8 +115,7 @@ void Backend::Optimize() {
                 optimizer.addVertex(fixedPoseVertex);
 
                 // Record in map
-                fixedKeyframeMap[keyframeId] = keyframe;
-                fixedPoseVerticesMap[keyframeId] = fixedPoseVertex;
+                idToFixedKeyframeThenVertex[keyframeId] = make_pair(keyframe, fixedPoseVertex);
 
                 poseVertex = fixedPoseVertex;
             }
@@ -131,7 +124,7 @@ void Backend::Optimize() {
             BinaryEdgeProjection* edge = new BinaryEdgeProjection(camera_);
 
             edge->setVertex(0, poseVertex);
-            edge->setVertex(1, mappointVerticesMap[mappointId]);
+            edge->setVertex(1, mappointVertex);
             edge->setId(++edgeIndex);
             edge->setMeasurement(toVec2d(observedPixelPos));
             edge->setInformation(Eigen::Matrix<double, 2, 2>::Identity());
@@ -140,8 +133,7 @@ void Backend::Optimize() {
             edge->setRobustKernel(rk);
             optimizer.addEdge(edge);
             
-            edgesToKeyframes[edge] = keyframe;
-            edgesToMappoints[edge] = mappoint;
+            edgeToKeyframeThenMappoint[edge] = make_pair(keyframe, mappoint);
         }
     }
 
@@ -151,12 +143,14 @@ void Backend::Optimize() {
 
     // Remove outlier and do second round optimization
     int outlierCnt = 0;
-    for (auto &edgeToKeyframe : edgesToKeyframes) {
+    for (auto &edgeToKeyframe : edgeToKeyframeThenMappoint) {
         auto edge = edgeToKeyframe.first;
         edge->computeError();
         if (edge->chi2() > chi2Threshold_) {
-            edgesToMappoints[edge]->RemoveObservedByKeyframe(edgeToKeyframe.second->GetId());
-            edgesToKeyframes[edge]->RemoveObservedMappoint(edgesToMappoints[edge]->GetId());
+            auto keyframe = edgeToKeyframeThenMappoint[edge].first;
+            auto mappoint = edgeToKeyframeThenMappoint[edge].second;
+            mappoint->RemoveObservedByKeyframe(keyframe->GetId());
+            keyframe->RemoveObservedMappoint(mappoint->GetId());
             edge->setLevel(1);
             ++outlierCnt;
         } 
@@ -167,31 +161,38 @@ void Backend::Optimize() {
     optimizer.optimize(10);
 
     // Set outlier again
-    for (auto &edgeToKeyframe : edgesToKeyframes) {
+    for (auto &edgeToKeyframe : edgeToKeyframeThenMappoint) {
         auto edge = edgeToKeyframe.first;
         edge->computeError();
         if (edge->level() == 0 && edge->chi2() > chi2Threshold_) {
-            edgesToMappoints[edge]->RemoveObservedByKeyframe(edgeToKeyframe.second->GetId());
-            edgesToKeyframes[edge]->RemoveObservedMappoint(edgesToMappoints[edge]->GetId());
+            auto keyframe = edgeToKeyframeThenMappoint[edge].first;
+            auto mappoint = edgeToKeyframeThenMappoint[edge].second;
+            mappoint->RemoveObservedByKeyframe(keyframe->GetId());
+            keyframe->RemoveObservedMappoint(mappoint->GetId());
             ++outlierCnt;
         } 
-        edgesToMappoints[edge]->optimized_ = true;
+        edgeToKeyframeThenMappoint[edge].second->optimized_ = true;
     }
 
     cout << "\nBackend:" << endl;
-    cout << "  optimized pose number: " << poseVerticesMap.size() << endl;
-    cout << "  fixed pose number: " << fixedPoseVerticesMap.size() << endl;
-    cout << "  mappoint/edge number: " << mappointVerticesMap.size() << endl;
-    cout << "  outlier observations: " << outlierCnt << endl;
+    cout << "  optimized pose number: "     << idToCovisibleKeyframeThenVertex.size() << endl;
+    cout << "  optimized mappoint number: " << idToMappointThenVertex.size() << endl;
+    cout << "  fixed pose number: "         << idToFixedKeyframeThenVertex.size() << endl;
+    cout << "  edge number: "               << edgeToKeyframeThenMappoint.size() << endl;
+    cout << "  outlier observations: "      << outlierCnt << endl;
     cout << endl;
 
     // Set pose and mappoint position
-    for (auto& v : poseVerticesMap) {
-        covisibleKeyframesMap[v.first]->SetPose(v.second->estimate());
+    for (auto& pair : idToCovisibleKeyframeThenVertex) {
+        auto id = pair.first;
+        auto keyframeAndVertex = pair.second;
+        keyframeAndVertex.first -> SetPose(keyframeAndVertex.second->estimate());
     }
-    for (auto& v : mappointVerticesMap) {
-        if (!localMappointsMap[v.first]->outlier_) {
-            localMappointsMap[v.first]->SetPosition(v.second->estimate());
+    for (auto& pair : idToMappointThenVertex) {
+        auto id = pair.first;
+        auto mappointAndVertex = pair.second;
+        if (!mappointAndVertex.first->outlier_) {
+            mappointAndVertex.first -> SetPosition(mappointAndVertex.second->estimate());
         }
     }
 }
