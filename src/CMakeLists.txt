@@ -1,12 +1,12 @@
 add_library( myslam SHARED
     frame.cpp
     mappoint.cpp
-    map.cpp
     camera.cpp
     config.cpp
     frontend.cpp
-    viewer.cpp
     backend.cpp
+    mapmanager.cpp
+    viewer.cpp
 )
 
 target_link_libraries( myslam

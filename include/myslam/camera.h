@@ -1,6 +1,6 @@
 /*
- * <one line to give the program's name and a brief idea of what it does.>
- * Copyright (C) 2016  <copyright holder> <email>
+ * Represents a camara model holding the intrinsics
+ * Copyright (C) 2016  Bowen Zhang zbw14@outlook.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,33 +30,40 @@ class Camera
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     typedef std::shared_ptr<Camera> Ptr;
-    float   fx_, fy_, cx_, cy_, depth_scale_;  // Camera intrinsics 
 
     Camera();
-    Camera ( float fx, float fy, float cx, float cy, float depth_scale=0 ) :
-        fx_ ( fx ), fy_ ( fy ), cx_ ( cx ), cy_ ( cy ), depth_scale_ ( depth_scale )
-    {}
 
-    Mat getCameraMatrix () {
-        Mat K = ( cv::Mat_<double>(3,3)<<
-                    fx_, 0,   cx_,
-                    0,   fy_, cy_,
-                    0,   0,   1 );
-        return K;
+    float GetFx() const {
+        return fx_;
+    }
+    float GetFy() const {
+        return fy_;
+    }
+    float GetDepthScale() const {
+        return depthScale_;
+    }
+
+    Mat GetCameraMatrix() const {
+        return cameraMatrix_;
     }
 
     // coordinate transform: world, camera, pixel
-    Vector3d world2camera( const Vector3d& p_w, const SE3& T_c_w );
-    Vector3d camera2world( const Vector3d& p_c, const SE3& T_c_w );
-    Vector2d camera2pixel( const Vector3d& p_c );
-    Vector3d pixel2camera( const Vector2d& p_p, double depth=1 ); 
-    Vector3d pixel2world ( const Vector2d& p_p, const SE3& T_c_w, double depth=1 );
-    Vector2d world2pixel ( const Vector3d& p_w, const SE3& T_c_w );
+    Vector3d World2Camera( const Vector3d& p_w, const SE3& T_c_w );
+    Vector3d Camera2World( const Vector3d& p_c, const SE3& T_c_w );
+    Vector2d Camera2Pixel( const Vector3d& p_c );
+    Vector3d Pixel2Camera( const Vector2d& p_p, double depth=1 ); 
+    Vector3d Pixel2World ( const Vector2d& p_p, const SE3& T_c_w, double depth=1 );
+    Vector2d World2Pixel ( const Vector3d& p_w, const SE3& T_c_w );
 
     // overload functions
-    Vector3d pixel2world ( const cv::KeyPoint& p_p, const SE3& T_c_w, double depth=1 );
-    Vector3d pixel2camera( const cv::Point2f& p_p, double depth=1 ); 
+    Vector3d Pixel2World ( const KeyPoint& p_p, const SE3& T_c_w, double depth=1 );
+    Vector3d Pixel2Camera( const Point2f& p_p, double depth=1 ); 
+
+private:
+    float   fx_, fy_, cx_, cy_, depthScale_;  // Camera intrinsics 
+    Mat     cameraMatrix_;
 };
 
 }

@@ -8,9 +8,9 @@ namespace myslam {
 
 void Viewer::updateDrawingObjects() {
     std::unique_lock<std::mutex> lck(viewer_data_mutex_);
-    all_keyframes_ = Map::getInstance().getAllKeyFrames();
-    all_mappoints_ = Map::getInstance().getAllMappoints();
-    active_mappoints_ = Map::getInstance().getActiveMappoints();
+    all_keyframes_ = MapManager::GetInstance().GetAllKeyframes();
+    all_mappoints_ = MapManager::GetInstance().GetAllMappoints();
+    active_mappoints_ = all_mappoints_;
 }
 
 void Viewer::ThreadLoop() {
@@ -58,7 +58,7 @@ void Viewer::DrawOtherKeyFrames() {
     const float normalColor[3] = {0, 0, 1.0};
 
     for (auto& kf : all_keyframes_) {
-        if(kf.first == current_frame_->getId())
+        if(kf.first == current_frame_->GetId())
             continue;
 
         DrawFrame(kf.second, normalColor);
@@ -79,7 +79,7 @@ void Viewer::DrawMapPoints() {
         else {
             glColor3f(normalColor[0], normalColor[1], normalColor[2]);
         }
-        auto pos = mappoint.second->getPosition();
+        auto pos = mappoint.second->GetPosition();
         glVertex3d(pos[0], pos[1], pos[2]);
     }
     glEnd();
@@ -87,7 +87,7 @@ void Viewer::DrawMapPoints() {
 
 
 void Viewer::DrawFrame(Frame::Ptr frame, const float* color) {
-    SE3 Twc = frame->getPose().inverse();
+    SE3 Twc = frame->GetPose().inverse();
     const float sz = 1.0;
     const int line_width = 2.0;
     const float fx = 400;
@@ -136,7 +136,7 @@ void Viewer::DrawFrame(Frame::Ptr frame, const float* color) {
 }
 
 void Viewer::FollowCurrentFrame(pangolin::OpenGlRenderState& vis_camera) {
-    SE3 Twc = current_frame_->getPose().inverse();
+    SE3 Twc = current_frame_->GetPose().inverse();
     pangolin::OpenGlMatrix m(Twc.matrix());
     vis_camera.Follow(m, true);
 }

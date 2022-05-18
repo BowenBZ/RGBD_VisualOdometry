@@ -8,8 +8,9 @@
 #include <opencv2/features2d/features2d.hpp>
 #include <bits/stdc++.h>
 #include "myslam/common_include.h"
-#include "myslam/viewer.h"
 #include "myslam/frame.h"
+#include "myslam/mappoint.h"
+#include "myslam/viewer.h"
 #include "myslam/backend.h"
 #include "myslam/util.h"
 
@@ -19,73 +20,92 @@ class FrontEnd
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     typedef shared_ptr<FrontEnd> Ptr;
     enum VOState {
-        INITIALIZING=-1,
-        TRACKING=0,
+        INITIALIZING=0,
+        TRACKING,
         LOST
     };
-    
+
     FrontEnd();
     
-    bool addFrame( Frame::Ptr frame );      // add a new frame 
+    bool AddFrame( const Frame::Ptr frame );      // entry point for application
 
-    void setViewer(Viewer::Ptr viewer) {viewer_ = viewer;}
+    void SetViewer( const Viewer::Ptr viewer) {
+        viewer_ = move(viewer);
+    }
 
-    void setBackend(Backend::Ptr backend) {backend_ = backend;}
+    void SetBackend( const Backend::Ptr backend) {
+        backend_ = move(backend);
+    }
 
-    VOState getState() { return state_;}
+    VOState GetState() const { 
+        return state_;
+    }
     
 private:  
-    Frame::Ptr  frameRef_;       // reference key frame
-    Frame::Ptr  frameCurr_;      // current frame 
-    VOState     state_;     // current VO status
-    cv::Ptr<cv::ORB> orb_;  // orb detector and computer 
-    vector<cv::KeyPoint>    keypointsCurr_;    // keypoints in current frame
-    Mat                     descriptorsCurr_;  // descriptor in current frame 
-    cv::FlannBasedMatcher   flannMatcher_;     // flann matcher
-    unordered_map<MapPoint::Ptr, cv::KeyPoint>  matchedMptKptMap_;   // matched map points and keypoints
-    KeyPointSet  matchedKptSet_; // set of matched keypoint
-   
-    SE3 estimatedPoseCurr_;    // the estimated pose of current frame 
- 
-    int num_inliers_;        // number of inlier features in pnp
-    int accuLostFrameNums_;           // number of lost times
+    const vector<string> VOStateStr {
+        "Initializing", 
+        "Tracking", 
+        "Lost" 
+    };                                          // used for logging
+
+    Viewer::Ptr             viewer_;
+    Backend::Ptr            backend_;
+
+    VOState                 state_;             // current VO status
+    int                     accuLostFrameNums_; // number of lost times
+
+    Frame::Ptr              keyframeRef_;       // reference keyframe, used for getting local tracking map
+    Frame::Ptr              framePrev_;         // last frame
+    Frame::Ptr              frameCurr_;         // current frame 
+    
+    unordered_map<size_t, Mappoint::Ptr> trackingMap_;  // the local tracking map
+    Frame::Ptr              keyframeForTrackingMap_;    // the keyframe which is used to identify the tracking map
+
+    cv::Ptr<cv::ORB>        orb_;               // orb detector and computer 
+    vector<KeyPoint>        keypointsCurr_;     // keypoints in current frame
+    Mat                     descriptorsCurr_;   // descriptor in current frame 
+    cv::FlannBasedMatcher   flannMatcher_;      // flann matcher
+    unordered_map<Mappoint::Ptr, KeyPoint>  matchedMptKptMap_;   // matched map points and keypoints
+    KeyPointSet             matchedKptSet_;     // set of matched keypoint
+    
+    vector<Mappoint::Ptr>   newMappoints_;      // new mappoints created for new keyframe
+
+    int                     numInliers_;        // number of inlier features in pnp estimation
     
     // parameters, see config/default.yaml
-    float minDisRatio_;      // ratio for selecting good matches
-    int maxLostFrames_;      // max number of continuous lost times
-    int min_inliers_;       // minimum inliers
-    double keyFrameMinRot_;   // minimal rotation of two key-frames
-    double keyFrameMinTrans_; // minimal translation of two key-frames
+    float                   minDisRatio_;       // ratio for selecting good matches
+    int                     maxLostFrames_;     // max number of continuous lost times
+    int                     minInliers_;        // minimum inliers
+    double                  keyFrameMinRot_;    // minimal rotation of two key-frames
+    double                  keyFrameMinTrans_;  // minimal translation of two key-frames
     
-    // inner operation 
-    void extractKeyPointsAndComputeDescriptors();
-    void computeDescriptors(); 
-    void matchKeyPointsWithActiveMapPoints();
-    void estimatePosePnP(); 
+    void InitializationHandler();
+    bool TrackingHandler();
+    void LostHandler();
 
-    // for first key-frame, add all 3d points into map
-    void initMap();    
-    // remove non-active mappoints
-    void cullNonActiveMapPoints();
-    // add new mappoint to the map from the observation of a keyframe
-    void addNewMapPoints();     
-    // really perform the adding action
-    void addNewMapPoint(const int& idx);     
+    // extract features from current frame
+    void ExtractKeyPointsAndComputeDescriptors();
+    // match extracted features in tracking map
+    void MatchKeyPointsInTrackingMap();
+    // estimate the pose with 3D-2D methods (mappoint, keypoint)
+    void EstimatePosePnP(bool addObservation); 
 
-    // add current keyframe as the new observation of old mappoints (also observed by previous keyframes)
-    void addKeyframeObservationToOldMapPoints();
-    
-    // use triangulatiton to optmize the position of active mappoints
-    void triangulateActiveMapPoints();
-    
-    bool isGoodEstimation(); 
-    bool isKeyFrame();
+    // measure the estimation quality
+    bool IsGoodEstimation(); 
+    // determine whether treating as keyframe
+    bool IsKeyframe();
 
-    Viewer::Ptr viewer_;
-
-    Backend::Ptr backend_;
+    // add current keyframe as the observedBy keyframe of old mappoints
+    void AddObservedByKeyframeToOldMappoints();
+    // create mappoints from new observed keypoint of current frame
+    void CreateNewMappoints();
+    // add new mappoints to the observedMappoints of keyframes in tracking map
+    void AddNewObservedMappointsForKeyframes();     
+    // use triangulatiton to optmize the position of mappoints in trackingMap
+    void TriangulateMappointsInTrackingMap();
 
 };
 }

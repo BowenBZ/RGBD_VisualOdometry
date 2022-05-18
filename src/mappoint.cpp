@@ -1,47 +1,61 @@
+/*
+ * Mappoint can only be created by factory function
+ *
+ * Mappoint maintain the relationship with keyframes who observe this mappoint
+ *  
+ * Mappoint uses different mutex when modifying the position or the observedBy relationships
+ */
+
 #include "myslam/common_include.h"
 #include "myslam/mappoint.h"
 
 namespace myslam
 {
 
-MapPoint::MapPoint ( 
-    long unsigned int id, 
-    const Vector3d& position, 
-    const Vector3d& norm, 
-    const Mat& descriptor,
-    const unsigned long observedKeyFrameId,
-    const cv::Point2f& pixelPos)
-: id_(id), pos_(position), norm_(norm), triangulated_(false), visibleTimes_(1), matchedTimes_(1), descriptor_(descriptor), outlier_(false), optimized_(false)
-{
-    addKeyFrameObservation(observedKeyFrameId, pixelPos);
-}
+size_t Mappoint::factoryId_ = 0;
 
-MapPoint::Ptr MapPoint::createMapPoint ( 
-    const Vector3d posWorld, 
-    const Vector3d norm,
-    const Mat descriptor,
-    const unsigned long observedKeyFrameId,
-    const cv::Point2f pixelPos)
+Mappoint::Ptr Mappoint::CreateMappoint ( 
+    const Vector3d     position, 
+    const Vector3d     norm,
+    const Mat          descriptor,
+    const size_t       observedByKeyframeId,
+    const Point2f      pixelPos)
 {
-    return MapPoint::Ptr( 
-        new MapPoint( factoryId_++, posWorld, norm, descriptor, observedKeyFrameId, pixelPos)
+    // Mat is defaultly shadow copy
+    return Mappoint::Ptr( 
+        new Mappoint( 
+            ++factoryId_, 
+            move(position), 
+            move(norm), 
+            descriptor.clone(), 
+            move(observedByKeyframeId), 
+            move(pixelPos))
     );
 }
 
-unsigned long MapPoint::factoryId_ = 0;
+
+Mappoint::Mappoint ( 
+    const size_t    id, 
+    const Vector3d  position, 
+    const Vector3d  norm, 
+    const Mat       descriptor,
+    const size_t    observedByKeyframeId,
+    const Point2f   pixelPos)
+: id_(move(id)), pos_(move(position)), norm_(move(norm)), descriptor_(move(descriptor)), 
+    triangulated_(false), optimized_(false), outlier_(false)
+{
+    AddKeyframeObservation(move(observedByKeyframeId), move(pixelPos));
+}
 
 
-void MapPoint::removeKeyFrameObservation(const unsigned long keyFrameId) {
+void Mappoint::RemoveObservedByKeyframe(const size_t keyframeId) {
     unique_lock<mutex> lck(observationMutex_);
-    for (auto iter = observedKeyFrameMap_.begin(); iter != observedKeyFrameMap_.end(); iter++) {
-        if (iter->first == keyFrameId) {
-            observedKeyFrameMap_.erase(iter);
-            break;
-        }
+    if (observedByKeyframeMap_.count(keyframeId)) {
+        observedByKeyframeMap_.erase(keyframeId);
     }
 
     // if all the observations has been removed
-    if(observedKeyFrameMap_.size() == 0) {
+    if(observedByKeyframeMap_.size() == 0) {
         // cout << "Mark as outlier mappint: " << id_ << endl;
         outlier_ = true;
     }

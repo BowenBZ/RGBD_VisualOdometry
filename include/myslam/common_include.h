@@ -43,6 +43,9 @@ typedef Sophus::SO3d SO3;
 // for cv
 #include <opencv2/core/core.hpp>
 using cv::Mat;
+using cv::KeyPoint;
+using cv::Point3f;
+using cv::Point2f;
 
 // std 
 #include <atomic>

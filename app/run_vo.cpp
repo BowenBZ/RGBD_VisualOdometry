@@ -10,7 +10,7 @@
 #include "myslam/config.h"
 #include "myslam/frontend.h"
 #include "myslam/viewer.h"
-#include "myslam/map.h"
+#include "myslam/mapmanager.h"
 #include "myslam/backend.h"
 #include "myslam/frame.h"
 
@@ -66,15 +66,14 @@ int main ( int argc, char** argv )
     if (myslam::Config::get<int> ( "enable_viewer" )) {
         cout << "Enable to show image" << endl; 
         viewer = myslam::Viewer::Ptr( new myslam::Viewer );
-        frontend->setViewer(viewer);
+        frontend->SetViewer(viewer);
     }
 
     myslam::Backend::Ptr backend;
     if (myslam::Config::get<int> ( "enable_local_optimization" )) {
         cout << "Enable local optimization" << endl;
-        backend = myslam::Backend::Ptr(new myslam::Backend);
-        backend->setCamera(camera);
-        frontend->setBackend(backend); 
+        backend = myslam::Backend::Ptr(new myslam::Backend(camera));
+        frontend->SetBackend(backend); 
     }
 
     cout << "Finish initialization!" << endl;
@@ -86,18 +85,18 @@ int main ( int argc, char** argv )
         Mat depth = cv::imread ( depth_files[i], -1 );
         if ( color.data==nullptr || depth.data==nullptr )
             break;
-        myslam::Frame::Ptr pFrame = myslam::Frame::createFrame();
-        pFrame->camera_ = camera;
-        pFrame->color_ = color;
-        pFrame->depth_ = depth;
-        pFrame->time_stamp_ = rgb_times[i];
+        myslam::Frame::Ptr pFrame = myslam::Frame::CreateFrame(
+            rgb_times[i],
+            camera,
+            color,
+            depth);
 
         cout << "Image #" << i << endl;
         boost::timer timer;
-        frontend->addFrame ( pFrame );
+        frontend->AddFrame ( pFrame );
         cout<<"Time cost (s): "<<timer.elapsed()<<endl<<endl;
 
-        if ( frontend->getState() == myslam::FrontEnd::LOST ) {
+        if ( frontend->GetState() == myslam::FrontEnd::LOST ) {
             cout << "VO lost" << endl;
             break;        
         }
@@ -109,9 +108,9 @@ int main ( int argc, char** argv )
     ofstream fout (myslam::Config::get<string> ( "output_file" ));
     fout << "# estimated trajectory format" << endl;
     fout << "# timestamp tx ty tz qx qy qz qw" << endl;
-    for(auto keyFrameMap: myslam::Map::getInstance().getAllKeyFrames()) {
+    for(auto keyFrameMap: myslam::MapManager::GetInstance().GetAllKeyframes()) {
         auto keyFrame = keyFrameMap.second;
-        writePosetoFile(fout, std::to_string(keyFrame->time_stamp_), keyFrame->getPose());
+        writePosetoFile(fout, std::to_string(keyFrame->timestamp_), keyFrame->GetPose());
     }
     fout.close();
 

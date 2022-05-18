@@ -1,4 +1,4 @@
-cmake_minimum_required( VERSION 2.8 )
+cmake_minimum_required( VERSION 3.14 )
 project ( myslam )
 
 set( CMAKE_CXX_COMPILER "g++" )
@@ -32,11 +32,11 @@ find_package( G2O REQUIRED )
 include_directories( ${G2O_INCLUDE_DIRS} )
 
 # csparse
-find_package(CSparse REQUIRED)
+find_package( CSPARSE REQUIRED )
 include_directories(${CSPARSE_INCLUDE_DIR})
 
 # pangolin
-find_package(Pangolin REQUIRED)
+find_package( Pangolin REQUIRED )
 include_directories(${Pangolin_INCLUDE_DIRS})
 
 set( THIRD_PARTY_LIBS 
@@ -50,3 +50,4 @@ set( THIRD_PARTY_LIBS
 include_directories( ${PROJECT_SOURCE_DIR}/include )
 add_subdirectory( src )
 add_subdirectory( app )
+add_subdirectory( gtest )

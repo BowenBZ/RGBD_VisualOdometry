@@ -1,60 +1,55 @@
 /*
- * <one line to give the program's name and a brief idea of what it does.>
- * Copyright (C) 2016  <copyright holder> <email>
+ * Class frame maintains its RGB and depth image, and its pose in world reference frame
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * When the instance is regarded as a keyframe, it will populate the observed mappoints and covisible keyframes, 
+ * where the keyframes share at least 15 covisible mappoints of this keyframe
+ * 
+ * After adding all observed mappoints, the covisible keyframes need to be called manually to be computed
+ * When removing an observed mappoints, the covisible keyframes will be updated automatically
  */
 
 #include "myslam/frame.h"
 #include "myslam/mappoint.h"
-#include "myslam/map.h"
+#include "myslam/mapmanager.h"
 
 namespace myslam
 {
-Frame::Frame()
-: id_(-1), time_stamp_(-1), camera_(nullptr)
+
+size_t Frame::factoryId_ = 0;
+
+Frame::Ptr Frame::CreateFrame(
+    const double timestamp, 
+    const Camera::Ptr camera, 
+    const Mat color, 
+    const Mat depth)
+{
+    return Frame::Ptr( new Frame(
+        ++factoryId_,
+        move(timestamp),
+        move(camera),
+        color.clone(),
+        depth.clone()) 
+    );
+}
+
+Frame::Frame (  const size_t id, 
+                const double timestamp, 
+                const Camera::Ptr camera, 
+                const Mat color, 
+                const Mat depth )
+: id_(move(id)), timestamp_(move(timestamp)), camera_(move(camera)), color_(move(color)), depth_(move(depth)), T_c_w_(SE3())
 {
 
 }
 
-Frame::Frame ( long id, double time_stamp, SE3 T_c_w, Camera::Ptr camera, Mat color, Mat depth )
-: id_(id), time_stamp_(time_stamp), T_c_w_(T_c_w), camera_(camera), color_(color), depth_(depth)
-{
-
-}
-
-Frame::~Frame()
-{
-
-}
-
-unsigned long Frame::factoryId_ = 0;
-
-Frame::Ptr Frame::createFrame()
-{
-    return Frame::Ptr( new Frame(factoryId_++) );
-}
-
-double Frame::findDepth ( const cv::KeyPoint& kp )
+double Frame::GetDepth ( const KeyPoint& kp )
 {
     int x = cvRound(kp.pt.x);
     int y = cvRound(kp.pt.y);
     ushort d = depth_.ptr<ushort>(y)[x];
     if ( d!=0 )
     {
-        return double(d)/camera_->depth_scale_;
+        return double(d)/camera_->GetDepthScale();
     }
     else 
     {
@@ -66,7 +61,7 @@ double Frame::findDepth ( const cv::KeyPoint& kp )
             d = depth_.ptr<ushort>( y+dy[i] )[x+dx[i]];
             if ( d!=0 )
             {
-                return double(d)/camera_->depth_scale_;
+                return double(d)/camera_->GetDepthScale();
             }
         }
     }
@@ -74,112 +69,116 @@ double Frame::findDepth ( const cv::KeyPoint& kp )
 }
 
 
-Vector3d Frame::getCamCenter() const
+bool Frame::IsInFrame ( const Vector3d& pt_world )
 {
-    return T_c_w_.inverse().translation();
-}
-
-bool Frame::isInFrame ( const Vector3d& pt_world )
-{
-    Vector3d p_cam = camera_->world2camera( pt_world, T_c_w_ );
+    Vector3d p_cam = camera_->World2Camera( pt_world, T_c_w_ );
     if ( p_cam(2, 0) < 0 ) {
         return false;
     } 
-    Vector2d pixel = camera_->camera2pixel ( p_cam );
+    Vector2d pixel = camera_->Camera2Pixel ( p_cam );
     return pixel(0,0)>0 && pixel(1,0)>0 
         && pixel(0,0)<color_.cols 
         && pixel(1,0)<color_.rows;
 }
 
-void Frame::removeObservedMapPoint(const shared_ptr<MapPoint> mpt) {
+void Frame::RemoveObservedMappoint(const size_t id) {
     unique_lock<mutex> lck(observationMutex_);
 
-    bool flag = false;
-    for (auto iter = observedMapPoints_.begin(); iter != observedMapPoints_.end(); iter++) {
-        if (iter->lock() == mpt) {
-            observedMapPoints_.erase(iter);
-            flag = true;
-            break;
-        }
+    if (!observedMappointIds_.count(id)) {
+        return;
     }
 
-    if (flag) {
-        for (auto& pair: mpt->getKeyFrameObservationsMap()) {
-            auto otherKF = Map::getInstance().getKeyFrame(pair.first);
+    observedMappointIds_.erase(id);
 
-            if ( otherKF == nullptr || otherKF->getId() == this->id_ ) {
-                continue;
-            }
+    auto mappoint = MapManager::GetInstance().GetMappoint(id);
+    if (mappoint == nullptr) {
+        return;
+    }
 
-            this->decreaseConnectedKeyFrameWeightByOne(otherKF->getId());
-            otherKF->decreaseConnectedKeyFrameWeightByOne(this->id_);
+    for (auto& idToPixel: mappoint->GetObservedByKeyframesMap()) {
+        auto otherKFId = idToPixel.first;
+        auto otherKF = MapManager::GetInstance().GetKeyframe(otherKFId);
+
+        if ( otherKF == nullptr || otherKF->GetId() == this->id_ ) {
+            continue;
         }
+
+        // if the other keyframe has already removed the observation of this mappoint
+        if ( !otherKF->IsObservedMappoint(id) ) {
+            continue;
+        }
+
+        // update both the covisible keyframes for this keyframe and the other keyframe
+        this   ->DecreaseCovisibleKeyFrameWeightByOneWithoutMutex(otherKFId);
+        otherKF->DecreaseCovisibleKeyframeWeightByOne(this->id_);
     }
 
     // if all the observations has been removed, consider this keyframe as outlier?
 }
 
-void Frame::decreaseConnectedKeyFrameWeightByOne(const unsigned long id) {
-    if (connectedKeyFrameIdToWeight_.count(id)) {
-        connectedKeyFrameIdToWeight_[id]--;
-        if (connectedKeyFrameIdToWeight_[id] < 15 
-            && connectedKeyFrameIdToWeight_.size() >= 2) {
-                connectedKeyFrameIdToWeight_.erase(id);
+void Frame::DecreaseCovisibleKeyframeWeightByOne(const size_t id) {
+    unique_lock<mutex> lck(observationMutex_);
+
+    DecreaseCovisibleKeyFrameWeightByOneWithoutMutex(id);
+}
+
+void Frame::DecreaseCovisibleKeyFrameWeightByOneWithoutMutex(const size_t id) {
+    if (covisibleKeyframeIdToWeight_.count(id)) {
+        covisibleKeyframeIdToWeight_[id]--;
+        if (covisibleKeyframeIdToWeight_[id] < 15 
+            && covisibleKeyframeIdToWeight_.size() >= 2) {
+                covisibleKeyframeIdToWeight_.erase(id);
             }
     }
 }
 
-void Frame::updateConnectedKeyFrames() {
-    unique_lock<mutex> lck(connectedMutex_);
+void Frame::ComputeCovisibleKeyframes() {
+    unique_lock<mutex> lck(observationMutex_);
 
     // Calcualte the co-visibliblity keyframes' weight
-    ConnectedKeyFrameIdToWeight connectedKeyFrameCandidates;
-    for(auto& mapPoint : observedMapPoints_) {
-        if (mapPoint.expired() || mapPoint.lock()->outlier_) {
+    CovisibleKeyframeIdToWeight covisibleKeyframeIdToWeightCandidates;
+    for(auto& mappointId : observedMappointIds_) {
+        auto mappoint = MapManager::GetInstance().GetMappoint(mappointId);
+        if (mappoint == nullptr || mappoint->outlier_) {
             continue;
         }
 
-        for(auto& keyFrameMap : (mapPoint.lock())->getKeyFrameObservationsMap()) {
-
-            auto keyFrame = Map::getInstance().getKeyFrame(keyFrameMap.first);
-
-            if ( keyFrame == nullptr || keyFrame->getId() == id_) {
+        for(auto& idToPixelPos : mappoint->GetObservedByKeyframesMap()) {
+            auto keyframe = MapManager::GetInstance().GetKeyframe(idToPixelPos.first);
+            if ( keyframe == nullptr || keyframe->GetId() == id_) {
                 continue;
             }
 
-            connectedKeyFrameCandidates[keyFrame->getId()]++;
+            ++covisibleKeyframeIdToWeightCandidates[keyframe->GetId()];
         }
     }
        
     // Filter the connections whose weight larger than 15
-    connectedKeyFrameIdToWeight_.clear();
+    covisibleKeyframeIdToWeight_.clear();
+    size_t idWithMaxWeight;
     int maxWeight = 0;
-    unsigned long maxWeightConnectedKeyFrameId;
 
-    for(auto& pair : connectedKeyFrameCandidates) {
-        auto connectedKeyFrameId = pair.first;
-        auto connectedMapPointsCnt = pair.second;
-
-        if(connectedMapPointsCnt >= 15) {
-            connectedKeyFrameIdToWeight_[connectedKeyFrameId] = connectedMapPointsCnt;
-            Map::getInstance().getKeyFrame(connectedKeyFrameId)->addConnectedKeyFrame(this->id_, connectedMapPointsCnt);
+    for(auto& idToWeight : covisibleKeyframeIdToWeightCandidates) {
+        if(idToWeight.second >= 15) {
+            covisibleKeyframeIdToWeight_[idToWeight.first] = idToWeight.second;
+            MapManager::GetInstance().GetKeyframe(idToWeight.first)->AddCovisibleKeyframe(this->id_, idToWeight.second);
         }
 
-        if(connectedMapPointsCnt > maxWeight) {
-            maxWeightConnectedKeyFrameId = connectedKeyFrameId;
-            maxWeight = connectedMapPointsCnt;
+        if (idToWeight.second > maxWeight) {
+            idWithMaxWeight = idToWeight.first;
+            maxWeight = idToWeight.second;
         }
     }
 
     // In case there is no weight larger than 15
-    if(connectedKeyFrameIdToWeight_.empty() && maxWeight != 0) {
-        connectedKeyFrameIdToWeight_[maxWeightConnectedKeyFrameId] = maxWeight;
-        Map::getInstance().getKeyFrame(maxWeightConnectedKeyFrameId)->addConnectedKeyFrame(this->id_, maxWeight);
+    if(covisibleKeyframeIdToWeight_.empty() && maxWeight != 0) {
+        covisibleKeyframeIdToWeight_[idWithMaxWeight] = maxWeight;
+        MapManager::GetInstance().GetKeyframe(idWithMaxWeight)->AddCovisibleKeyframe(this->id_, maxWeight);
     }
 
     // cout << "Current Keyframe Id: " << this->id_ << endl;
-    // cout << "Connected Keyframe counts: " << connectedKeyFrameIdToWeight_.size() << endl;
-    // for(auto& pair: connectedKeyFrameIdToWeight_) {
+    // cout << "Connected Keyframe counts: " << covisibleKeyframeIdToWeight_.size() << endl;
+    // for(auto& pair: covisibleKeyframeIdToWeight_) {
     //     cout << "Id: " << pair.first << " Weight: " << pair.second << endl;
     // }    
 }

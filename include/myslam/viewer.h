@@ -8,7 +8,7 @@
 #include "myslam/common_include.h"
 #include "myslam/frame.h"
 #include "myslam/util.h"
-#include "myslam/map.h"
+#include "myslam/mapmanager.h"
 #include <opencv2/features2d/features2d.hpp>
 
 namespace myslam {
@@ -46,9 +46,9 @@ private:
     thread viewer_thread_;
     mutex viewer_data_mutex_;
 
-    Map::KeyframeDict all_keyframes_;
-    Map::MappointDict all_mappoints_;
-    Map::MappointDict active_mappoints_;
+    MapManager::KeyframeIdToPtr all_keyframes_;
+    MapManager::MappointIdToPtr all_mappoints_;
+    MapManager::MappointIdToPtr active_mappoints_;
     Frame::Ptr current_frame_;
     KeyPointSet keypointsCurr_;
 
