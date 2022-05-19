@@ -55,7 +55,7 @@ public:
         return id_; 
     }
 
-    void AddKeyframeObservation(const size_t keyframeId, const Point2f pixel_pos) {
+    void AddObservedByKeyframe(const size_t keyframeId, const Point2f pixel_pos) {
         unique_lock<mutex> lock(observationMutex_);
         observedByKeyframeMap_[keyframeId] = move(pixel_pos);
     }

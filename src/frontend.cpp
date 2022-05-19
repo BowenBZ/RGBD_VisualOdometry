@@ -119,14 +119,14 @@ bool FrontEnd::TrackingHandler() {
     if (!IsKeyframe()) {
         return true;
     } else {
-        cout << "  Current frame is a new keyframe" << endl;
+        cout << "Current frame is a new keyframe" << endl;
     }
 
     MapManager::GetInstance().InsertKeyframe(frameCurr_);
 
-    AddObservedByKeyframeToOldMappoints();
+    AddCurrentKeyframeAsObservedByKeyframeOfOldMappoints();
     CreateNewMappoints();
-    AddNewObservedMappointsForKeyframes();
+    AddNewMappointsObservationsForOldKeyframes();
     frameCurr_->ComputeCovisibleKeyframes();
 
     TriangulateMappointsInTrackingMap();
@@ -361,7 +361,7 @@ bool FrontEnd::IsKeyframe()
     return false;
 }
 
-void FrontEnd::AddObservedByKeyframeToOldMappoints()
+void FrontEnd::AddCurrentKeyframeAsObservedByKeyframeOfOldMappoints()
 {
     // observed mappoints is popluated in the PNP estimation
     for (auto &mappointId : frameCurr_->GetObservedMappointIds())
@@ -372,7 +372,7 @@ void FrontEnd::AddObservedByKeyframeToOldMappoints()
             continue;
         }
 
-        mappoint->AddKeyframeObservation(frameCurr_->GetId(), matchedMptKptMap_[mappoint].pt);
+        mappoint->AddObservedByKeyframe(frameCurr_->GetId(), matchedMptKptMap_[mappoint].pt);
     }
 }
 
@@ -412,9 +412,10 @@ void FrontEnd::CreateNewMappoints()
         // record new mappoints
         newMappoints_.push_back(mpt);
     }
+    cout << "Created new mappoints: " << newMappoints_.size() << endl;
 }
 
-void FrontEnd::AddNewObservedMappointsForKeyframes() {
+void FrontEnd::AddNewMappointsObservationsForOldKeyframes() {
     if (newMappoints_.size() == 0) {
         return;
     }
@@ -422,10 +423,52 @@ void FrontEnd::AddNewObservedMappointsForKeyframes() {
     auto localKeyframes = keyframeRef_->GetCovisibleKeyframes();
     localKeyframes[keyframeRef_->GetId()] = 0;
 
-    for (auto& keyframe : localKeyframes) {
-        for (auto& mappoint : newMappoints_) {
-            // TODO: check whether keyframe could observe this mappoint
+    for (auto& idToWeight : localKeyframes) {
+
+        auto keyframe = MapManager::GetInstance().GetKeyframe(idToWeight.first);
+        vector<KeyPoint> keypoints;
+        Mat descriptors;
+        // TODO: use previous keypoint as mask
+        orb_->detectAndCompute(keyframe->color_, Mat(), keypoints, descriptors);
+
+        // Select the good mappoints candidates
+        vector<Mappoint::Ptr> mptCandidates;
+        Mat mptCandidatesDescriptors;
+        for (auto & mappoint : newMappoints_)
+        {
+            if ( !keyframe->IsInFrame(mappoint->GetPosition()) ) {
+                continue;
+            }
+
+            // add as a candidate
+            mptCandidates.push_back(mappoint);
+            mptCandidatesDescriptors.push_back(mappoint->descriptor_);
         }
+
+        vector<cv::DMatch> matches;
+        flannMatcher_.match(mptCandidatesDescriptors, descriptors, matches);
+
+        // compute the min distance of the best match
+        float min_dis = std::min_element(
+                            matches.begin(),
+                            matches.end(),
+                            [](const cv::DMatch &m1, const cv::DMatch &m2)
+                            { return m1.distance < m2.distance; })
+                            ->distance;
+
+        int matchedSize = 0;
+        for (cv::DMatch &m : matches)
+        {
+            // filter out the matches whose distance is large
+            if (m.distance < max<float>(min_dis * minDisRatio_, 30.0))
+            {
+                ++matchedSize;
+                // keyframe->AddObservedMappoint(mptCandidates[m.queryIdx]->GetId());
+                // mptCandidates[m.queryIdx]->AddObservedByKeyframe(keyframe->GetId(), keypoints[m.trainIdx].pt);
+            }
+        }
+
+        cout << " for keyframe " << idToWeight.first << " add " << matchedSize << " new observations \n";
     }
 }
 

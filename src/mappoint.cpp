@@ -44,7 +44,7 @@ Mappoint::Mappoint (
 : id_(move(id)), pos_(move(position)), norm_(move(norm)), descriptor_(move(descriptor)), 
     triangulated_(false), optimized_(false), outlier_(false)
 {
-    AddKeyframeObservation(move(observedByKeyframeId), move(pixelPos));
+    AddObservedByKeyframe(move(observedByKeyframeId), move(pixelPos));
 }
 
 

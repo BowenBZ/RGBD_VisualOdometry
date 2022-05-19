@@ -99,11 +99,11 @@ private:
     bool IsKeyframe();
 
     // add current keyframe as the observedBy keyframe of old mappoints
-    void AddObservedByKeyframeToOldMappoints();
+    void AddCurrentKeyframeAsObservedByKeyframeOfOldMappoints();
     // create mappoints from new observed keypoint of current frame
     void CreateNewMappoints();
     // add new mappoints to the observedMappoints of keyframes in tracking map
-    void AddNewObservedMappointsForKeyframes();     
+    void AddNewMappointsObservationsForOldKeyframes();     
     // use triangulatiton to optmize the position of mappoints in trackingMap
     void TriangulateMappointsInTrackingMap();
 
