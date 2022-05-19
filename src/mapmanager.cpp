@@ -14,18 +14,16 @@ namespace myslam
 MapManager::MappointIdToPtr MapManager::GetMappointsAroundKeyframe( const Frame::Ptr& keyframe ) {
     unique_lock<mutex> lck(dataMutex_);
 
-    auto localKeyframes = keyframe->GetCovisibleKeyframes();
-    // Add this keyFrame to the connected keyframe map
-    localKeyframes[keyframe->GetId()] = 0;
+    auto covisibleKeyframeIds = keyframe->GetCovisibleKeyframes();
+    // Add this keyFrame to the covisible keyframe map
+    covisibleKeyframeIds.insert(keyframe->GetId());
 
     unordered_map<size_t, Mappoint::Ptr> localMappointsDict;
 
     // Find all mappoints observed by connected keyframes
-    for(auto& idToWeight: localKeyframes) {
-        if (!keyframesDict_.count(idToWeight.first)) {
-            continue;
-        }
-        auto localKeyframe = keyframesDict_[idToWeight.first];
+    for(auto& keyframeId: covisibleKeyframeIds) {
+        assert(keyframesDict_.count(keyframeId));
+        auto localKeyframe = keyframesDict_[keyframeId];
 
         for(auto& mappointId: localKeyframe -> GetObservedMappointIds()) {
             if (!mappointsDict_.count(mappointId) || mappointsDict_[mappointId] -> outlier_) {

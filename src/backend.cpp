@@ -35,16 +35,15 @@ void Backend::Optimize() {
     
     unordered_map<BinaryEdgeProjection*, pair<Frame::Ptr, Mappoint::Ptr>>    edgeToKeyframeThenMappoint;
 
-    auto covisibleKeyframesIdToWeight = keyframeCurr_->GetCovisibleKeyframes();
+    auto covisibleKeyframesIds = keyframeCurr_->GetCovisibleKeyframes();
     // Add current keyframe 
-    covisibleKeyframesIdToWeight[keyframeCurr_->GetId()] = 0;
+    covisibleKeyframesIds.insert(keyframeCurr_->GetId());
 
     int vertexIndex = 0;
 
     // Create pose vertices and mappoint vertices for covisible keyframes 
-    for(auto& idToWeight: covisibleKeyframesIdToWeight) {
+    for(auto& keyframeId: covisibleKeyframesIds) {
     
-        auto keyframeId = idToWeight.first;
         auto keyframe = MapManager::GetInstance().GetKeyframe(keyframeId);
 
         if (keyframe == nullptr) {

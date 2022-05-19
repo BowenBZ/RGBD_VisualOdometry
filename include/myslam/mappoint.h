@@ -37,9 +37,7 @@ public:
     static Mappoint::Ptr CreateMappoint( 
         const Vector3d  position, 
         const Vector3d  norm,
-        const Mat       descriptor,
-        const size_t    observedByKeyframeId,
-        const Point2f   pixelPos);
+        const Mat       descriptor);
 
     Vector3d GetPosition() {
         unique_lock<mutex> lock(posMutex_);
@@ -83,9 +81,7 @@ private:
         const size_t    id, 
         const Vector3d  position, 
         const Vector3d  norm, 
-        const Mat       descriptor,
-        const size_t    observedByKeyframeId,
-        const Point2f   pixelPos);
+        const Mat       descriptor);
 };
 
 } // namespace
