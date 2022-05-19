@@ -150,7 +150,6 @@ void Backend::Optimize() {
         if (edge->chi2() > chi2Threshold_) {
             auto keyframe = edgeToKeyframeThenMappoint[edge].first;
             auto mappoint = edgeToKeyframeThenMappoint[edge].second;
-            mappoint->RemoveObservedByKeyframe(keyframe->GetId());
             keyframe->RemoveObservedMappoint(mappoint->GetId());
             edge->setLevel(1);
             ++outlierCnt;
@@ -168,7 +167,6 @@ void Backend::Optimize() {
         if (edge->level() == 0 && edge->chi2() > chi2Threshold_) {
             auto keyframe = edgeToKeyframeThenMappoint[edge].first;
             auto mappoint = edgeToKeyframeThenMappoint[edge].second;
-            mappoint->RemoveObservedByKeyframe(keyframe->GetId());
             keyframe->RemoveObservedMappoint(mappoint->GetId());
             ++outlierCnt;
         } 

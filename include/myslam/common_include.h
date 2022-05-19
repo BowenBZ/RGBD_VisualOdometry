@@ -63,5 +63,8 @@ using cv::Point2f;
 #include <unordered_set>
 #include <vector>
 
+#undef NDEBUG
+#include <assert.h>
+
 using namespace std; 
 #endif
