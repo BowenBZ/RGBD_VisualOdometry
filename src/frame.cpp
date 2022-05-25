@@ -8,7 +8,6 @@
  */
 
 #include "myslam/frame.h"
-#include "myslam/mappoint.h"
 #include "myslam/mapmanager.h"
 
 namespace myslam
@@ -68,16 +67,27 @@ double Frame::GetDepth ( const KeyPoint& kp )
 }
 
 
-bool Frame::IsInFrame ( const Vector3d& pt_world )
+bool Frame::IsCouldObserveMappoint ( const Mappoint::Ptr& mpt )
 {
-    Vector3d p_cam = camera_->World2Camera( pt_world, T_c_w_ );
-    if ( p_cam(2, 0) < 0 ) {
+    Vector3d posInCam = camera_->World2Camera( mpt->GetPosition(), T_c_w_ );
+    if ( posInCam(2, 0) < 0 ) {
         return false;
     } 
-    Vector2d pixel = camera_->Camera2Pixel ( p_cam );
-    return pixel(0,0)>0 && pixel(1,0)>0 
-        && pixel(0,0)<color_.cols 
-        && pixel(1,0)<color_.rows;
+
+    Vector2d posInPixel = camera_->Camera2Pixel ( posInCam );
+    if (posInPixel(0, 0) < 0 || posInPixel(0, 0) >= color_.cols ||
+        posInPixel(1, 0) < 0 || posInPixel(1, 0) >= color_.rows) {
+            return false;
+    }
+
+    Vector3d direction = mpt->GetPosition() - this->GetCamCenter();
+    direction.normalize();
+    double angle = acos( direction.transpose() * mpt->GetNormDirection() );
+    if ( angle > M_PI/6 ) {
+        return false;
+    }
+
+    return true;
 }
 
 void Frame::AddObservedMappoint(const size_t mappointId, const Point2f pixelPos) {
@@ -88,7 +98,7 @@ void Frame::AddObservedMappoint(const size_t mappointId, const Point2f pixelPos)
 
     auto mappoint = MapManager::GetInstance().GetMappoint(mappointId);
     assert(mappoint != nullptr);
-    mappoint->AddObservedByKeyframe(this->id_, move(pixelPos));
+    mappoint->AddObservedByKeyframe(this->id_, move(pixelPos), GetCamCenter());
 
     for (auto& idToPixel: mappoint->GetObservedByKeyframesMap()) {
         auto otherKFId = idToPixel.first;

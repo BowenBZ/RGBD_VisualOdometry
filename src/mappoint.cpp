@@ -16,7 +16,6 @@ size_t Mappoint::factoryId_ = 0;
 
 Mappoint::Ptr Mappoint::CreateMappoint ( 
     const Vector3d     position, 
-    const Vector3d     norm,
     const Mat          descriptor)
 {
     // Mat is defaultly shadow copy
@@ -24,7 +23,6 @@ Mappoint::Ptr Mappoint::CreateMappoint (
         new Mappoint( 
             ++factoryId_, 
             move(position), 
-            move(norm), 
             descriptor.clone())
     );
 }
@@ -33,9 +31,8 @@ Mappoint::Ptr Mappoint::CreateMappoint (
 Mappoint::Mappoint ( 
     const size_t    id, 
     const Vector3d  position, 
-    const Vector3d  norm, 
     const Mat       descriptor)
-: id_(move(id)), pos_(move(position)), norm_(move(norm)), descriptor_(move(descriptor)), 
+: id_(move(id)), pos_(move(position)), descriptor_(move(descriptor)), norm_(Vector3d::Zero()),
     triangulated_(false), optimized_(false), outlier_(false) { }
 
 

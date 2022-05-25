@@ -171,7 +171,7 @@ void FrontEnd::MatchKeyPointsInTrackingMap()
 
         // If considered as outlier by backend or cannot be viewed by current frame
         // TODO: should remove this mappoint from the trackingMap_
-        if ( mp->outlier_ || !frameCurr_->IsInFrame(mp->GetPosition()) ) {
+        if ( mp->outlier_ || !frameCurr_->IsCouldObserveMappoint(mp) ) {
             continue;
         }
 
@@ -385,7 +385,6 @@ void FrontEnd::CreateNewMappoints()
         // all parameters will have a deep copy inside the constructor
         Mappoint::Ptr mpt = Mappoint::CreateMappoint(
             mptPos,
-            (mptPos - frameCurr_->GetCamCenter()).normalized(),
             descriptorsCurr_.row(idx));
 
         // add mappoint into map
@@ -421,7 +420,7 @@ void FrontEnd::AddNewMappointsObservationsForOldKeyframes() {
         Mat mptCandidatesDescriptors;
         for (auto & mappoint : newMappoints_)
         {
-            if ( !keyframe->IsInFrame(mappoint->GetPosition()) ) {
+            if ( !keyframe->IsCouldObserveMappoint(mappoint) ) {
                 continue;
             }
 

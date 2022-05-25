@@ -7,6 +7,7 @@
 
 #include "myslam/common_include.h"
 #include "myslam/camera.h"
+#include "myslam/mappoint.h"
 
 namespace myslam 
 {
@@ -54,7 +55,7 @@ public:
     }
     
     // check if a point is in the view of this frame 
-    bool IsInFrame( const Vector3d& pt_world );
+    bool IsCouldObserveMappoint( const Mappoint::Ptr& mpt );
 
     // Add observed mappoint and also update the covisible keyframes
     void AddObservedMappoint(const size_t mappointId, const Point2f pixelPos);
