@@ -1,6 +1,6 @@
 %YAML:1.0
 # The tum dataset directory with the associate.txt fiel, change it to yours! 
-dataset_dir: ../dataset/rgbd_dataset_freiburg1_xyz
+dataset_dir: /home/azureuser/dataset/rgbd_dataset_freiburg1_room
 
 # The output trajectory file directory
 output_file: ./output/output.txt
