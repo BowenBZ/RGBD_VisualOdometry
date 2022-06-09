@@ -19,7 +19,6 @@ public:
     typedef unordered_map<size_t, Point2f> ObservedByKeyframeIdtoPixelPos;
 
     Mat         descriptor_;            // Descriptor for matching 
-    Vector3d    norm_;                  // Normal of viewing direction 
 
     bool        triangulated_;          // whether have been triangulated in frontend
     bool        optimized_;             // whether is optimized by backend
@@ -36,10 +35,7 @@ public:
     // there will be only 1 time copy of parameters happening in the private constructor
     static Mappoint::Ptr CreateMappoint( 
         const Vector3d  position, 
-        const Vector3d  norm,
-        const Mat       descriptor,
-        const size_t    observedByKeyframeId,
-        const Point2f   pixelPos);
+        const Mat       descriptor);
 
     Vector3d GetPosition() {
         unique_lock<mutex> lock(posMutex_);
@@ -55,9 +51,16 @@ public:
         return id_; 
     }
 
-    void AddKeyframeObservation(const size_t keyframeId, const Point2f pixel_pos) {
+    Vector3d GetNormDirection() {
         unique_lock<mutex> lock(observationMutex_);
-        observedByKeyframeMap_[keyframeId] = move(pixel_pos);
+        return norm_;
+    }
+
+    void AddObservedByKeyframe(const size_t keyframeId, const Point2f posInPixel, const Vector3d cameraCenter) {
+        unique_lock<mutex> lock(observationMutex_);
+        assert(!observedByKeyframeMap_.count(keyframeId));
+        observedByKeyframeMap_[keyframeId] = move(posInPixel);
+        norm_ = (norm_ + (pos_ - cameraCenter).normalized()).normalized();
     }
     
     void RemoveObservedByKeyframe(const size_t keyframeId);
@@ -72,6 +75,8 @@ private:
     static size_t               factoryId_;
     size_t                      id_;
 
+    Vector3d                    norm_;      // Normal of viewing direction 
+
     mutex                       posMutex_;
     Vector3d                    pos_;       // Position in world reference frame
 
@@ -82,10 +87,7 @@ private:
     Mappoint( 
         const size_t    id, 
         const Vector3d  position, 
-        const Vector3d  norm, 
-        const Mat       descriptor,
-        const size_t    observedByKeyframeId,
-        const Point2f   pixelPos);
+        const Mat       descriptor);
 };
 
 } // namespace

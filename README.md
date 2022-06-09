@@ -80,8 +80,8 @@ The `run_vo` app will save the estiamted trajectory to a `.txt` file. Then you c
 You can also generate the trajectory in plane or the drift error per second. This requires Python3 with matplotlib module installed. 
 
 <p float="left">
-  <img src="pngs/plot_ate.png" width="300"/>
-  <img src="pngs/plot_rpe.png" width="300"/>
+  <img src="pngs/output_ate.png" width="300"/>
+  <img src="pngs/output_rpe.png" width="300"/>
 </p>
 
 ## Use repo with Docker

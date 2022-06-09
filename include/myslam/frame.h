@@ -7,6 +7,7 @@
 
 #include "myslam/common_include.h"
 #include "myslam/camera.h"
+#include "myslam/mappoint.h"
 
 namespace myslam 
 {
@@ -54,15 +55,13 @@ public:
     }
     
     // check if a point is in the view of this frame 
-    bool IsInFrame( const Vector3d& pt_world );
+    bool IsCouldObserveMappoint( const Mappoint::Ptr& mpt );
 
+    // Add observed mappoint and also update the covisible keyframes
+    void AddObservedMappoint(const size_t mappointId, const Point2f pixelPos);
 
-    void AddObservedMappoint(const size_t id) {
-        unique_lock<mutex> lck(observationMutex_);
-        observedMappointIds_.insert(id);
-    }
-
-    void RemoveObservedMappoint(const size_t id);
+    // Remove observed mappoint and also update the covisible keyframes
+    void RemoveObservedMappoint(const size_t mappointId);
 
     unordered_set<size_t> GetObservedMappointIds() {
         unique_lock<mutex> lck(observationMutex_);
@@ -74,22 +73,12 @@ public:
         return observedMappointIds_.count(id);
     }
 
-    // Update the covisible keyframes when this frame is a keyframe 
-    void ComputeCovisibleKeyframes();
+    // Update the covisible keyframe with new weight
+    void UpdateCovisibleKeyframeWeight(const size_t id, const int weight);
 
-    // Add the connection of another frame with weight to current frame
-    void AddCovisibleKeyframe(const size_t id, const int weight) {
+    unordered_set<size_t> GetCovisibleKeyframes() {
         unique_lock<mutex> lck(observationMutex_);
-        covisibleKeyframeIdToWeight_[id] = weight;
-    }
-
-    // Decrease the weight of covosible keyframe by 1
-    void DecreaseCovisibleKeyframeWeightByOne(const size_t id);
-
-
-    CovisibleKeyframeIdToWeight GetCovisibleKeyframes() {
-        unique_lock<mutex> lck(observationMutex_);
-        return covisibleKeyframeIdToWeight_;
+        return activeCovisibleKeyframes_;
     }
 
 private: 
@@ -101,7 +90,8 @@ private:
 
     mutex                   observationMutex_;
     unordered_set<size_t>   observedMappointIds_;
-    CovisibleKeyframeIdToWeight covisibleKeyframeIdToWeight_;  // Covisible keyframes (has same observed mappoints >= 15) and the number of covisible mappoints
+    CovisibleKeyframeIdToWeight allCovisibleKeyframeIdToWeight_;        // All covisible keyframes
+    unordered_set<size_t>   activeCovisibleKeyframes_;     // Covisible keyframes (has same observed mappoints >= 15) and the number of covisible mappoints
 
 
     Frame(  const size_t id, 
@@ -110,7 +100,6 @@ private:
             const Mat color, 
             const Mat depth );
 
-    void DecreaseCovisibleKeyFrameWeightByOneWithoutMutex(const size_t id);
 };
 
 }

@@ -35,16 +35,15 @@ void Backend::Optimize() {
     
     unordered_map<BinaryEdgeProjection*, pair<Frame::Ptr, Mappoint::Ptr>>    edgeToKeyframeThenMappoint;
 
-    auto covisibleKeyframesIdToWeight = keyframeCurr_->GetCovisibleKeyframes();
+    auto covisibleKeyframesIds = keyframeCurr_->GetCovisibleKeyframes();
     // Add current keyframe 
-    covisibleKeyframesIdToWeight[keyframeCurr_->GetId()] = 0;
+    covisibleKeyframesIds.insert(keyframeCurr_->GetId());
 
     int vertexIndex = 0;
 
     // Create pose vertices and mappoint vertices for covisible keyframes 
-    for(auto& idToWeight: covisibleKeyframesIdToWeight) {
+    for(auto& keyframeId: covisibleKeyframesIds) {
     
-        auto keyframeId = idToWeight.first;
         auto keyframe = MapManager::GetInstance().GetKeyframe(keyframeId);
 
         if (keyframe == nullptr) {
@@ -151,7 +150,6 @@ void Backend::Optimize() {
         if (edge->chi2() > chi2Threshold_) {
             auto keyframe = edgeToKeyframeThenMappoint[edge].first;
             auto mappoint = edgeToKeyframeThenMappoint[edge].second;
-            mappoint->RemoveObservedByKeyframe(keyframe->GetId());
             keyframe->RemoveObservedMappoint(mappoint->GetId());
             edge->setLevel(1);
             ++outlierCnt;
@@ -169,7 +167,6 @@ void Backend::Optimize() {
         if (edge->level() == 0 && edge->chi2() > chi2Threshold_) {
             auto keyframe = edgeToKeyframeThenMappoint[edge].first;
             auto mappoint = edgeToKeyframeThenMappoint[edge].second;
-            mappoint->RemoveObservedByKeyframe(keyframe->GetId());
             keyframe->RemoveObservedMappoint(mappoint->GetId());
             ++outlierCnt;
         } 

@@ -15,7 +15,7 @@
 #include "myslam/frame.h"
 
 void writePosetoFile(ofstream& outputFile, const string& timestamp, const SE3& pose) {
-    Vector3d translation = pose.translation();
+    Vector3d translation = pose.inverse().translation();
     Eigen::Quaterniond rotation = Eigen::Quaterniond(pose.rotationMatrix());
     outputFile << timestamp << ' ' << translation[0] << ' ' << translation[1] << ' ' << translation[2] 
                 << ' ' << rotation.coeffs()[0] << ' ' << rotation.coeffs()[1] << ' ' 
