@@ -14,9 +14,9 @@
 #include "myslam/backend.h"
 #include "myslam/frame.h"
 
-void writePosetoFile(ofstream& outputFile, const string& timestamp, const SE3& pose) {
-    Vector3d translation = pose.inverse().translation();
-    Eigen::Quaterniond rotation = Eigen::Quaterniond(pose.rotationMatrix());
+void writePosetoFile(ofstream& outputFile, const string& timestamp, const SE3& Twc) {
+    Vector3d translation = Twc.translation();
+    Eigen::Quaterniond rotation = Eigen::Quaterniond(Twc.rotationMatrix());
     outputFile << timestamp << ' ' << translation[0] << ' ' << translation[1] << ' ' << translation[2] 
                 << ' ' << rotation.coeffs()[0] << ' ' << rotation.coeffs()[1] << ' ' 
                 << rotation.coeffs()[2] << ' ' << rotation.coeffs()[3] << endl;
@@ -110,7 +110,7 @@ int main ( int argc, char** argv )
     fout << "# timestamp tx ty tz qx qy qz qw" << endl;
     for(auto keyFrameMap: myslam::MapManager::GetInstance().GetAllKeyframes()) {
         auto keyFrame = keyFrameMap.second;
-        writePosetoFile(fout, std::to_string(keyFrame->timestamp_), keyFrame->GetPose());
+        writePosetoFile(fout, std::to_string(keyFrame->timestamp_), keyFrame->GetPose().inverse());
     }
     fout.close();
 
