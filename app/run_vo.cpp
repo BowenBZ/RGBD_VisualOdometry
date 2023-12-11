@@ -3,10 +3,12 @@
  */
 #include <fstream>
 #include <iostream>
-#include <boost/timer.hpp>
+#include <boost/timer/timer.hpp>
+
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <Eigen/Core>
+
 #include "myslam/config.h"
 #include "myslam/frontend.h"
 #include "myslam/viewer.h"
@@ -78,12 +80,12 @@ int main ( int argc, char** argv )
 
     cout << "Finish initialization!" << endl;
 
-    cout<<"Total "<<rgb_files.size() <<" images from dataset\n\n";
-    for ( int i=0; i<rgb_files.size(); i++ )
+    cout<< "Total " << rgb_files.size() <<" images from dataset\n\n";
+    for ( int i = 0; i < rgb_files.size(); ++i )
     {
         Mat color = cv::imread ( rgb_files[i] );
         Mat depth = cv::imread ( depth_files[i], -1 );
-        if ( color.data==nullptr || depth.data==nullptr )
+        if ( color.data == nullptr || depth.data == nullptr )
             break;
         myslam::Frame::Ptr pFrame = myslam::Frame::CreateFrame(
             rgb_times[i],
@@ -92,13 +94,14 @@ int main ( int argc, char** argv )
             depth);
 
         cout << "Image #" << i << endl;
-        boost::timer timer;
+        boost::timer::cpu_timer timer;
         frontend->AddFrame ( pFrame );
-        cout<<"Time cost (s): "<<timer.elapsed()<<endl<<endl;
+        boost::timer::cpu_times elapsed_times(timer.elapsed());
+        cout << "Time cost (ms): " << (elapsed_times.user + elapsed_times.system) / pow(10.0, 6.0) << endl << endl;
 
         if ( frontend->GetState() == myslam::FrontEnd::LOST ) {
             cout << "VO lost" << endl;
-            break;        
+            break;
         }
     }
 

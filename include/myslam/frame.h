@@ -41,7 +41,7 @@ public:
         return T_c_w_;
     }
 
-    SE3 SetPose(const SE3 pose) {
+    void SetPose(const SE3 pose) {
         unique_lock<mutex> lck(poseMutex_);
         T_c_w_ = move(pose);
     }
