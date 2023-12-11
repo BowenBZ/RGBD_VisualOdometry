@@ -40,6 +40,7 @@ find_package( Pangolin REQUIRED )
 include_directories(${Pangolin_INCLUDE_DIRS})
 
 set( THIRD_PARTY_LIBS 
+    boost_timer
     ${OpenCV_LIBS}
     ${Sophus_LIBRARIES}
     ${Pangolin_LIBRARIES} GL GLU GLEW glut

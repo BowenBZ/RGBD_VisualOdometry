@@ -95,8 +95,8 @@ public:
         0, -fy * Zinv, fy * Y / (Z * Z), fy + fy * Y * Y * Zinv2, -fy * X * Y * Zinv2, -fy * X * Zinv;
         }
 
-        virtual bool read( std::istream& in ) override {}
-        virtual bool write(std::ostream& os) const override {}
+        virtual bool read( std::istream& in ) override { return true; }
+        virtual bool write(std::ostream& os) const override { return true; }
 
 private:
     Vector3d _mappointPos;

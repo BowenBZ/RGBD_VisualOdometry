@@ -18,7 +18,6 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 #include <algorithm>
-#include <boost/timer.hpp>
 
 #include "myslam/config.h"
 #include "myslam/g2o_types.h"
@@ -96,7 +95,7 @@ bool FrontEnd::TrackingHandler() {
 
     ExtractKeyPointsAndComputeDescriptors();
 
-    // Corase compute pose
+    // Coarse compute pose
     cout << "Corase computing...\n";
     MatchKeyPointsInTrackingMap();
     EstimatePosePnP();
@@ -139,6 +138,7 @@ bool FrontEnd::TrackingHandler() {
     framePrev_ = frameCurr_;
     keyframeRef_ = frameCurr_;
 
+    return true;
 }
 
 void FrontEnd::LostHandler() {
@@ -147,6 +147,7 @@ void FrontEnd::LostHandler() {
 
 void FrontEnd::ExtractKeyPointsAndComputeDescriptors()
 {
+    keypointsCurr_.clear();
     orb_->detectAndCompute(frameCurr_->color_, Mat(), keypointsCurr_, descriptorsCurr_);
 }
 
