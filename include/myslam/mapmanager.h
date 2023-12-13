@@ -27,7 +27,7 @@ public:
     
     void InsertKeyframe( Frame::Ptr frame ) {
         unique_lock<mutex> lck(dataMutex_);
-        keyframesDict_[ frame->GetId() ] = std::move(frame);
+        keyframesDict_[ frame->GetId() ] = frame;
     }
 
     Frame::Ptr GetKeyframe( const size_t id ) {
@@ -42,7 +42,7 @@ public:
 
     void InsertMappoint( Mappoint::Ptr map_point ) {
         unique_lock<mutex> lck(dataMutex_);
-        mappointsDict_[map_point->GetId()] = std::move(map_point);
+        mappointsDict_[map_point->GetId()] = map_point;
     }
 
     Mappoint::Ptr GetMappoint( const size_t id ) {

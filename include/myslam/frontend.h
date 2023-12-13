@@ -7,6 +7,7 @@
 
 #include <opencv2/features2d/features2d.hpp>
 #include <bits/stdc++.h>
+
 #include "myslam/common_include.h"
 #include "myslam/frame.h"
 #include "myslam/mappoint.h"
@@ -104,9 +105,9 @@ private:
     void AddMatchedMappointsToKeyframeObservations();
     // create mappoints from new observed keypoint of current frame
     void CreateNewMappoints();
-    // add new mappoints to the observedMappoints of keyframes in tracking map
+    // add new mappoints to the observedMappoints of existing keyframes in tracking map
     void AddNewMappointsObservationsForOldKeyframes();     
-    // use triangulatiton to optmize the position of mappoints in trackingMap
+    // use triangulatiton to optmize the position of mappoints in tracking map
     void TriangulateMappointsInTrackingMap();
 
 };

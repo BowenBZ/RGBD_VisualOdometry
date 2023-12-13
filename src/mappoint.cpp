@@ -18,7 +18,7 @@ Mappoint::Ptr Mappoint::CreateMappoint (
     const Vector3d     position, 
     const Mat          descriptor)
 {
-    // Mat is defaultly shadow copy
+    // Vector3d is deep copy, while Mat is shadow copy
     return Mappoint::Ptr( 
         new Mappoint( 
             ++factoryId_, 

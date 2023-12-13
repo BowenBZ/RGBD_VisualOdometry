@@ -21,15 +21,17 @@
 
 #include "myslam/config.h"
 #include "myslam/g2o_types.h"
-#include "myslam/util.h"
 #include "myslam/mapmanager.h"
 
 namespace myslam
 {
 
-FrontEnd::FrontEnd() : state_(INITIALIZING), framePrev_(nullptr), frameCurr_(nullptr), accuLostFrameNums_(0), numInliers_(0),
-                        flannMatcher_(new cv::flann::LshIndexParams(5, 10, 2))
+FrontEnd::FrontEnd()    
 {
+    state_ = INITIALIZING;
+
+    flannMatcher_ = cv::FlannBasedMatcher(new cv::flann::LshIndexParams(5, 10, 2));
+
     orb_ = cv::ORB::create(Config::get<int>("number_of_features"),
                             Config::get<double>("scale_factor"),
                             Config::get<int>("level_pyramid"));
@@ -43,7 +45,7 @@ FrontEnd::FrontEnd() : state_(INITIALIZING), framePrev_(nullptr), frameCurr_(nul
 bool FrontEnd::AddFrame(const Frame::Ptr frame)
 {
     cout << "Frontend status: " << VOStateStr[state_] << endl;
-    frameCurr_ = move(frame);
+    frameCurr_ = frame;
 
     switch (state_)
     {
