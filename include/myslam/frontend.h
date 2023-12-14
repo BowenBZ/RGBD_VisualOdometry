@@ -69,10 +69,11 @@ private:
     vector<KeyPoint>        keypointsCurr_;     // keypoints in current frame
     Mat                     descriptorsCurr_;   // descriptor in current frame 
     cv::FlannBasedMatcher   flannMatcher_;      // flann matcher
-    unordered_map<Mappoint::Ptr, KeyPoint>  flannMatchedMptKptMap_;   // matched map points and keypoints after flann
-    KeyPointSet             matchedKptSet_;     // set of matched keypoint
+    unordered_map<Mappoint::Ptr, KeyPoint>  flannMatchedMptKptMap_;   // matched mappoints to keypoints after flann
+    KeyPointSet             flannMatchedKptSet_;     // matched keypoints set after flann
 
-    unordered_set<Mappoint::Ptr> pnpMatchedMptSet_;    // matched mappoints set after PNP estimation
+    unordered_set<Mappoint::Ptr> pnpMatchedMptSet_;    // matched inliner mappoints set after PNP estimation
+    KeyPointSet pnpMatchedKptSet_;              // matched inlier keypoint set after PNP estimation
     
     vector<Mappoint::Ptr>   newMappoints_;      // new mappoints created for new keyframe
 
@@ -101,8 +102,8 @@ private:
     // determine whether treating as keyframe
     bool IsKeyframe();
 
-    // add matched points as observation of current keyframe
-    void AddMatchedMappointsToKeyframeObservations();
+    // add matched points as observation to current keyframe
+    void AddCurrentKeyframeObservations();
     // create mappoints from new observed keypoint of current frame
     void CreateNewMappoints();
     // add new mappoints to the observedMappoints of existing keyframes in tracking map

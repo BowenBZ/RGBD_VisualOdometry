@@ -20,10 +20,8 @@ void Backend::Optimize() {
 
     cout << "\nBackend starts optimization" << endl;
 
-    typedef g2o::BlockSolver_6_3 BlockSolverType;
-    typedef g2o::LinearSolverCSparse<BlockSolverType::PoseMatrixType> LinearSolverType;
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
-        g2o::make_unique<BlockSolverType>(g2o::make_unique<LinearSolverType>()));
+        g2o::make_unique<BlockSolverType>(g2o::make_unique<CSparseLinearSolverType>()));
 
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(solver);
