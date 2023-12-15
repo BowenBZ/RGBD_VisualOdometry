@@ -83,7 +83,7 @@ bool Frame::IsCouldObserveMappoint ( const Mappoint::Ptr& mpt )
     Vector3d direction = mpt->GetPosition() - this->GetCamCenter();
     direction.normalize();
     double angle = acos( direction.transpose() * mpt->GetNormDirection() );
-    if ( angle > M_PI/6 ) {
+    if ( angle > M_PI / 8 ) {
         return false;
     }
 

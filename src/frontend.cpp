@@ -193,16 +193,17 @@ void FrontEnd::MatchKeyPointsInTrackingMap()
                         [](const cv::DMatch &m1, const cv::DMatch &m2)
                         { return m1.distance < m2.distance; })
                         ->distance;
+    float max_dis = max<float>(min_dis * minDisRatio_, 30.0);
 
     cout << "Minimum distance of matches " << min_dis << endl;
-    cout << "Largest distance of matches " << max<float>(min_dis * minDisRatio_, 30.0) << endl;
+    cout << "Largest distance of matches " << max_dis << endl;
 
     flannMatchedMptKptMap_.clear();
     flannMatchedKptSet_.clear();
     for (cv::DMatch &m : matches)
     {
         // filter out the matches whose distance is large
-        if (m.distance < max<float>(min_dis * minDisRatio_, 30.0))
+        if (m.distance <= max_dis)
         {
             flannMatchedMptKptMap_[mptCandidates[m.queryIdx]] = keypointsCurr_[m.trainIdx];
             flannMatchedKptSet_.insert(keypointsCurr_[m.trainIdx]);
