@@ -25,12 +25,12 @@ public:
         return map_;
     }
     
-    void InsertKeyframe( Frame::Ptr frame ) {
+    void InsertKeyframe(const Frame::Ptr& frame) {
         unique_lock<mutex> lck(dataMutex_);
         keyframesDict_[ frame->GetId() ] = frame;
     }
 
-    Frame::Ptr GetKeyframe( const size_t id ) {
+    Frame::Ptr GetKeyframe(const size_t id) {
         unique_lock<mutex> lck(dataMutex_);
         return (keyframesDict_.count(id)) ? keyframesDict_[id] : nullptr;
     }
@@ -40,12 +40,12 @@ public:
         return keyframesDict_;
     }
 
-    void InsertMappoint( Mappoint::Ptr map_point ) {
+    void InsertMappoint(const Mappoint::Ptr& map_point) {
         unique_lock<mutex> lck(dataMutex_);
         mappointsDict_[map_point->GetId()] = map_point;
     }
 
-    Mappoint::Ptr GetMappoint( const size_t id ) {
+    Mappoint::Ptr GetMappoint(const size_t id) {
         unique_lock<mutex> lck(dataMutex_);
         return (mappointsDict_.count(id)) ? mappointsDict_[id] : nullptr;
     }
