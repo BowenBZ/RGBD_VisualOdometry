@@ -36,6 +36,7 @@ public:
         return id_; 
     }
 
+    // Get T_c_w
     SE3 GetPose() {
         unique_lock<mutex> lck(poseMutex_);
         return T_c_w_;

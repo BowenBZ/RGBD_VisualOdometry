@@ -21,15 +21,17 @@
 
 #include "myslam/config.h"
 #include "myslam/g2o_types.h"
-#include "myslam/util.h"
 #include "myslam/mapmanager.h"
 
 namespace myslam
 {
 
-FrontEnd::FrontEnd() : state_(INITIALIZING), framePrev_(nullptr), frameCurr_(nullptr), accuLostFrameNums_(0), numInliers_(0),
-                        flannMatcher_(new cv::flann::LshIndexParams(5, 10, 2))
+FrontEnd::FrontEnd()    
 {
+    state_ = INITIALIZING;
+
+    flannMatcher_ = cv::FlannBasedMatcher(new cv::flann::LshIndexParams(5, 10, 2));
+
     orb_ = cv::ORB::create(Config::get<int>("number_of_features"),
                             Config::get<double>("scale_factor"),
                             Config::get<int>("level_pyramid"));
@@ -43,7 +45,7 @@ FrontEnd::FrontEnd() : state_(INITIALIZING), framePrev_(nullptr), frameCurr_(nul
 bool FrontEnd::AddFrame(const Frame::Ptr frame)
 {
     cout << "Frontend status: " << VOStateStr[state_] << endl;
-    frameCurr_ = move(frame);
+    frameCurr_ = frame;
 
     switch (state_)
     {
@@ -69,7 +71,7 @@ bool FrontEnd::AddFrame(const Frame::Ptr frame)
 
     if (viewer_)
     {
-        viewer_->setCurrentFrame(frameCurr_, matchedKptSet_);
+        viewer_->setCurrentFrame(frameCurr_, flannMatchedKptSet_);
         viewer_->updateDrawingObjects();
     }
 
@@ -123,9 +125,9 @@ bool FrontEnd::TrackingHandler() {
 
     MapManager::GetInstance().InsertKeyframe(frameCurr_);
 
-    AddMatchedMappointsToKeyframeObservations();
+    AddCurrentKeyframeObservations();
     CreateNewMappoints();
-    AddNewMappointsObservationsForOldKeyframes();
+    // AddNewMappointsObservationsForOldKeyframes();
     
     TriangulateMappointsInTrackingMap();
 
@@ -153,7 +155,7 @@ void FrontEnd::ExtractKeyPointsAndComputeDescriptors()
 
 void FrontEnd::MatchKeyPointsInTrackingMap()
 {
-    // Update the tracking map
+    // Tracking map is defined by reference keyframe
     if (keyframeForTrackingMap_ != keyframeRef_) {
         keyframeForTrackingMap_ = keyframeRef_;
         trackingMap_ = MapManager::GetInstance().GetMappointsAroundKeyframe(keyframeRef_);
@@ -191,19 +193,20 @@ void FrontEnd::MatchKeyPointsInTrackingMap()
                         [](const cv::DMatch &m1, const cv::DMatch &m2)
                         { return m1.distance < m2.distance; })
                         ->distance;
+    float max_dis = max<float>(min_dis * minDisRatio_, 30.0);
 
     cout << "Minimum distance of matches " << min_dis << endl;
-    cout << "Largest distance of matches " << max<float>(min_dis * minDisRatio_, 30.0) << endl;
+    cout << "Largest distance of matches " << max_dis << endl;
 
     flannMatchedMptKptMap_.clear();
-    matchedKptSet_.clear();
+    flannMatchedKptSet_.clear();
     for (cv::DMatch &m : matches)
     {
         // filter out the matches whose distance is large
-        if (m.distance < max<float>(min_dis * minDisRatio_, 30.0))
+        if (m.distance <= max_dis)
         {
             flannMatchedMptKptMap_[mptCandidates[m.queryIdx]] = keypointsCurr_[m.trainIdx];
-            matchedKptSet_.insert(keypointsCurr_[m.trainIdx]);
+            flannMatchedKptSet_.insert(keypointsCurr_[m.trainIdx]);
         }
     }
     cout << "  Size of tracking map: " << trackingMap_.size() << endl;
@@ -215,11 +218,13 @@ void FrontEnd::EstimatePosePnP()
 {
     // construct the 3d 2d observations
     vector<Mappoint::Ptr> mpts3d;
+    vector<KeyPoint> kpts2d;
     vector<Point3f> pts3d;
     vector<Point2f> pts2d;
 
     for (auto &mappointToKeypoint : flannMatchedMptKptMap_) {
         mpts3d.push_back(mappointToKeypoint.first);
+        kpts2d.push_back(mappointToKeypoint.second);
         pts3d.push_back(toPoint3f(mappointToKeypoint.first->GetPosition()));
         pts2d.push_back(mappointToKeypoint.second.pt);
     }
@@ -249,11 +254,8 @@ void FrontEnd::EstimatePosePnP()
         Vector3d(tranVec.at<double>(0, 0), tranVec.at<double>(1, 0), tranVec.at<double>(2, 0)));
 
     // using motion-only bundle adjustment to optimize the pose
-    typedef g2o::BlockSolver_6_3 BlockSolverType;
-    typedef g2o::LinearSolverDense<BlockSolverType::PoseMatrixType> LinearSolverType;
-
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
-        g2o::make_unique<BlockSolverType>(g2o::make_unique<LinearSolverType>()));
+        g2o::make_unique<BlockSolverType>(g2o::make_unique<DenseLinearSolverType>()));
 
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(solver);
@@ -309,7 +311,9 @@ void FrontEnd::EstimatePosePnP()
 
     frameCurr_->SetPose(pose->estimate());
 
+    // Collect the inlier points
     pnpMatchedMptSet_.clear();
+    pnpMatchedKptSet_.clear();
     for (size_t i = 0; i < edges.size(); ++i)
     {
         auto edge = edges[i];
@@ -319,8 +323,9 @@ void FrontEnd::EstimatePosePnP()
             continue;
         }
 
-        auto mpt = mpts3d[inliers.at<int>(i, 0)];
-        pnpMatchedMptSet_.insert(mpt);
+        auto index = inliers.at<int>(i, 0);
+        pnpMatchedMptSet_.insert(mpts3d[index]);
+        pnpMatchedKptSet_.insert(kpts2d[index]);
     }
 
     // TODO: remove the outliers from active map?
@@ -358,7 +363,7 @@ bool FrontEnd::IsKeyframe()
     return false;
 }
 
-void FrontEnd::AddMatchedMappointsToKeyframeObservations() {
+void FrontEnd::AddCurrentKeyframeObservations() {
     for (auto& mappoint : pnpMatchedMptSet_) {
         frameCurr_->AddObservedMappoint(mappoint->GetId(), flannMatchedMptKptMap_[mappoint].pt);
     }
@@ -370,7 +375,7 @@ void FrontEnd::CreateNewMappoints()
     for (size_t idx = 0; idx < keypointsCurr_.size(); ++idx)
     {
         // the new mappoint is keypoint doesn't match with previous mappoints
-        if (matchedKptSet_.count(keypointsCurr_[idx])) {
+        if (pnpMatchedKptSet_.count(keypointsCurr_[idx])) {
             continue;
         }
 
@@ -463,7 +468,7 @@ void FrontEnd::TriangulateMappointsInTrackingMap()
     for (auto &idToMappoint : trackingMap_)
     {
         auto mp = idToMappoint.second;
-        if (mp->outlier_ || mp->triangulated_ || mp->optimized_ || !flannMatchedMptKptMap_.count(mp))
+        if (mp->outlier_ || mp->triangulated_ || mp->optimized_ || !pnpMatchedMptSet_.count(mp))
         {
             continue;
         }

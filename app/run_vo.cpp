@@ -31,71 +31,80 @@ int main ( int argc, char** argv )
         cout<<"usage: run_vo parameter_file"<<endl;
         return 1;
     }
-
     myslam::Config::setParameterFile ( argv[1] );
 
-    string dataset_dir = myslam::Config::get<string> ( "dataset_dir" );
-    cout<<"Path of dataset: "<<dataset_dir<<endl;
-    ifstream fin ( dataset_dir+"/associate.txt" );
+    string datasetDir = myslam::Config::get<string> ( "dataset_dir" );
+    string datasetEntryFile = datasetDir + "/associate.txt";
+    cout << "Path of dataset: " << datasetEntryFile << endl;
+    ifstream fin ( datasetEntryFile );
     if ( !fin )
     {
         cout<<"please generate the associate file called associate.txt!"<<endl;
         return 1;
     }
-
-    vector<string> rgb_files, depth_files;
-    vector<double> rgb_times, depth_times;
+    vector<string> rgbFiles, depthFiles;
+    vector<double> rgbTimes, depthTimes;
     while ( !fin.eof() )
     {
-        string rgb_time, rgb_file, depth_time, depth_file;
-        fin>>rgb_time>>rgb_file>>depth_time>>depth_file;
-        rgb_times.push_back ( atof ( rgb_time.c_str() ) );
-        depth_times.push_back ( atof ( depth_time.c_str() ) );
-        rgb_files.push_back ( dataset_dir+"/"+rgb_file );
-        depth_files.push_back ( dataset_dir+"/"+depth_file );
-
-        if ( fin.good() == false )
+        string rgbTime, rgbFile, depthTime, depthFile;
+        fin>>rgbTime>>rgbFile>>depthTime>>depthFile;
+        if (rgbTime.size() == 0) {
             break;
+        }
+
+        rgbTimes.push_back ( atof ( rgbTime.c_str() ) );
+        depthTimes.push_back ( atof ( depthTime.c_str() ) );
+        rgbFiles.push_back ( datasetDir+"/"+rgbFile );
+        depthFiles.push_back ( datasetDir+"/"+depthFile );
+
+        if ( !fin.good() ) {
+            break;
+        }
     }
     fin.close();
+    cout<< "Total " << rgbFiles.size() << " images from dataset\n\n";
+
+    const string outputPath = myslam::Config::get<string> ( "output_file" );
+    ofstream fout (outputPath);
+    fout << "# estimated trajectory format" << endl;
+    fout << "# timestamp tx ty tz qx qy qz qw" << endl;
 
     cout << "Initializing VO system ..." << endl;
-
     myslam::Camera::Ptr camera ( new myslam::Camera );
     myslam::FrontEnd::Ptr frontend ( new myslam::FrontEnd );
-
     myslam::Viewer::Ptr viewer;
     if (myslam::Config::get<int> ( "enable_viewer" )) {
         cout << "Enable to show image" << endl; 
         viewer = myslam::Viewer::Ptr( new myslam::Viewer );
         frontend->SetViewer(viewer);
     }
-
     myslam::Backend::Ptr backend;
     if (myslam::Config::get<int> ( "enable_local_optimization" )) {
         cout << "Enable local optimization" << endl;
         backend = myslam::Backend::Ptr(new myslam::Backend(camera));
         frontend->SetBackend(backend); 
     }
-
-    cout << "Finish initialization!" << endl;
-
-    cout<< "Total " << rgb_files.size() <<" images from dataset\n\n";
-    for ( int i = 0; i < rgb_files.size(); ++i )
+    cout << "Finish initialization!\n\n" << endl;
+    
+    for ( size_t i = 0; i < rgbFiles.size(); ++i )
     {
-        Mat color = cv::imread ( rgb_files[i] );
-        Mat depth = cv::imread ( depth_files[i], -1 );
-        if ( color.data == nullptr || depth.data == nullptr )
+        Mat color = cv::imread ( rgbFiles[i] );
+        Mat depth = cv::imread ( depthFiles[i], -1 );
+        if ( color.data == nullptr || depth.data == nullptr ) {
+            cout << "Frame missing" << endl;
             break;
+        }
         myslam::Frame::Ptr pFrame = myslam::Frame::CreateFrame(
-            rgb_times[i],
+            rgbTimes[i],
             camera,
             color,
             depth);
 
         cout << "Image #" << i << endl;
         boost::timer::cpu_timer timer;
+
         frontend->AddFrame ( pFrame );
+        
         boost::timer::cpu_times elapsed_times(timer.elapsed());
         cout << "Time cost (ms): " << (elapsed_times.user + elapsed_times.system) / pow(10.0, 6.0) << endl << endl;
 
@@ -103,19 +112,12 @@ int main ( int argc, char** argv )
             cout << "VO lost" << endl;
             break;
         }
+
+        writePosetoFile(fout, std::to_string(pFrame->timestamp_), pFrame->GetPose().inverse());
     }
 
-    cout << "Finished. \nPress <enter> to continue\n"; 
-    cin.get();
-
-    ofstream fout (myslam::Config::get<string> ( "output_file" ));
-    fout << "# estimated trajectory format" << endl;
-    fout << "# timestamp tx ty tz qx qy qz qw" << endl;
-    for(auto keyFrameMap: myslam::MapManager::GetInstance().GetAllKeyframes()) {
-        auto keyFrame = keyFrameMap.second;
-        writePosetoFile(fout, std::to_string(keyFrame->timestamp_), keyFrame->GetPose().inverse());
-    }
     fout.close();
+    cout << "Finished. \nWrote trajectory to " << outputPath << endl; 
 
     if (myslam::Config::get<int> ( "enable_local_optimization" )) {
         backend->Stop();
@@ -124,6 +126,9 @@ int main ( int argc, char** argv )
     if (myslam::Config::get<int> ( "enable_viewer" )) {
         viewer->Close();
     }
+
+    cout << "\nPress <enter> to continue\n"; 
+    cin.get();
 
     return 0;
 }
