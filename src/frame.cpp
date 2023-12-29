@@ -8,6 +8,7 @@
  */
 
 #include "myslam/frame.h"
+#include "myslam/util.h"
 #include "myslam/mapmanager.h"
 
 namespace myslam
@@ -17,27 +18,37 @@ size_t Frame::factoryId_ = 0;
 
 Frame::Ptr Frame::CreateFrame(
     const double timestamp, 
-    const Camera::Ptr camera, 
-    const Mat color, 
-    const Mat depth)
+    const Camera::Ptr& camera, 
+    const Mat& color, 
+    const Mat& depth)
 {
     return Frame::Ptr( new Frame(
         ++factoryId_,
-        move(timestamp),
-        move(camera),
-        color.clone(),
-        depth.clone()) 
+        timestamp,
+        camera,
+        color,
+        depth) 
     );
 }
 
 Frame::Frame (  const size_t id, 
                 const double timestamp, 
-                const Camera::Ptr camera, 
-                const Mat color, 
-                const Mat depth )
-: id_(move(id)), timestamp_(move(timestamp)), camera_(move(camera)), color_(move(color)), depth_(move(depth)), T_c_w_(SE3())
+                const Camera::Ptr& camera, 
+                const Mat& color, 
+                const Mat& depth )
+: id_(id), timestamp_(timestamp), camera_(camera), color_(color.clone()), depth_(depth.clone()), T_c_w_(SE3())
 {
+    imgCols = color.cols;
+    imgRows = color.rows;
 
+    gridSize_ = (size_t)Config::get<double>("pixel_grid_size");
+    gridColCnt_ = (size_t)ceil((double)imgCols / gridSize_);
+    gridRowCnt_ = (size_t)ceil((double)imgRows / gridSize_);
+
+    searchGridRadius_ = Config::get<int>("search_grid_radius");
+
+    descriptorDistanceThres_ = Config::get<double>("max_descriptor_distance");
+    bestSecondaryDistanceRatio_ = Config::get<double>("min_best_secondary_distance_ratio");;
 }
 
 double Frame::GetDepth ( const KeyPoint& kp )
@@ -66,18 +77,32 @@ double Frame::GetDepth ( const KeyPoint& kp )
     return -1.0;
 }
 
+void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& detector) {
+    detector->detectAndCompute(color_, Mat(), keypoints_, descriptors_);
+    ConstructKeypointGrids();
 
-bool Frame::IsCouldObserveMappoint ( const Mappoint::Ptr& mpt )
-{
-    Vector3d posInCam = camera_->World2Camera( mpt->GetPosition(), T_c_w_ );
-    if ( posInCam(2, 0) < 0 ) {
+    // TODO: Since the keypoints are extracted, the color frame won't been needed unless the viewer
+}
+
+void Frame::ConstructKeypointGrids() {
+    for (size_t i = 0; i < keypoints_.size(); ++i) {
+        size_t gridIdx = GetGridIdx(keypoints_[i].pt.x, keypoints_[i].pt.y);
+        gridToKptIdx_[gridIdx].push_back(i);
+    }
+}
+
+bool Frame::GetMatchedKeypoint(const Mappoint::Ptr& mpt, size_t& kptIdx, double& distance, bool& mayObserveMpt) {
+    mayObserveMpt = false;
+
+    Vector3d posInCam = camera_->World2Camera(mpt->GetPosition(), T_c_w_);
+    if (posInCam(2, 0) < 0) {
         return false;
     } 
 
-    Vector2d posInPixel = camera_->Camera2Pixel ( posInCam );
-    if (posInPixel(0, 0) < 0 || posInPixel(0, 0) >= color_.cols ||
-        posInPixel(1, 0) < 0 || posInPixel(1, 0) >= color_.rows) {
-            return false;
+    Vector2d pixelPos = camera_->Camera2Pixel(posInCam);
+    if (pixelPos(0, 0) < 0 || pixelPos(0, 0) >= imgCols ||
+        pixelPos(1, 0) < 0 || pixelPos(1, 0) >= imgRows) {
+        return false;
     }
 
     Vector3d direction = mpt->GetPosition() - this->GetCamCenter();
@@ -87,58 +112,130 @@ bool Frame::IsCouldObserveMappoint ( const Mappoint::Ptr& mpt )
         return false;
     }
 
+    // This frame may observe this mappoint, but not gurantee to have a matched keypoint
+    // This is used by the fallback flann feature matching
+    mayObserveMpt = true;
+    
+    const size_t mptGridIdx = GetGridIdx(pixelPos(0, 0), pixelPos(0, 1));
+    const vector<size_t> queryGridsIdx = getNearbyGrids(mptGridIdx);
+    vector<pair<size_t, double>> kptIdxToDistance;
+    for (auto& gridIdx: queryGridsIdx) {
+        if (!gridToKptIdx_.count(gridIdx)) {
+            continue;
+        }
+
+        for (auto& kptIdx: gridToKptIdx_[gridIdx]) {
+            double distance = ComputeDescriptorDistance(
+                mpt->GetDescriptor(), 0,
+                descriptors_, kptIdx);
+
+            kptIdxToDistance.push_back({kptIdx, distance});
+        }
+    }
+
+    if (kptIdxToDistance.empty()) {
+        return false;
+    }
+
+    sort(kptIdxToDistance.begin(), kptIdxToDistance.end(), 
+        [](const pair<size_t, double>& kpt1, const pair<size_t, double>& kpt2) {
+            return kpt1.second < kpt2.second;
+        });
+
+    const pair<size_t, double>& bestKptToDistance = kptIdxToDistance[0];
+    // if (bestKptToDistance.second > descriptorDistanceThres_) {
+    //     return false;
+    // }
+
+    // if (kptIdxToDistance.size() >= 2) {
+    //     const pair<size_t, double>& secondKptToDistance = kptIdxToDistance[1];
+    //     if (bestKptToDistance.second / secondKptToDistance.second < bestSecondaryDistanceRatio_) {
+    //         return false;
+    //     }
+    // }
+    
+    kptIdx = bestKptToDistance.first;
+    distance = bestKptToDistance.second;
     return true;
 }
 
-void Frame::AddObservedMappoint(const size_t mappointId, const Point2f pixelPos) {
+size_t Frame::GetGridIdx(double x, double y) {
+    size_t colIdx = (size_t)floor(x / gridSize_);
+    size_t rowIdx = (size_t)floor(y / gridSize_);
+    return GetGridIdx(colIdx, rowIdx);
+}
+
+size_t Frame::GetGridIdx(size_t colIdx, size_t rowIdx) {
+    return rowIdx * gridColCnt_ + colIdx;
+}
+
+vector<size_t> Frame::getNearbyGrids(size_t gridIdx) {
+    vector<size_t> grids;
+
+    size_t rowIdx = gridIdx / gridColCnt_;
+    size_t colIdx = gridIdx - rowIdx * gridColCnt_;
+
+    for (int drow = -searchGridRadius_; drow <= searchGridRadius_; ++drow) {
+        for (int dcol = -searchGridRadius_; dcol <= searchGridRadius_; ++dcol) {
+            int row = (int)rowIdx + drow;
+            int col = (int)colIdx + dcol;
+
+            if (row >= 0 && row < gridRowCnt_ &&
+                col >= 0 && col < gridColCnt_) {
+                    grids.push_back(GetGridIdx((size_t)row, (size_t)col));
+                }
+        }
+    }
+
+    return grids;
+}
+
+void Frame::AddObservingMappoint(const Mappoint::Ptr& mpt, const size_t kptIdx) {
     unique_lock<mutex> lck(observationMutex_);
     
-    assert(!observedMappointIds_.count(mappointId));
-    observedMappointIds_.insert(mappointId);
+    auto mptId = mpt->GetId();
+    assert(!observingMappointIds_.count(mptId));
+    observingMappointIds_.insert(mptId);
 
-    auto mappoint = MapManager::GetInstance().GetMappoint(mappointId);
-    assert(mappoint != nullptr);
-    mappoint->AddObservedByKeyframe(this->id_, move(pixelPos), GetCamCenter());
+    assert(mpt != nullptr);
+    mpt->AddObservedByKeyframe(shared_from_this(), kptIdx);
 
-    for (auto& idToPixel: mappoint->GetObservedByKeyframesMap()) {
-        auto otherKFId = idToPixel.first;
-        if (otherKFId == this->id_) {
+    for (auto& [otherKFId, _]: mpt->GetObservedByKeyframesMap()) {
+        if (otherKFId == id_) {
             continue;
         }
 
         auto otherKF = MapManager::GetInstance().GetKeyframe(otherKFId);
         assert(otherKF != nullptr);
-        assert(otherKF->IsObservedMappoint(mappointId));
+        assert(otherKF->IsObservingMappoint(mptId));
 
         ++allCovisibleKeyframeIdToWeight_[otherKFId];
         if (allCovisibleKeyframeIdToWeight_[otherKFId] >= 15) {
             activeCovisibleKeyframes_.insert(otherKFId);
         }
 
-        otherKF -> UpdateCovisibleKeyframeWeight(this->id_, allCovisibleKeyframeIdToWeight_[otherKFId]);
+        otherKF->UpdateCovisibleKeyframeWeight(id_, allCovisibleKeyframeIdToWeight_[otherKFId]);
     }
-    
 }
 
 void Frame::RemoveObservedMappoint(const size_t mappointId) {
     unique_lock<mutex> lck(observationMutex_);
 
-    assert(observedMappointIds_.count(mappointId));
-    observedMappointIds_.erase(mappointId);
+    assert(observingMappointIds_.count(mappointId));
+    observingMappointIds_.erase(mappointId);
 
     auto mappoint = MapManager::GetInstance().GetMappoint(mappointId);
     assert(mappoint != nullptr);
     mappoint->RemoveObservedByKeyframe(this->id_);
 
-    for (auto& idToPixel: mappoint->GetObservedByKeyframesMap()) {
-        auto otherKFId = idToPixel.first;
+    for (auto& [otherKFId, _]: mappoint->GetObservedByKeyframesMap()) {
         if (otherKFId == this->id_) {
             continue;
         }
 
         auto otherKF = MapManager::GetInstance().GetKeyframe(otherKFId);
         assert(otherKF != nullptr);
-        assert(otherKF->IsObservedMappoint(mappointId));
+        assert(otherKF->IsObservingMappoint(mappointId));
 
         --allCovisibleKeyframeIdToWeight_[otherKFId];
         if (allCovisibleKeyframeIdToWeight_[otherKFId] == 0) {

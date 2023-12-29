@@ -71,7 +71,7 @@ int main ( int argc, char** argv )
 
     cout << "Initializing VO system ..." << endl;
     myslam::Camera::Ptr camera ( new myslam::Camera );
-    myslam::FrontEnd::Ptr frontend ( new myslam::FrontEnd );
+    myslam::Frontend::Ptr frontend ( new myslam::Frontend );
     myslam::Viewer::Ptr viewer;
     if (myslam::Config::get<int> ( "enable_viewer" )) {
         cout << "Enable to show image" << endl; 
@@ -86,8 +86,12 @@ int main ( int argc, char** argv )
     }
     cout << "Finish initialization!\n\n" << endl;
     
+    bool pauseEveryFrame = (myslam::Config::get<int>("single_step") == 1);
     for ( size_t i = 0; i < rgbFiles.size(); ++i )
     {
+        if (pauseEveryFrame) {
+            cin.get();
+        }
         Mat color = cv::imread ( rgbFiles[i] );
         Mat depth = cv::imread ( depthFiles[i], -1 );
         if ( color.data == nullptr || depth.data == nullptr ) {
@@ -108,7 +112,7 @@ int main ( int argc, char** argv )
         boost::timer::cpu_times elapsed_times(timer.elapsed());
         cout << "Time cost (ms): " << (elapsed_times.user + elapsed_times.system) / pow(10.0, 6.0) << endl << endl;
 
-        if ( frontend->GetState() == myslam::FrontEnd::LOST ) {
+        if ( frontend->GetState() == myslam::Frontend::LOST ) {
             cout << "VO lost" << endl;
             break;
         }

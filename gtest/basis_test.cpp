@@ -82,6 +82,16 @@ TEST(BASISTEST, PassOfMat_originReset) {
   EXPECT_EQ(a.at<double>(0, 0), b.mem.at<double>(0, 0));
 }
 
+// Demonstrate deep copy of Keypoint
+TEST(BASISTEST, CopyOfKeyPoint) {
+  cv::KeyPoint kpt1(1.0, 1,0, 0.1);
+  cv::KeyPoint kpt2 = kpt1;
+
+  EXPECT_EQ(kpt1.pt.x, kpt2.pt.x);
+  kpt1.pt.x = 2.0;
+  EXPECT_NE(kpt1.pt.x, kpt2.pt.x);
+}
+
 // Demonstrate deep copy of SE3
 TEST(BASISTEST, CopyOfSE3) {
   Eigen::Matrix3d aR = Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d(0, 0, 1)).toRotationMatrix();

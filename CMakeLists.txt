@@ -5,10 +5,10 @@ set( CMAKE_CXX_COMPILER "g++" )
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     set( CMAKE_BUILD_TYPE "Debug" )
-    set( CMAKE_CXX_FLAGS "-std=c++11")
+    set( CMAKE_CXX_FLAGS "-std=c++17")
 else()
     set( CMAKE_BUILD_TYPE "Release" )
-    set( CMAKE_CXX_FLAGS "-std=c++11 -march=native -O3" )
+    set( CMAKE_CXX_FLAGS "-std=c++17 -march=native -O3" )
 endif()
 
 list( APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules )

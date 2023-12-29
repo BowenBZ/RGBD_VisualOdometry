@@ -8,6 +8,7 @@
 
 namespace myslam
 {
+
 class Frame;
 
 class Mappoint
@@ -16,9 +17,6 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     typedef shared_ptr<Mappoint> Ptr;
-    typedef unordered_map<size_t, Point2f> ObservedByKeyframeIdtoPixelPos;
-
-    Mat         descriptor_;            // Descriptor for matching 
 
     bool        triangulated_;          // whether have been triangulated in frontend
     bool        optimized_;             // whether is optimized by backend
@@ -33,9 +31,7 @@ public:
     
     // factory function to create mappoint
     // there will be only 1 time copy of parameters happening in the private constructor
-    static Mappoint::Ptr CreateMappoint( 
-        const Vector3d  position, 
-        const Mat       descriptor);
+    static Mappoint::Ptr CreateMappoint(const Vector3d& pos);
 
     Vector3d GetPosition() {
         unique_lock<mutex> lock(posMutex_);
@@ -51,23 +47,28 @@ public:
         return id_; 
     }
 
+    // Set the descriptor for temp mappoints, it will be reset once observation is added
+    void SetTempDescriptor(const Mat& descriptor) {
+        descriptor_ = descriptor.clone();
+    }
+
+    Mat GetDescriptor() {
+        unique_lock<mutex> lock(observationMutex_);
+        return descriptor_;
+    }
+
     Vector3d GetNormDirection() {
         unique_lock<mutex> lock(observationMutex_);
         return norm_;
     }
 
-    void AddObservedByKeyframe(const size_t keyframeId, const Point2f posInPixel, const Vector3d cameraCenter) {
-        unique_lock<mutex> lock(observationMutex_);
-        assert(!observedByKeyframeMap_.count(keyframeId));
-        observedByKeyframeMap_[keyframeId] = move(posInPixel);
-        norm_ = (norm_ + (pos_ - cameraCenter).normalized()).normalized();
-    }
+    void AddObservedByKeyframe(const shared_ptr<Frame>& kf, const size_t kptIdx);
     
-    void RemoveObservedByKeyframe(const size_t keyframeId);
+    void RemoveObservedByKeyframe(const size_t kfId);
 
-    ObservedByKeyframeIdtoPixelPos GetObservedByKeyframesMap() {
+    unordered_map<size_t, size_t> GetObservedByKeyframesMap() {
         unique_lock<mutex> lock(observationMutex_);
-        return observedByKeyframeMap_;
+        return observedByKfIdToKptIdx_;
     }
 
 
@@ -75,19 +76,20 @@ private:
     static size_t               factoryId_;
     size_t                      id_;
 
+    Mat                         descriptor_;    // Descriptor for keypoint matching, coming from the best keypoint descriptor 
     Vector3d                    norm_;      // Normal of viewing direction 
 
     mutex                       posMutex_;
     Vector3d                    pos_;       // Position in world reference frame
 
     mutex                       observationMutex_;
-    ObservedByKeyframeIdtoPixelPos    observedByKeyframeMap_;
+    unordered_map<size_t, size_t>    observedByKfIdToKptIdx_;
+
 
     // mappoint can only be created by factory
-    Mappoint( 
-        const size_t    id, 
-        const Vector3d  position, 
-        const Mat       descriptor);
+    Mappoint(const size_t id, const Vector3d& pos);
+
+    void CalculateMappointDescriptor();
 };
 
 } // namespace

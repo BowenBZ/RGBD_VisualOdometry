@@ -1,9 +1,12 @@
 %YAML:1.0
 # The tum dataset directory with the associate.txt fiel, change it to yours! 
-dataset_dir: /home/azureuser/dataset/rgbd_dataset_freiburg1_room
+dataset_dir: /home/zbw/Desktop/dataset/rgbd_dataset_freiburg1_xyz
 
 # The output trajectory file directory
 output_file: ./output/output.txt
+
+# single step mode
+single_step: 0
 
 # camera intrinsics
 # Freiburg 1 RGB
@@ -14,19 +17,33 @@ camera.cy: 255.3
 
 camera.depth_scale: 5000
 
-# frontend paras
+# keypoints extraction paras
 number_of_features: 500
 scale_factor: 1.2
 level_pyramid: 8
+
+# active feature matching paras
+pixel_grid_size: 10
+search_grid_radius: 10
+max_descriptor_distance: 30
+min_best_secondary_distance_ratio: 0.5
+
+# flann feature matching paras
+min_matches_to_use_flann_frame_tracking: 200
+min_matches_to_use_flann_map_tracking: 250
 match_ratio: 2.0
+
+# frontend paras
+ba_inlier_threshold: 1.0
 max_num_lost: 10
-min_inliers: 10
+min_inliers_for_good_estimation: 10
+min_inliers_for_new_keyframe: 30
 keyframe_rotation: 0.05
 keyframe_translation: 0.05
 
 # backend paras
 enable_local_optimization: 1
-chi2_th: 1
+chi2_th: 1.0
 
 # viewer paras
-enable_viewer: 0
+enable_viewer: 1

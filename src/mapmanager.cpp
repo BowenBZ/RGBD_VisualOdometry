@@ -23,7 +23,7 @@ MapManager::MappointIdToPtr MapManager::GetMappointsAroundKeyframe( const Frame:
     // Find all mappoints observed by connected keyframes
     for(auto& keyframeId: covisibleKeyframeIds) {
         assert(keyframesDict_.count(keyframeId));
-        auto localKeyframe = keyframesDict_[keyframeId];
+        auto& localKeyframe = keyframesDict_[keyframeId];
 
         for(auto& mappointId: localKeyframe -> GetObservedMappointIds()) {
             if (!mappointsDict_.count(mappointId) || mappointsDict_[mappointId] -> outlier_) {

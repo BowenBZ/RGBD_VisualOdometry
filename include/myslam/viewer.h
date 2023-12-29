@@ -29,17 +29,15 @@ public:
         viewer_thread_.join();
     }
 
-    void setCurrentFrame(const Frame::Ptr& current_frame, 
-                         const KeyPointSet& keypoints) {
-        unique_lock<mutex> lck(viewer_data_mutex_);
-        current_frame_ = current_frame;
-        keypointsCurr_ = keypoints;
-    }
+    void SetCurrentFrame(
+        const Frame::Ptr& current_frame, 
+        const unordered_set<size_t>& matchedKptsIdx,
+        const unordered_set<size_t>& inlierKptsIdx);
 
     /*
       Update the all_keyframes_ and all_mappoints_
     */
-    void updateDrawingObjects();
+    void UpdateDrawingObjects();
 
 private:
     bool viewer_running_;
@@ -51,6 +49,9 @@ private:
     MapManager::MappointIdToPtr active_mappoints_;
     Frame::Ptr current_frame_;
     KeyPointSet keypointsCurr_;
+
+    unordered_set<size_t> matchedKptsIdx_;
+    unordered_set<size_t> inlierKptsIdx_;
 
     void ThreadLoop();
 
@@ -64,6 +65,9 @@ private:
 
     /// plot the features in current frame into an image
     cv::Mat PlotFrameImage();
+
+    // Get keypoint color
+    cv::Scalar GetKeypointColor(size_t kptIdx);
 
 }; // class Viewer
 

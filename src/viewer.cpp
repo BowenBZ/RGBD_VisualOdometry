@@ -6,7 +6,20 @@
 namespace myslam {
 
 
-void Viewer::updateDrawingObjects() {
+void Viewer::SetCurrentFrame(
+    const Frame::Ptr& current_frame, 
+    const unordered_set<size_t>& matchedKptsIdx,
+    const unordered_set<size_t>& inlierKptsIdx) {
+
+    unique_lock<mutex> lck(viewer_data_mutex_);
+    current_frame_ = current_frame;
+    matchedKptsIdx_.clear();
+    matchedKptsIdx_.insert(matchedKptsIdx.begin(), matchedKptsIdx.end());
+    inlierKptsIdx_.clear();
+    inlierKptsIdx_.insert(inlierKptsIdx.begin(), inlierKptsIdx.end());
+}
+
+void Viewer::UpdateDrawingObjects() {
     std::unique_lock<std::mutex> lck(viewer_data_mutex_);
     all_keyframes_ = MapManager::GetInstance().GetAllKeyframes();
     all_mappoints_ = MapManager::GetInstance().GetAllMappoints();
@@ -142,11 +155,27 @@ void Viewer::FollowCurrentFrame(pangolin::OpenGlRenderState& vis_camera) {
 }
 
 cv::Mat Viewer::PlotFrameImage() {
-    cv::Mat img_out = current_frame_->color_.clone();
-    for(auto& keypoint : keypointsCurr_) {
-        cv::circle(img_out, keypoint.pt, 2, cv::Scalar(0, 250, 0), 2);
+    cv::Mat img_out = current_frame_->GetImage().clone();
+    for(size_t idx = 0; idx < current_frame_->GetKeypointsSize(); ++idx) {
+        cv::circle(img_out, current_frame_->GetKeypoint(idx).pt, 2, 
+                   GetKeypointColor(idx), 2);
     }
     return img_out;
+}
+
+cv::Scalar Viewer::GetKeypointColor(size_t kptIdx) {
+    // inlier points are green
+    if(inlierKptsIdx_.count(kptIdx)) {
+        return cv::Scalar(0, 255, 0);
+    }
+
+    // Matched but outlier points are blue
+    if(matchedKptsIdx_.count(kptIdx)) {
+        return cv::Scalar(255, 0, 0);
+    }
+
+    // Unmatched point is red
+    return cv::Scalar(0, 0, 255);
 }
 
     

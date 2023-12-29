@@ -17,19 +17,21 @@
 
 namespace myslam 
 {
-class FrontEnd
+class Frontend
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    typedef shared_ptr<FrontEnd> Ptr;
+    typedef shared_ptr<Frontend> Ptr;
+    typedef unordered_map<size_t, Mappoint::Ptr> TrackingMap;
+
     enum VOState {
         INITIALIZING=0,
         TRACKING,
         LOST
     };
 
-    FrontEnd();
+    Frontend();
     
     bool AddFrame( const Frame::Ptr frame );      // entry point for application
 
@@ -39,6 +41,11 @@ public:
 
     void SetBackend( const Backend::Ptr backend) {
         backend_ = move(backend);
+
+        backend_->RegisterTrackingMapUpdateCallback(
+            [&](const Frame::Ptr& keyframe, function<void(void)> callback) {
+                UpdateTrackingMap(keyframe, callback);
+            });
     }
 
     VOState GetState() const { 
@@ -56,56 +63,70 @@ private:
     Backend::Ptr            backend_;
 
     VOState                 state_;             // current VO status
-    int                     accuLostFrameNums_; // number of lost times
+    size_t                  accuLostFrameNums_; // number of lost times
 
-    Frame::Ptr              keyframeRef_;       // reference keyframe, used for getting local tracking map
     Frame::Ptr              framePrev_;         // last frame
     Frame::Ptr              frameCurr_;         // current frame 
     
-    unordered_map<size_t, Mappoint::Ptr> trackingMap_;  // the local tracking map
+    TrackingMap             trackingMap_;  // the local tracking map
     Frame::Ptr              keyframeForTrackingMap_;    // the keyframe which is used to identify the tracking map
 
     cv::Ptr<cv::ORB>        orb_;               // orb detector and computer 
-    vector<KeyPoint>        keypointsCurr_;     // keypoints in current frame
-    Mat                     descriptorsCurr_;   // descriptor in current frame 
-    cv::FlannBasedMatcher   flannMatcher_;      // flann matcher
-    unordered_map<Mappoint::Ptr, KeyPoint>  flannMatchedMptKptMap_;   // matched mappoints to keypoints after flann
-    KeyPointSet             flannMatchedKptSet_;     // matched keypoints set after flann
+    cv::FlannBasedMatcher   flannMatcher_;      // flann matcher used if active search fails
 
-    unordered_set<Mappoint::Ptr> pnpMatchedMptSet_;    // matched inliner mappoints set after PNP estimation
-    KeyPointSet pnpMatchedKptSet_;              // matched inlier keypoint set after PNP estimation
-    
-    vector<Mappoint::Ptr>   newMappoints_;      // new mappoints created for new keyframe
+    unordered_map<size_t, size_t>   matchedMptIdKptIdxMap_;     // matched mappoint id to keypoint idx
+    unordered_map<size_t, size_t>   matchedKptIdxMptIdMap_;     // matched keypoint idx to mappoint id
+    unordered_map<size_t, double>   matchedKptIdxDistanceMap_;  // matched keypoint idx to distance
 
-    int                     numInliers_;        // number of inlier features in pnp estimation
+    unordered_set<size_t>   baInlierMptIdSet_;      // inlier mappoint id after PNP estimation
+    unordered_set<size_t>   baInlierKptIdxSet_;     // inlier keypoint idx after PNP estimation
+    size_t                  numInliers_;            // inlier count, should equal to size of baInlierMptIdSet_ and baInlierKptIdxSet_
     
+    g2o::SparseOptimizer    optimizer_;
+
+    TrackingMap             lastFrameMpts_;         // mpt of last frame including matched mpts and temp mpts 
+    list<Mappoint::Ptr>     tempMpts_;                      // temp mpts created from current frame
+    unordered_map<size_t, size_t> tempMptIdToKptIdx_;       // temp mpts id to kpt idx
+
     // parameters, see config/default.yaml
-    float                   minDisRatio_;       // ratio for selecting good matches
-    int                     maxLostFrames_;     // max number of continuous lost times
-    int                     minInliers_;        // minimum inliers
+    size_t                  minMatchesToUseFlannFrameTracking_;     // threshold to use flann for map matching
+    size_t                  minMatchesToUseFlannMapTracking_;     // threshold to use flann for map matching
+    float                   minDisRatio_;       // ratio for selecting flann good matches
+    double                  baInlierThres_;     // threshold to be consider as an inlier after BA
+    size_t                  minInliersForGood_; // minimum inliers to treat current frame as good
+    size_t                  maxLostFrames_;     // max number of continuous lost times
+    size_t                  minInliersForKeyframe_; // minimum inliers to consider current frame as keyframe
     double                  keyFrameMinRot_;    // minimal rotation of two key-frames
     double                  keyFrameMinTrans_;  // minimal translation of two key-frames
     
+    mutex                   trackingMapMutex_;  // mutex for update tracking map
+
     void InitializationHandler();
     bool TrackingHandler();
     void LostHandler();
 
-    // extract features from current frame
-    void ExtractKeyPointsAndComputeDescriptors();
+    // update tracking map, called by backend
+    void UpdateTrackingMap(const Frame::Ptr& keyframe, function<void(void)> callback);
+
     // match extracted features in tracking map
-    void MatchKeyPointsInTrackingMap();
+    void MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, size_t matchesToUseFlann);
+    // match keypoints by flann
+    void MatchKeyPointsFlann(const Mat& flannMptCandidateDes, unordered_map<int, size_t>& flannMptIdxToId);
+
     // estimate the pose with 3D-2D methods (mappoint, keypoint)
-    void EstimatePosePnP(); 
+    void EstimatePoseMotionOnlyBA(TrackingMap& trackingMap); 
 
     // measure the estimation quality
     bool IsGoodEstimation(); 
     // determine whether treating as keyframe
     bool IsKeyframe();
 
-    // add matched points as observation to current keyframe
-    void AddCurrentKeyframeObservations();
+    // create temp mappoints for current frame, used for next frame feature matching
+    void CreateTempMappoints();
     // create mappoints from new observed keypoint of current frame
-    void CreateNewMappoints();
+    void AddTempMappointsToMapManager();
+    // add observing mappoints (both previous and new created) to current keyframe
+    void AddObservingMappointsToCurrentFrame();
     // add new mappoints to the observedMappoints of existing keyframes in tracking map
     void AddNewMappointsObservationsForOldKeyframes();     
     // use triangulatiton to optmize the position of mappoints in tracking map

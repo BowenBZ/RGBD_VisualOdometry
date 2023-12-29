@@ -77,6 +77,7 @@ public:
     UnaryEdgeProjection(const Vector3d pos, const Camera::Ptr camera) : 
         _mappointPos(move(pos)), _camera(move(camera)) {}
 
+    // compute the projection pixel error
     virtual void computeError() override {
         const VertexPose *v = static_cast<VertexPose *> (_vertices[0]);
         SE3 T = v->estimate();

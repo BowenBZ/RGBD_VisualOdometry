@@ -62,9 +62,14 @@ using cv::Point2f;
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-
-#undef NDEBUG
+#include <functional>
 #include <assert.h>
 
-using namespace std; 
+#ifdef NDEBUG
+#undef assert
+#define assert(condition) ((void)0)
 #endif
+
+using namespace std; 
+
+#endif  // COMMON_INCLUDE_H

@@ -67,6 +67,24 @@ struct KeyPointsComparision
 
 typedef unordered_set<KeyPoint, KeyPointHash, KeyPointsComparision> KeyPointSet;
 
+// Compute the Hamming distance between 2 descriptors
+// Descriptor is provided as a row in the Mat
+inline double ComputeDescriptorDistance(
+    const Mat& desMat1, size_t row1,
+    const Mat& desMat2, size_t row2) {
+
+    assert(desMat1.cols == desMat2.cols);
+
+    auto& cols = desMat1.cols;
+    double distance = 0;
+    for(size_t col = 0; col < cols; ++col) {
+        distance += (desMat1.at<unsigned char>(row1, col) !=
+                     desMat2.at<unsigned char>(row2, col));
+    }
+
+    return distance;
+}
+
 
 } // namespace
 
