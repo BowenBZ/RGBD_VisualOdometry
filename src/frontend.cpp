@@ -100,7 +100,13 @@ void Frontend::InitializationHandler() {
     CreateTempMappoints();
     AddTempMappointsToMapManager();
     AddObservingMappointsToCurrentFrame();
-    UpdateTrackingMap(frameCurr_, nullptr);
+    UpdateTrackingMap([&](Frame::Ptr& refKeyframe, unordered_map<size_t, Mappoint::Ptr>& trackingMap) {
+        refKeyframe = frameCurr_;
+        trackingMap.clear();
+        for (auto& [mptId, mpt]: lastFrameMpts_) {
+            trackingMap[mptId] = mpt;
+        }
+    });
 
     // RGBD camera only needs 1 frame to configure since it could get the depth information
     state_ = TRACKING;
@@ -154,8 +160,6 @@ bool Frontend::TrackingHandler() {
         lock.unlock();
         // TODO: if backend is optimizaing, here will block frontend
         backend_->OptimizeCovisibleGraphOfKeyframe(frameCurr_);
-    } else {
-        TriangulateMappointsInTrackingMap();
     }
 
     return true;
@@ -165,23 +169,11 @@ void Frontend::LostHandler() {
     cout << "Tracking is lost" << endl;
 }
 
-void Frontend::UpdateTrackingMap(const Frame::Ptr& keyframe, function<void(void)> callback) {
+void Frontend::UpdateTrackingMap(function<void(Frame::Ptr&, TrackingMap&)> updater) {
     unique_lock<mutex> lock(trackingMapMutex_);
 
-    // Tracking map is defined by reference keyframe
-    if (keyframeForTrackingMap_ == nullptr || keyframe->GetId() != keyframeForTrackingMap_->GetId()) {
-        keyframeForTrackingMap_ = keyframe;
-        trackingMap_ = MapManager::GetInstance().GetMappointsAroundKeyframe(keyframe);
-
-        if (trackingMap_.size() < 100) {
-            trackingMap_ = MapManager::GetInstance().GetAllMappoints();
-            cout << " Not enough active mappoints, reset tracking map to all mappoints" << endl;
-        }
-    }
-
-    if (callback != nullptr) {
-        callback();
-    }
+    // Use updater to update tracking map
+    updater(keyframeForTrackingMap_, trackingMap_);
 
     cout << "Tracking map is updated" << endl;
 }
@@ -364,7 +356,7 @@ void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
     {
         int index = inliers.at<int>(i, 0);
         // 3D -> 2D projection
-        UnaryEdgeProjection *edge = new UnaryEdgeProjection(toVec3d(pts3d[index]), frameCurr_->camera_);
+        UnaryEdgeProjection *edge = new UnaryEdgeProjection(toVector3d(pts3d[index]), frameCurr_->camera_);
 
         edge->setId(i);
         edge->setVertex(0, poseVertex);
@@ -579,48 +571,6 @@ void Frontend::AddNewMappointsObservationsForOldKeyframes() {
 
         cout << " for keyframe " << keyframeId << " add " << matchedSize << " new observations \n";
     }
-}
-
-void Frontend::TriangulateMappointsInTrackingMap()
-{
-    int triangulatedCnt = 0;
-    for (auto &[id, mpt] : trackingMap_)
-    {
-        if (mpt->outlier_ || mpt->triangulated_ || mpt->optimized_ || !baInlierMptIdSet_.count(id))
-        {
-            continue;
-        }
-
-        // try to triangulate the mappoint
-        vector<SE3> poses;
-        vector<Vec3> points;
-        for (auto &[keyframeId, kptIdx] : mpt->GetObservedByKeyframesMap())
-        {
-            auto keyframe = MapManager::GetInstance().GetKeyframe(keyframeId);
-            auto& kpt = keyframe->GetKeypoint(kptIdx);
-
-            if (keyframe == nullptr) {
-                continue;
-            }
-
-            poses.push_back(keyframe->GetPose());
-            points.push_back(keyframe->camera_->Pixel2Camera(kpt.pt));
-        }
-
-        if (poses.size() >= 2)
-        {
-            Vec3 pworld = Vec3::Zero();
-            if (Triangulation(poses, points, pworld) && pworld[2] > 0)
-            {
-                // if triangulate successfully
-                mpt->SetPosition(pworld);
-                mpt->triangulated_ = true;
-                triangulatedCnt++;
-                break;
-            }
-        }
-    }
-    cout << "  Triangulate active mappoints size: " << triangulatedCnt << endl;
 }
 
 } // namespace

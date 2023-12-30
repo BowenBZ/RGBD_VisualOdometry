@@ -21,8 +21,8 @@ public:
 
     Backend(const Camera::Ptr camera);
 
-    void RegisterTrackingMapUpdateCallback(function<void(const Frame::Ptr&, function<void(void)>)> trackingMapUpdateHandler) {
-        trackingMapUpdateHandler_ = trackingMapUpdateHandler;
+    void RegisterTrackingMapUpdateCallback(function<void(function<void(Frame::Ptr&, unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler) {
+        frontendMapUpdateHandler_ = frontendMapUpdateHandler;
     }
 
     // Stop backend processing and clean up resources
@@ -54,7 +54,7 @@ private:
     unordered_map<size_t, pair<Frame::Ptr, VertexPose*>> kfIdToFixedKfThenVertex_;
     unordered_map<BinaryEdgeProjection*, pair<Frame::Ptr, Mappoint::Ptr>> edgeToKfThenMpt_;
 
-    function<void(const Frame::Ptr&, function<void(void)>)> trackingMapUpdateHandler_;
+    function<void(function<void(Frame::Ptr&, unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler_;
 
     // main function for backend thread
     void BackendLoop();

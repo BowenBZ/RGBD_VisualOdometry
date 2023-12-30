@@ -9,23 +9,21 @@ namespace myslam {
 /**
  * linear triangulation with SVD
  * @param poses     poses,
- * @param points    points in normalized plane
- * @param pt_world  triangulated point in the world
+ * @param normalizedMptPos    normalizedMptPos in normalized plane
+ * @param mptPosWorld  triangulated point in the world
  * @return true if success
  */
-inline bool Triangulation(const vector<SE3>&    poses,
-                          const vector<Vec3>&   points, 
-                          Vec3&                 pt_world) {
+inline bool Triangulation(const vector<SE3>&        poses,
+                          const vector<Vector3d>&   normalizedMptPos, 
+                          Vector3d&                 mptPosWorld) {
     MatXX A(2 * poses.size(), 4);
-    VecX b(2 * poses.size());
-    b.setZero();
     for (size_t i = 0; i < poses.size(); ++i) {
         Mat34 m = poses[i].matrix3x4();
-        A.block<1, 4>(2 * i, 0) = points[i][0] * m.row(2) - m.row(0);
-        A.block<1, 4>(2 * i + 1, 0) = points[i][1] * m.row(2) - m.row(1);
+        A.block<1, 4>(2 * i, 0) = normalizedMptPos[i][0] * m.row(2) - m.row(0);
+        A.block<1, 4>(2 * i + 1, 0) = normalizedMptPos[i][1] * m.row(2) - m.row(1);
     }
     auto svd = A.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV);
-    pt_world = (svd.matrixV().col(3) / svd.matrixV()(3, 3)).head<3>();
+    mptPosWorld = (svd.matrixV().col(3) / svd.matrixV()(3, 3)).head<3>();
 
     if (svd.singularValues()[3] / svd.singularValues()[2] < 1e-2) {
         return true;
@@ -41,7 +39,7 @@ inline Vector2d toVec2d(const KeyPoint& kp) {
     return toVec2d( kp.pt );
 }
 
-inline Vector3d toVec3d(const Point3f& pt) {
+inline Vector3d toVector3d(const Point3f& pt) {
     return Vector3d ( pt.x, pt.y, pt.z );
 }
 

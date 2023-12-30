@@ -99,11 +99,17 @@ void Backend::Optimize()
     const double deltaRGBD = sqrt(7.815);
     int edgeIndex = 0;
 
-    // Create pose vertices for fixed keyframe and add all edges
+    // Create pose vertices for fixed keyframe and add all edges, also perform triangulation
+    size_t triangulatedCnt = 0;
     for (auto& [mptId, mptAndVertex] : mptIdToMptThenVertex_)
     {   
-        auto& mpt = mptAndVertex.first;
-        auto& mptVertex = mptAndVertex.second;
+        auto& [mpt, mptVertex] = mptAndVertex;
+
+        vector<SE3> poses;
+        vector<Vector3d> normalizedPos;
+        // TODO: enable triangulation
+        // bool needTriangulate = !mpt->outlier_ && !(mpt->triangulated_ || mpt->optimized_);
+        bool needTriangulate = false;
 
         for (auto &[kfId, kptIdx] : mpt->GetObservedByKeyframesMap())
         {
@@ -151,6 +157,22 @@ void Backend::Optimize()
             optimizer_.addEdge(edge);
 
             edgeToKfThenMpt_[edge] = make_pair(keyframe, mpt);
+
+            if (needTriangulate) {
+                poses.push_back(keyframe->GetPose());
+                normalizedPos.push_back(keyframe->camera_->Pixel2Camera(kpt.pt));
+            }
+        }
+
+        if (needTriangulate) {
+            Vector3d pworld = Vector3d::Zero();
+            if (Triangulation(poses, normalizedPos, pworld) && pworld[2] > 0)
+            {
+                // if triangulate successfully
+                mptVertex->setEstimate(pworld);
+                mpt->triangulated_ = true;
+                ++triangulatedCnt;
+            }
         }
     }
 
@@ -160,15 +182,13 @@ void Backend::Optimize()
 
     // Remove outlier and do second round optimization
     int outlierCnt = 0;
-    for (auto &edgeToKeyframe : edgeToKfThenMpt_)
+    for (auto& [edge, kfAndMpt] : edgeToKfThenMpt_)
     {
-        auto edge = edgeToKeyframe.first;
         edge->computeError();
         if (edge->chi2() > chi2Threshold_)
         {
-            auto& keyframe = edgeToKfThenMpt_[edge].first;
-            auto& mappoint = edgeToKfThenMpt_[edge].second;
-            keyframe->RemoveObservedMappoint(mappoint->GetId());
+            auto& [kf, mpt] = kfAndMpt;
+            kf->RemoveObservedMappoint(mpt->GetId());
             edge->setLevel(1);
             ++outlierCnt;
         }
@@ -179,32 +199,51 @@ void Backend::Optimize()
     optimizer_.optimize(10);
 
     // Set outlier again
-    for (auto &edgeToKeyframe : edgeToKfThenMpt_)
+    for (auto& [edge, kfAndMpt] : edgeToKfThenMpt_)
     {
-        auto edge = edgeToKeyframe.first;
         edge->computeError();
         if (edge->level() == 0 && edge->chi2() > chi2Threshold_)
         {
-            auto& keyframe = edgeToKfThenMpt_[edge].first;
-            auto& mappoint = edgeToKfThenMpt_[edge].second;
-            keyframe->RemoveObservedMappoint(mappoint->GetId());
+            auto& [kf, mpt] = kfAndMpt;
+            kf->RemoveObservedMappoint(mpt->GetId());
             ++outlierCnt;
         }
         edgeToKfThenMpt_[edge].second->optimized_ = true;
     }
 
     cout << "\nBackend results:" << endl;
-    cout << "  optimized pose number: " << kfIdToCovKfThenVertex_.size() << endl;
-    cout << "  optimized mappoint number: " << mptIdToMptThenVertex_.size() << endl;
-    cout << "  fixed pose number: " << kfIdToFixedKfThenVertex_.size() << endl;
-    cout << "  edge number: " << edgeToKfThenMpt_.size() << endl;
-    cout << "  outlier observations: " << outlierCnt << endl;
+    cout << "  optimized pose count: " << kfIdToCovKfThenVertex_.size() << endl;
+    cout << "  fixed pose count: " << kfIdToFixedKfThenVertex_.size() << endl;
+    cout << "  optimized mappoint count: " << mptIdToMptThenVertex_.size() << endl;
+    cout << "  triangulated mappoints count: " << triangulatedCnt << endl;
+    cout << "  edge count: " << edgeToKfThenMpt_.size() << endl;
+    cout << "  outlier edge count: " << outlierCnt << endl;
     cout << endl;
 }
 
 void Backend::UpdateFrontendTrackingMap() {
 
-    trackingMapUpdateHandler_(keyframeCurr_, [&](){
+    frontendMapUpdateHandler_([&](Frame::Ptr& refKeyframe, unordered_map<size_t, Mappoint::Ptr>& trackingMap){
+
+        // Tracking map is defined by reference keyframe
+        if (refKeyframe == nullptr || refKeyframe->GetId() != keyframeCurr_->GetId()) {
+            refKeyframe = keyframeCurr_;
+            trackingMap.clear();
+            for (auto& [mptId, mptAndVertex]: mptIdToMptThenVertex_) {
+                auto& [mpt, _] = mptAndVertex;
+                if (mpt->outlier_) {
+                    continue;
+                }
+
+                trackingMap[mptId] = mpt;
+            }
+
+            if (trackingMap.size() < 100) {
+                trackingMap = MapManager::GetInstance().GetAllMappoints();
+                cout << " Not enough active mappoints, reset tracking map to all mappoints" << endl;
+            }
+        }
+
         for (auto &[_, kfAndVertex] : kfIdToCovKfThenVertex_)
         {
             auto& [kf, kfVertex] = kfAndVertex;

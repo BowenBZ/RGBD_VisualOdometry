@@ -43,8 +43,8 @@ public:
         backend_ = move(backend);
 
         backend_->RegisterTrackingMapUpdateCallback(
-            [&](const Frame::Ptr& keyframe, function<void(void)> callback) {
-                UpdateTrackingMap(keyframe, callback);
+            [&](function<void(Frame::Ptr&, TrackingMap&)> updater) {
+                UpdateTrackingMap(updater);
             });
     }
 
@@ -106,7 +106,7 @@ private:
     void LostHandler();
 
     // update tracking map, called by backend
-    void UpdateTrackingMap(const Frame::Ptr& keyframe, function<void(void)> callback);
+    void UpdateTrackingMap(function<void(Frame::Ptr&, TrackingMap&)> updater);
 
     // match extracted features in tracking map
     void MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, size_t matchesToUseFlann);
@@ -128,10 +128,7 @@ private:
     // add observing mappoints (both previous and new created) to current keyframe
     void AddObservingMappointsToCurrentFrame();
     // add new mappoints to the observedMappoints of existing keyframes in tracking map
-    void AddNewMappointsObservationsForOldKeyframes();     
-    // use triangulatiton to optmize the position of mappoints in tracking map
-    void TriangulateMappointsInTrackingMap();
-
+    void AddNewMappointsObservationsForOldKeyframes();
 };
 }
 
