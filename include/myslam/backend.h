@@ -12,7 +12,6 @@
 #define MYSLAM_BACKEND_H
 
 #include "myslam/common_include.h"
-#include "myslam/mapmanager.h"
 #include "myslam/camera.h"
 #include "myslam/frame.h"
 #include "myslam/g2o_types.h"
@@ -62,6 +61,9 @@ private:
     // keyframes not belonging to covisible keyframes but could observe the local mappoints
     unordered_map<size_t, pair<Frame::Ptr, VertexPose*>>                    kfIdToFixedKfThenVertex_;
     unordered_map<BinaryEdgeProjection*, pair<Frame::Ptr, Mappoint::Ptr>>   edgeToKfThenMpt_;
+
+    list<pair<Frame::Ptr, size_t>>  observingMptToRemove_;
+    unordered_set<Mappoint::Ptr>    observingMptToRemoveSet_;
 
     function<void(function<void(Frame::Ptr&, unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler_;
 

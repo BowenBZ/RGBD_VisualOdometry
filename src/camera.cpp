@@ -18,6 +18,7 @@
  */
 
 #include "myslam/camera.h"
+
 #include "myslam/config.h"
 #include "myslam/util.h"
 

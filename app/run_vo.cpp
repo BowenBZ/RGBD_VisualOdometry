@@ -12,8 +12,6 @@
 #include "myslam/config.h"
 #include "myslam/frontend.h"
 #include "myslam/viewer.h"
-#include "myslam/mapmanager.h"
-#include "myslam/backend.h"
 #include "myslam/frame.h"
 
 void writePosetoFile(ofstream& outputFile, const string& timestamp, const SE3& Twc) {

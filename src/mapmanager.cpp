@@ -11,29 +11,34 @@
 namespace myslam
 {
 
-MapManager::MappointIdToPtr MapManager::GetMappointsAroundKeyframe( const Frame::Ptr& keyframe ) {
+MapManager::MappointIdToPtr MapManager::GetMappointsNearKeyframe(const Frame::Ptr& keyframe ) {
 
-    auto covisibleKeyframeIds = keyframe->GetActiveCovisibleKfIds();
-    // Add this keyFrame to the covisible keyframe map
-    covisibleKeyframeIds.insert(keyframe->GetId());
+    auto allCovisibleKfIds = keyframe->GetAllCovisibleKfIds();
+    // Add current keyFrame to the covisible keyframe map
+    allCovisibleKfIds.insert(keyframe->GetId());
 
-    unordered_map<size_t, Mappoint::Ptr> localMappointsDict;
+    unordered_map<size_t, Mappoint::Ptr> nearbyMpts;
 
-    // Find all mappoints observed by connected keyframes
-    for(auto& keyframeId: covisibleKeyframeIds) {
-        assert(keyframesDict_.count(keyframeId));
-        auto& localKeyframe = keyframesDict_[keyframeId];
+    // find all mappoints observed by keyframes above
+    for(const auto& kfId: allCovisibleKfIds) {
+        assert(keyframesDict_.count(kfId));
+        auto& kf = keyframesDict_[kfId];
 
-        for(auto& mappointId: localKeyframe->GetObservingMappointIds()) {
-            if (!mappointsDict_.count(mappointId) || mappointsDict_[mappointId] -> outlier_) {
+        for(auto& mptId: kf->GetObservingMappointIds()) {
+            if (!mappointsDict_.count(mptId)) {
                 continue;
             }
 
-            localMappointsDict[mappointId] = mappointsDict_[mappointId];
+            auto& mpt = mappointsDict_[mptId];
+            if (mpt->outlier_ || !mpt->optimized_) {
+                continue;
+            }
+
+            nearbyMpts[mptId] = mpt;
         }
     }
 
-    return localMappointsDict;
+    return nearbyMpts;
 }
 
 void MapManager::ReplaceMappoint(size_t oldMptId, size_t newMptId) {
@@ -52,10 +57,10 @@ void MapManager::ReplaceMappoint(size_t oldMptId, size_t newMptId) {
         assert(keyframesDict_.count(kfId));
         auto& kf = keyframesDict_[kfId];
  
-        kf->RemoveObservedMappoint(oldMptId);
+        kf->RemoveObservingMappoint(oldMptId);
         // If the kf already observes the newMpt, which could happen when several old mpts need to be replaced by the same new mpt. This means those points should be merged together, so just remove one observation
         if (kf->IsObservingMappoint(newMptId)) {
-            kf->RemoveObservedMappoint(newMptId);
+            kf->RemoveObservingMappoint(newMptId);
         }
         kf->AddObservingMappoint(newMpt, kptIdx);
     }

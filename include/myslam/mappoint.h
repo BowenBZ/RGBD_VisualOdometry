@@ -24,15 +24,18 @@ public:
     typedef shared_ptr<Mappoint> Ptr;
 
     bool        triangulated_;          // whether have been triangulated in frontend
-    bool        optimized_;             // whether is optimized by backend
 
-    // Usages 
-    // 1. whether match with new mappoints in frontend
-    // 2. whether will be triangulated
-    // 3. whether add new observation keyframe
-    // 4. whether update in covisible graph
-    // 5. whether add into backend
-    bool        outlier_;               // whether this is an outlider
+    // If this mappoint is optimized as inlier by backend
+    // only optimized and inlier mpt can be used as tracking map for frontend
+    bool        optimized_;
+
+    // If this mappoint is not observed by any keyframe
+    // Outlier mappoint cannot 
+    // 1. used as a point in tracking map in frontend
+    // 2. matched with new keyframe
+    // 3. be triangulated or optimized
+    // 4. should be removed from map manager
+    bool        outlier_;
     
     // factory function to create mappoint
     // there will be only 1 time copy of parameters happening in the private constructor

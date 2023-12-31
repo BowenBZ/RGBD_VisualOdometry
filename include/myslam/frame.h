@@ -88,7 +88,7 @@ public:
     }
 
     // Get matched keypoint idx for the mappoint
-    bool GetMatchedKeypoint(const Mappoint::Ptr& mpt, size_t& kptIdx, double& distance, bool& mayObserveMpt);
+    bool GetMatchedKeypoint(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, double& distance, bool& mayObserveMpt);
 
     // 1. Add observing mappoint 
     // 2. Update the covisible keyframes
@@ -96,7 +96,7 @@ public:
     void AddObservingMappoint(const Mappoint::Ptr& mpt, const size_t kptIdx);
 
     // Remove observed mappoint and also update the covisible keyframes
-    void RemoveObservedMappoint(const size_t mptId);
+    void RemoveObservingMappoint(const size_t mptId);
 
     unordered_set<size_t> GetObservingMappointIds() {
         unique_lock<mutex> lck(observationMutex_);

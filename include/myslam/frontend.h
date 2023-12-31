@@ -15,14 +15,12 @@
 #define FrontEnd_H
 
 #include <opencv2/features2d/features2d.hpp>
-#include <bits/stdc++.h>
 
 #include "myslam/common_include.h"
 #include "myslam/frame.h"
 #include "myslam/mappoint.h"
 #include "myslam/viewer.h"
 #include "myslam/backend.h"
-#include "myslam/util.h"
 
 namespace myslam 
 {
@@ -111,7 +109,7 @@ private:
     void UpdateTrackingMap(function<void(Frame::Ptr&, TrackingMap&)> updater);
 
     // match extracted features in tracking map
-    void MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, size_t matchesToUseFlann);
+    void MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const bool doDirectionCheck, const size_t matchesToUseFlann);
     // match keypoints by flann
     void MatchKeyPointsFlann(const Mat& flannMptCandidateDes, unordered_map<int, size_t>& flannMptIdxToId);
 

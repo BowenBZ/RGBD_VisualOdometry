@@ -1,5 +1,7 @@
 #include "myslam/backend.h"
+
 #include "myslam/util.h"
+#include "myslam/mapmanager.h"
 
 namespace myslam
 {
@@ -64,6 +66,10 @@ void Backend::AddObservingMappointsToNewKeyframe() {
     for (const auto& [mptId, kptIdx] : oldMptIdKptIdxMap_) {
         // old mpt may be replaced by previous new mpt
         auto mpt = MapManager::Instance().GetPotentialReplacedMappoint(mptId);
+        // the mpt may already been considered as outlier
+        if (mpt->outlier_) {
+            continue;
+        }
         keyframeCurr_->AddObservingMappoint(mpt, kptIdx);
         // old mpt has new observations, update its descriptor
         mpt->CalculateMappointDescriptor();
@@ -114,7 +120,7 @@ void Backend::AddNewMappointsToExistingKeyframe() {
 
         kptIdxToMptAndDistance.clear();
         for (auto& [mpt, _]: newMptKptIdxMap_) {
-            if (!kf->GetMatchedKeypoint(mpt, kptIdx, distance, mayObserveMpt) || distance > reMatchDescriptorDistance_) {
+            if (!kf->GetMatchedKeypoint(mpt, false, kptIdx, distance, mayObserveMpt) || distance > reMatchDescriptorDistance_) {
                 continue;
             }
 
@@ -300,7 +306,7 @@ void Backend::OptimizeLocalMap()
     optimizer_.initializeOptimization(0);
     optimizer_.optimize(10);
 
-    // Remove outlier and do second round optimization
+    // Find the outlier observations
     size_t outlierCnt = 0;
     for (auto& [edge, kfAndMpt] : edgeToKfThenMpt_)
     {
@@ -308,7 +314,7 @@ void Backend::OptimizeLocalMap()
         if (edge->chi2() > chi2Threshold_)
         {
             auto& [kf, mpt] = kfAndMpt;
-            kf->RemoveObservedMappoint(mpt->GetId());
+            observingMptToRemove_.push_back(make_pair(kf, mpt->GetId()));
             edge->setLevel(1);
             ++outlierCnt;
         }
@@ -318,17 +324,23 @@ void Backend::OptimizeLocalMap()
     optimizer_.initializeOptimization(0);
     optimizer_.optimize(10);
 
-    // Set outlier again
+    // Find more outlier observations
     for (auto& [edge, kfAndMpt] : edgeToKfThenMpt_)
     {
-        edge->computeError();
-        if (edge->level() == 0 && edge->chi2() > chi2Threshold_)
-        {
-            auto& [kf, mpt] = kfAndMpt;
-            kf->RemoveObservedMappoint(mpt->GetId());
-            ++outlierCnt;
+        // skip outlier of first round
+        if (edge->level() != 0) {
+            continue;
         }
-        edgeToKfThenMpt_[edge].second->optimized_ = true;
+
+        auto& [kf, mpt] = kfAndMpt;
+        edge->computeError();
+        if (edge->chi2() > chi2Threshold_) {
+            observingMptToRemove_.push_back(make_pair(kf, mpt->GetId()));
+            observingMptToRemoveSet_.insert(mpt);
+            ++outlierCnt;
+        } else {
+            mpt->optimized_ = true;
+        }
     }
 
     printf("Backend results:\n");
@@ -343,40 +355,33 @@ void Backend::OptimizeLocalMap()
 void Backend::UpdateFrontendTrackingMap() {
 
     frontendMapUpdateHandler_([&](Frame::Ptr& refKeyframe, unordered_map<size_t, Mappoint::Ptr>& trackingMap){
+        
+        for(const auto& [kf, mptId]: observingMptToRemove_) {
+            kf->RemoveObservingMappoint(mptId);
+        }
 
-        // Tracking map is defined by reference keyframe
-        if (refKeyframe == nullptr || refKeyframe->GetId() != keyframeCurr_->GetId()) {
-            refKeyframe = keyframeCurr_;
-            trackingMap.clear();
-            for (auto& [mptId, mptAndVertex]: mptIdToMptThenVertex_) {
-                auto& [mpt, _] = mptAndVertex;
-                if (mpt->outlier_) {
-                    continue;
-                }
-
-                trackingMap[mptId] = mpt;
-            }
-
-            if (trackingMap.size() < 100) {
-                trackingMap = MapManager::Instance().GetAllMappoints();
-                cout << " Not enough active mappoints, reset tracking map to all mappoints" << endl;
+        for(const auto& mpt: observingMptToRemoveSet_) {
+            if (!mpt->outlier_) {
+                mpt->CalculateMappointDescriptor();
             }
         }
 
-        for (auto &[_, kfAndVertex] : kfIdToCovKfThenVertex_)
-        {
+        for (const auto &[_, kfAndVertex] : kfIdToCovKfThenVertex_) {
             auto& [kf, kfVertex] = kfAndVertex;
             kf->SetTcw(kfVertex->estimate());
         }
 
-        for (auto &[_, mptAndVertex] : mptIdToMptThenVertex_)
-        {
+        for (const auto &[mptId, mptAndVertex] : mptIdToMptThenVertex_) {
             auto& [mpt, mptVertex] = mptAndVertex;
-            if (!mpt->outlier_)
-            {
+            if (!mpt->outlier_ && mpt->optimized_) {
                 mpt->SetPosition(mptVertex->estimate());
             }
         }
+
+        refKeyframe = keyframeCurr_;
+        trackingMap.clear();
+        // get more mappoints from all covisible keyframes of current keyframe
+        trackingMap = MapManager::Instance().GetMappointsNearKeyframe(refKeyframe);
     });
 }
 
@@ -386,6 +391,9 @@ void Backend::CleanUp() {
     mptIdToMptThenVertex_.clear();
     kfIdToFixedKfThenVertex_.clear();
     edgeToKfThenMpt_.clear();
+
+    observingMptToRemove_.clear();
+    observingMptToRemoveSet_.clear();
 
     // The algorithm, vertex and edges will be deallocated by g2o
     optimizer_.clear();

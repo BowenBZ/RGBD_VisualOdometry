@@ -119,12 +119,12 @@ bool Frontend::TrackingHandler() {
 
     // Compute pose based on last frame mappoints
     cout << "Frame tracking...\n";
-    MatchKeyPointsWithMappoints(lastFrameMpts_, minMatchesToUseFlannFrameTracking_);
+    MatchKeyPointsWithMappoints(lastFrameMpts_, false, minMatchesToUseFlannFrameTracking_);
     EstimatePoseMotionOnlyBA(lastFrameMpts_);
 
     // Compute pose based on tracking map
     cout << "Map tracking...\n";
-    MatchKeyPointsWithMappoints(trackingMap_, minMatchesToUseFlannMapTracking_);
+    MatchKeyPointsWithMappoints(trackingMap_, true, minMatchesToUseFlannMapTracking_);
     EstimatePoseMotionOnlyBA(trackingMap_);
 
     // Create temp mappoints for next frame tracking
@@ -164,7 +164,7 @@ void Frontend::UpdateTrackingMap(function<void(Frame::Ptr&, TrackingMap&)> updat
     cout << "Tracking map is updated" << endl;
 }
 
-void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, size_t matchesToUseFlann)
+void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const bool doDirectionCheck, const size_t matchesToUseFlann)
 {
     // Search for the matched keypoint for mappoints from local map
     matchedMptIdKptIdxMap_.clear();
@@ -185,13 +185,12 @@ void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, size_
     bool hasMatchedKeypoint; 
     for (auto &[mptId, mpt] : trackingMap)
     {
-        // If considered as outlier by backend or cannot be viewed by current frame
-        // TODO: should remove this mappoint from the trackingMap
+        // mpt in tracking map are guranteed to be non-outlier and has been optimized by backend. But check in case
         if (mpt->outlier_) {
             continue;
         }
 
-        hasMatchedKeypoint = frameCurr_->GetMatchedKeypoint(mpt, kptIdx, distance, mayObserveMpt);
+        hasMatchedKeypoint = frameCurr_->GetMatchedKeypoint(mpt, doDirectionCheck, kptIdx, distance, mayObserveMpt);
 
         // Construct candidate for flann
         moreFlannMptIdxToId[moreFlannMptCandidatesDes.rows] = mptId;

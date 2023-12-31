@@ -62,8 +62,8 @@ public:
         return mappointsDict_;
     }
 
-    // Get the mpts observed by input keyframe or its covisible keyframes
-    MappointIdToPtr GetMappointsAroundKeyframe( const Frame::Ptr& keyframe );
+    // Get the mpts observed by input keyframe, or its (active and non-active) covisible keyframes
+    MappointIdToPtr GetMappointsNearKeyframe(const Frame::Ptr& keyframe);
 
     // Replace the old mappoint with new mappoint
     void ReplaceMappoint(size_t oldMptId, size_t newMptId);

@@ -1,6 +1,7 @@
+#include "myslam/mappoint.h"
+
 #include "myslam/common_include.h"
 #include "myslam/util.h"
-#include "myslam/mappoint.h"
 #include "myslam/frame.h"
 #include "myslam/mapmanager.h"
 

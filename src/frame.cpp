@@ -1,4 +1,5 @@
 #include "myslam/frame.h"
+
 #include "myslam/util.h"
 #include "myslam/mapmanager.h"
 
@@ -84,7 +85,7 @@ void Frame::ConstructKeypointGrids() {
     }
 }
 
-bool Frame::GetMatchedKeypoint(const Mappoint::Ptr& mpt, size_t& kptIdx, double& distance, bool& mayObserveMpt) {
+bool Frame::GetMatchedKeypoint(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, double& distance, bool& mayObserveMpt) {
     mayObserveMpt = false;
 
     Vector3d posInCam = camera_->World2Camera(mpt->GetPosition(), T_c_w_);
@@ -98,7 +99,7 @@ bool Frame::GetMatchedKeypoint(const Mappoint::Ptr& mpt, size_t& kptIdx, double&
         return false;
     }
 
-    if (mpt->GetNormDirection() != Vector3d::Zero()) {
+    if (doDirectionCheck) {
         Vector3d direction = mpt->GetPosition() - this->GetCamCenter();
         direction.normalize();
         double angle = acos( direction.transpose() * mpt->GetNormDirection() );
@@ -216,7 +217,7 @@ void Frame::AddObservingMappoint(const Mappoint::Ptr& mpt, const size_t kptIdx) 
     }
 }
 
-void Frame::RemoveObservedMappoint(const size_t mptId) {
+void Frame::RemoveObservingMappoint(const size_t mptId) {
     unique_lock<mutex> lck(observationMutex_);
 
     assert(observingMappointIds_.count(mptId));
