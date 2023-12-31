@@ -1,16 +1,3 @@
-/*
- * Fontend which tracks camera poses on frames
- *
- * The entry point is the AddFrame function, which gets a frame pointer and computes the camera pose on that frame. Return false if the tracking fails.
- *
- * Frontend is also reponsible for the other functions
- * 1. create keyframe
- * 2. create new mappoints for the keyframe
- * 3. maintain the covisible graph of keyframes (consider in backend??)
- * 4. invoke backend (if there is) to optimize
- * 5. invoke reviewer (if there is) to show the image frames, real-time poses and maps
- */
-
 #include "myslam/frontend.h"
 
 #include <opencv2/core/eigen.hpp>
@@ -26,12 +13,13 @@
 namespace myslam
 {
 
-Frontend::Frontend()    
-{
-    state_ = INITIALIZING;
+Frontend::Frontend(const Camera::Ptr& camera) {
+
+    camera_ = camera;
 
     flannMatcher_ = cv::FlannBasedMatcher(new cv::flann::LshIndexParams(5, 10, 2));
 
+    // Read paras
     orb_ = cv::ORB::create(Config::get<int>("number_of_features"),
                             Config::get<double>("scale_factor"),
                             Config::get<int>("level_pyramid"));
@@ -49,6 +37,15 @@ Frontend::Frontend()
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
         g2o::make_unique<BlockSolverType>(g2o::make_unique<DenseLinearSolverType>()));
     optimizer_.setAlgorithm(solver);
+
+    // Setup backend
+    backend_ = Backend::Ptr(new myslam::Backend(camera_));
+    backend_->RegisterTrackingMapUpdateCallback(
+            [&](function<void(Frame::Ptr&, TrackingMap&)> updater) {
+                UpdateTrackingMap(updater);
+            });
+
+    state_ = INITIALIZING;
 }
 
 bool Frontend::AddFrame(const Frame::Ptr frame)
@@ -96,16 +93,17 @@ bool Frontend::AddFrame(const Frame::Ptr frame)
 
 void Frontend::InitializationHandler() {
     // the first frame is a keyframe
-    MapManager::GetInstance().InsertKeyframe(frameCurr_);
+    MapManager::Instance().AddKeyframe(frameCurr_);
     CreateTempMappoints();
-    AddTempMappointsToMapManager();
-    AddObservingMappointsToCurrentFrame();
-    UpdateTrackingMap([&](Frame::Ptr& refKeyframe, unordered_map<size_t, Mappoint::Ptr>& trackingMap) {
+    assert(lastFrameMpts_.size() == tempMptKptIdxMap_.size());
+    for(auto& [mptId, mpt]: lastFrameMpts_) {
+        MapManager::Instance().AddMappoint(mpt);
+        frameCurr_->AddObservingMappoint(mpt, tempMptKptIdxMap_[mpt]);
+    }
+    UpdateTrackingMap([&](Frame::Ptr& refKeyframe, TrackingMap& trackingMap) {
         refKeyframe = frameCurr_;
         trackingMap.clear();
-        for (auto& [mptId, mpt]: lastFrameMpts_) {
-            trackingMap[mptId] = mpt;
-        }
+        trackingMap.insert(lastFrameMpts_.begin(), lastFrameMpts_.end());
     });
 
     // RGBD camera only needs 1 frame to configure since it could get the depth information
@@ -114,7 +112,7 @@ void Frontend::InitializationHandler() {
 
 bool Frontend::TrackingHandler() {
     // set an initial pose to the pose of previous pose, used for feature matching
-    frameCurr_->SetPose(framePrev_->GetPose());
+    frameCurr_->SetTcw(framePrev_->GetTcw());
 
     // lock tracking map
     unique_lock<mutex> lock(trackingMapMutex_);
@@ -132,35 +130,23 @@ bool Frontend::TrackingHandler() {
     // Create temp mappoints for next frame tracking
     CreateTempMappoints();
 
-    if (!IsGoodEstimation())
-    {
+    if (!IsGoodEstimation()) {
         cout << "Cannot estimate Pose" << endl;
         accuLostFrameNums_++;
         state_ = (++accuLostFrameNums_ > maxLostFrames_) ? LOST : TRACKING;
         return false;
-    } else {
-        accuLostFrameNums_ = 0;
-    }
+    } 
+    accuLostFrameNums_ = 0;
     
     if (!IsKeyframe()) {
         return true;
-    } else {
-        cout << "Current frame is a new keyframe" << endl;
-    }
-
-    MapManager::GetInstance().InsertKeyframe(frameCurr_);
-    AddTempMappointsToMapManager();
-    AddObservingMappointsToCurrentFrame();
-
-    // AddNewMappointsObservationsForOldKeyframes();
+    } 
+    cout << "Current frame is a new keyframe" << endl;
     
-    // if have backend, use backend to optimize mappoints position and frame pose
-    if (backend_) {
-        // unlock tracking map, otherwise it may cause deadly lock
-        lock.unlock();
-        // TODO: if backend is optimizaing, here will block frontend
-        backend_->OptimizeCovisibleGraphOfKeyframe(frameCurr_);
-    }
+    // unlock tracking map, otherwise it may cause deadly lock
+    lock.unlock();
+    // TODO: if backend is optimizaing, here will block frontend
+    backend_->ProcessNewKeyframeAsync(frameCurr_, baInlierMptIdKptIdxMap_, tempMptKptIdxMap_);
 
     return true;
 }
@@ -319,11 +305,11 @@ void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
 
     // use P3P to compute the initial pose
     Mat initRotMat, rotVec, tranVec, inliers;
-    cv::eigen2cv(frameCurr_->GetPose().rotationMatrix(), initRotMat);
+    cv::eigen2cv(frameCurr_->GetTcw().rotationMatrix(), initRotMat);
     cv::Rodrigues(initRotMat, rotVec);
-    cv::eigen2cv(frameCurr_->GetPose().translation(), tranVec);
+    cv::eigen2cv(frameCurr_->GetTcw().translation(), tranVec);
 
-    cv::solvePnPRansac(pts3d, pts2d, frameCurr_->camera_->GetCameraMatrix(), Mat(),
+    cv::solvePnPRansac(pts3d, pts2d, camera_->GetCameraMatrix(), Mat(),
                         rotVec, tranVec, true,
                         100, 4.0, 0.99,
                         inliers, cv::SOLVEPNP_P3P);
@@ -356,7 +342,7 @@ void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
     {
         int index = inliers.at<int>(i, 0);
         // 3D -> 2D projection
-        UnaryEdgeProjection *edge = new UnaryEdgeProjection(toVector3d(pts3d[index]), frameCurr_->camera_);
+        UnaryEdgeProjection *edge = new UnaryEdgeProjection(toVector3d(pts3d[index]), camera_);
 
         edge->setId(i);
         edge->setVertex(0, poseVertex);
@@ -399,7 +385,7 @@ void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
     optimizer_.optimize(10);
 
     // Collect the inlier points
-    baInlierMptIdSet_.clear();
+    baInlierMptIdKptIdxMap_.clear();
     baInlierKptIdxSet_.clear();
     numInliers_ = 0;
     for (size_t i = 0; i < edges.size(); ++i)
@@ -412,50 +398,18 @@ void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
         }
 
         auto idx = inliers.at<int>(i, 0);
-        baInlierMptIdSet_.insert(mptIds[idx]);
-        baInlierKptIdxSet_.insert(kptIdxs[idx]);
+        auto& mptId = mptIds[idx];
+        auto& kptIdx = kptIdxs[idx];
+        baInlierMptIdKptIdxMap_[mptId] = kptIdx;
+        baInlierKptIdxSet_.insert(kptIdx);
         ++numInliers_;
     }
     cout << "  Size of inlier after 2nd BA " << numInliers_ << endl;
 
     // Set computed pose
-    frameCurr_->SetPose(poseVertex->estimate());
+    frameCurr_->SetTcw(poseVertex->estimate());
 
     // TODO: remove the outliers from active map?
-}
-
-void Frontend::CreateTempMappoints() {
-    lastFrameMpts_.clear();
-    tempMpts_.clear();
-    tempMptIdToKptIdx_.clear();
-    for (size_t kptIdx = 0; kptIdx < frameCurr_->GetKeypointsSize(); ++kptIdx)
-    {
-        // temp mappoint doesn't have matched previous mappoint
-        if (baInlierKptIdxSet_.count(kptIdx)) {
-            auto& mpt = trackingMap_[matchedKptIdxMptIdMap_[kptIdx]];
-            lastFrameMpts_[mpt->GetId()] = mpt;
-            continue;
-        }
-
-        auto& kpt = frameCurr_->GetKeypoint(kptIdx);
-        double depth = frameCurr_->GetDepth(kpt);
-        if (depth < 0) {
-            continue;
-        }
-
-        Vector3d mptPos = frameCurr_->camera_->Pixel2World(
-            kpt, frameCurr_->GetPose(), depth);
-        
-        // create a mappoint
-        // all parameters will have a deep copy inside the constructor
-        Mappoint::Ptr mpt = Mappoint::CreateMappoint(mptPos);
-        mpt->SetTempDescriptor(frameCurr_->GetDescriptor(kptIdx));
-
-        lastFrameMpts_[mpt->GetId()] = mpt;
-        tempMpts_.push_back(mpt);
-        tempMptIdToKptIdx_[mpt->GetId()] = kptIdx;
-    }
-    cout << "Created temp mappoints: " << tempMpts_.size() << endl;
 }
 
 bool Frontend::IsGoodEstimation()
@@ -467,7 +421,7 @@ bool Frontend::IsGoodEstimation()
         return false;
     }
     // check if the motion is too large
-    SE3 T_r_c = framePrev_->GetPose() * frameCurr_->GetPose().inverse();
+    SE3 T_r_c = framePrev_->GetTcw() * frameCurr_->GetTcw().inverse();
     Sophus::Vector6d d = T_r_c.log();
     if (d.norm() > 5.0)
     {
@@ -483,7 +437,7 @@ bool Frontend::IsKeyframe()
         return true;
     }
 
-    SE3 T_r_c = framePrev_->GetPose() * frameCurr_->GetPose().inverse();
+    SE3 T_r_c = framePrev_->GetTcw() * frameCurr_->GetTcw().inverse();
     Sophus::Vector6d d = T_r_c.log();
     Vector3d trans = d.head<3>();
     Vector3d rot = d.tail<3>();
@@ -494,82 +448,41 @@ bool Frontend::IsKeyframe()
     return false;
 }
 
-void Frontend::AddTempMappointsToMapManager()
-{
-    for (auto& mpt: tempMpts_) {
-        MapManager::GetInstance().InsertMappoint(mpt);
-    }
-    cout << "Add temp mpts to map manager" << endl;
-}
-
-void Frontend::AddObservingMappointsToCurrentFrame() {
-    // add matched previous mpts observation
-    for (const auto& mptId : baInlierMptIdSet_) {
-        const auto& kptIdx = matchedMptIdKptIdxMap_[mptId];
-        frameCurr_->AddObservingMappoint(trackingMap_[mptId], kptIdx);
-    }
-
-    // add new created mpts observations
-    for (const auto& mpt: tempMpts_) {
-        auto& kptIdx = tempMptIdToKptIdx_[mpt->GetId()];
-        frameCurr_->AddObservingMappoint(mpt, kptIdx);
-    }
-}
-
-void Frontend::AddNewMappointsObservationsForOldKeyframes() {
-    if (tempMpts_.size() == 0) {
-        return;
-    }
-
-    auto localKeyframes = keyframeForTrackingMap_->GetCovisibleKeyframes();
-    localKeyframes.insert(keyframeForTrackingMap_->GetId());
-
-    for (auto& keyframeId : localKeyframes) {
-
-        auto keyframe = MapManager::GetInstance().GetKeyframe(keyframeId);
-        vector<KeyPoint> keypoints;
-        Mat descriptors;
-        // TODO: use previous keypoint as mask
-        keyframe->ExtractKeyPointsAndComputeDescriptors(orb_);
-
-        // Select the good mappoints candidates
-        vector<Mappoint::Ptr> mptCandidates;
-        Mat mptCandidatesDescriptors;
-        for (auto & mappoint : tempMpts_)
-        {
-            // if ( !keyframe->IsCouldObserveMappoint(mappoint) ) {
-            //     continue;
-            // }
-
-            // add as a candidate
-            mptCandidates.push_back(mappoint);
-            mptCandidatesDescriptors.push_back(mappoint->GetDescriptor());
+void Frontend::CreateTempMappoints() {
+    lastFrameMpts_.clear();
+    tempMptKptIdxMap_.clear();
+    for (size_t kptIdx = 0; kptIdx < frameCurr_->GetKeypointsSize(); ++kptIdx)
+    {
+        // temp mappoint doesn't have matched previous mappoint
+        if (baInlierKptIdxSet_.count(kptIdx)) {
+            auto& mpt = trackingMap_[matchedKptIdxMptIdMap_[kptIdx]];
+            lastFrameMpts_[mpt->GetId()] = mpt;
+            continue;
         }
 
-        vector<cv::DMatch> matches;
-        flannMatcher_.match(mptCandidatesDescriptors, descriptors, matches);
-
-        // compute the min distance of the best match
-        float min_dis = std::min_element(
-                            matches.begin(),
-                            matches.end(),
-                            [](const cv::DMatch &m1, const cv::DMatch &m2)
-                            { return m1.distance < m2.distance; })
-                            ->distance;
-
-        int matchedSize = 0;
-        for (cv::DMatch &m : matches)
-        {
-            // filter out the matches whose distance is large
-            if (m.distance < max<float>(min_dis * minDisRatio_, 30.0))
-            {
-                ++matchedSize;
-                // keyframe->AddObservingMappoint(mptCandidates[m.queryIdx]->GetId());
-                // mptCandidates[m.queryIdx]->AddObservedByKeyframe(keyframe->GetId(), keypoints[m.trainIdx].pt);
-            }
+        auto& kpt = frameCurr_->GetKeypoint(kptIdx);
+        double depth = frameCurr_->GetDepth(kpt);
+        if (depth < 0) {
+            continue;
         }
 
-        cout << " for keyframe " << keyframeId << " add " << matchedSize << " new observations \n";
+        Vector3d mptPos = camera_->Pixel2World(
+            kpt, frameCurr_->GetTcw(), depth);
+        
+        // create a mappoint
+        // all parameters will have a deep copy inside the constructor
+        Mappoint::Ptr mpt = Mappoint::CreateMappoint(mptPos, frameCurr_->GetDescriptor(kptIdx));
+
+        lastFrameMpts_[mpt->GetId()] = mpt;
+        tempMptKptIdxMap_[mpt] = kptIdx;
+    }
+    cout << "Created temp mappoints: " << tempMptKptIdxMap_.size() << endl;
+}
+
+void Frontend::Stop() {
+    backend_->Stop();
+    if (viewer_ != nullptr) {
+        viewer_->Stop();
     }
 }
 

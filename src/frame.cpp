@@ -1,12 +1,3 @@
-/*
- * Class frame maintains its RGB and depth image, and its pose in world reference frame
- *
- * When the instance is regarded as a keyframe, it will populate the observed mappoints and covisible keyframes, 
- * where the active keyframes share at least 15 covisible mappoints of this keyframe
- * 
- * After adding/removing an observed mappoints, the covisible keyframes will be updated automatcially
- */
-
 #include "myslam/frame.h"
 #include "myslam/util.h"
 #include "myslam/mapmanager.h"
@@ -48,7 +39,9 @@ Frame::Frame (  const size_t id,
     searchGridRadius_ = Config::get<int>("search_grid_radius");
 
     descriptorDistanceThres_ = Config::get<double>("max_descriptor_distance");
-    bestSecondaryDistanceRatio_ = Config::get<double>("min_best_secondary_distance_ratio");;
+    bestSecondaryDistanceRatio_ = Config::get<double>("min_best_secondary_distance_ratio");
+
+    activeCovisibleWeight_ = (size_t)Config::get<double>("active_covisible_keyframe_weight");
 }
 
 double Frame::GetDepth ( const KeyPoint& kp )
@@ -105,11 +98,13 @@ bool Frame::GetMatchedKeypoint(const Mappoint::Ptr& mpt, size_t& kptIdx, double&
         return false;
     }
 
-    Vector3d direction = mpt->GetPosition() - this->GetCamCenter();
-    direction.normalize();
-    double angle = acos( direction.transpose() * mpt->GetNormDirection() );
-    if ( angle > M_PI / 6 ) {
-        return false;
+    if (mpt->GetNormDirection() != Vector3d::Zero()) {
+        Vector3d direction = mpt->GetPosition() - this->GetCamCenter();
+        direction.normalize();
+        double angle = acos( direction.transpose() * mpt->GetNormDirection() );
+        if ( angle > M_PI / 6 ) {
+            return false;
+        }
     }
 
     // This frame may observe this mappoint, but not gurantee to have a matched keypoint
@@ -196,35 +191,41 @@ void Frame::AddObservingMappoint(const Mappoint::Ptr& mpt, const size_t kptIdx) 
     auto mptId = mpt->GetId();
     assert(!observingMappointIds_.count(mptId));
     observingMappointIds_.insert(mptId);
+    observingMptIdToKptIdxMap_[mptId] = kptIdx;
+    kptIdxToObservingMptIdMap_[kptIdx] = mptId;
 
     assert(mpt != nullptr);
     mpt->AddObservedByKeyframe(shared_from_this(), kptIdx);
 
-    for (auto& [otherKFId, _]: mpt->GetObservedByKeyframesMap()) {
-        if (otherKFId == id_) {
+    for (auto& [otherKfId, _]: mpt->GetObservedByKeyframesMap()) {
+        if (otherKfId == id_) {
             continue;
         }
 
-        auto otherKF = MapManager::GetInstance().GetKeyframe(otherKFId);
+        auto otherKF = MapManager::Instance().GetKeyframe(otherKfId);
         assert(otherKF != nullptr);
         assert(otherKF->IsObservingMappoint(mptId));
 
-        ++allCovisibleKeyframeIdToWeight_[otherKFId];
-        if (allCovisibleKeyframeIdToWeight_[otherKFId] >= 15) {
-            activeCovisibleKeyframes_.insert(otherKFId);
+        ++allCovisibleKfIdToWeight_[otherKfId];
+        allCovisibleKfIds_.insert(otherKfId);
+        if (allCovisibleKfIdToWeight_[otherKfId] >= activeCovisibleWeight_) {
+            activeCovisibleKfIds_.insert(otherKfId);
         }
 
-        otherKF->UpdateCovisibleKeyframeWeight(id_, allCovisibleKeyframeIdToWeight_[otherKFId]);
+        otherKF->UpdateCovisibleKeyframeWeight(id_, allCovisibleKfIdToWeight_[otherKfId]);
     }
 }
 
-void Frame::RemoveObservedMappoint(const size_t mappointId) {
+void Frame::RemoveObservedMappoint(const size_t mptId) {
     unique_lock<mutex> lck(observationMutex_);
 
-    assert(observingMappointIds_.count(mappointId));
-    observingMappointIds_.erase(mappointId);
+    assert(observingMappointIds_.count(mptId));
+    observingMappointIds_.erase(mptId);
+    size_t kptIdx = observingMptIdToKptIdxMap_[mptId];
+    observingMptIdToKptIdxMap_.erase(mptId);
+    kptIdxToObservingMptIdMap_.erase(kptIdx);
 
-    auto mappoint = MapManager::GetInstance().GetMappoint(mappointId);
+    auto mappoint = MapManager::Instance().GetMappoint(mptId);
     assert(mappoint != nullptr);
     mappoint->RemoveObservedByKeyframe(this->id_);
 
@@ -233,37 +234,41 @@ void Frame::RemoveObservedMappoint(const size_t mappointId) {
             continue;
         }
 
-        auto otherKF = MapManager::GetInstance().GetKeyframe(otherKFId);
+        auto otherKF = MapManager::Instance().GetKeyframe(otherKFId);
         assert(otherKF != nullptr);
-        assert(otherKF->IsObservingMappoint(mappointId));
+        assert(otherKF->IsObservingMappoint(mptId));
 
-        --allCovisibleKeyframeIdToWeight_[otherKFId];
-        if (allCovisibleKeyframeIdToWeight_[otherKFId] == 0) {
-            allCovisibleKeyframeIdToWeight_.erase(otherKFId);
-        } else if (activeCovisibleKeyframes_.count(otherKFId) && allCovisibleKeyframeIdToWeight_[otherKFId] < 15) {
-            activeCovisibleKeyframes_.erase(otherKFId);
+        --allCovisibleKfIdToWeight_[otherKFId];
+        size_t newWeight = allCovisibleKfIdToWeight_[otherKFId];
+        if (newWeight == 0) {
+            allCovisibleKfIdToWeight_.erase(otherKFId);
+            allCovisibleKfIds_.erase(otherKFId);
+        } else if (newWeight < activeCovisibleWeight_) {
+            activeCovisibleKfIds_.erase(otherKFId);
         }
         
-        otherKF->UpdateCovisibleKeyframeWeight(this->id_, allCovisibleKeyframeIdToWeight_[otherKFId]);
+        otherKF->UpdateCovisibleKeyframeWeight(this->id_, newWeight);
     }
 
     // TODO: if all the observations has been removed, consider this keyframe as outlier?
 }
 
 
-void Frame::UpdateCovisibleKeyframeWeight(const size_t id, const int weight) {
+void Frame::UpdateCovisibleKeyframeWeight(const size_t otherKfId, const size_t weight) {
     unique_lock<mutex> lck(observationMutex_);
 
     if (weight == 0) {
-        allCovisibleKeyframeIdToWeight_.erase(id);
-    } else if (weight >= 15) {
-        allCovisibleKeyframeIdToWeight_[id] = weight;
-        activeCovisibleKeyframes_.insert(id);
+        allCovisibleKfIdToWeight_.erase(otherKfId);
+        allCovisibleKfIds_.erase(otherKfId);
+        activeCovisibleKfIds_.erase(otherKfId);
+    } else if (weight >= activeCovisibleWeight_) {
+        allCovisibleKfIdToWeight_[otherKfId] = weight;
+        allCovisibleKfIds_.insert(otherKfId);
+        activeCovisibleKfIds_.insert(otherKfId);
     } else {
-        allCovisibleKeyframeIdToWeight_[id] = weight;
-        if (activeCovisibleKeyframes_.count(id)) {
-            activeCovisibleKeyframes_.erase(id);
-        }
+        allCovisibleKfIdToWeight_[otherKfId] = weight;
+        allCovisibleKfIds_.insert(otherKfId);
+        activeCovisibleKfIds_.erase(otherKfId);
     }
 }
 

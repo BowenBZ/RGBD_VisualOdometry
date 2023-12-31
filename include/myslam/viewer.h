@@ -24,7 +24,7 @@ public:
         viewer_thread_ = std::thread(std::bind(&Viewer::ThreadLoop, this));
     }
 
-    void Close() {
+    void Stop() {
         viewer_running_ = false;
         viewer_thread_.join();
     }

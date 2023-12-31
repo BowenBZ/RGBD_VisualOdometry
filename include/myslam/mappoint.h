@@ -1,4 +1,9 @@
 /*
+ * Reprensents a mappoint
+ * 
+ * Provides following functions
+ * 1. maintain the 3d position in world frame, and descriptor
+ * 2. maintain the observedBy keyframe and the respective keypoint idx in that keyframe
  */
 
 #ifndef MAPPOINT_H
@@ -22,16 +27,16 @@ public:
     bool        optimized_;             // whether is optimized by backend
 
     // Usages 
-    // 1. whether match with new mappoints in front end
+    // 1. whether match with new mappoints in frontend
     // 2. whether will be triangulated
-    // 3. whether add new observation keyframe 
-    // 4. whether update in co-visibility graph
+    // 3. whether add new observation keyframe
+    // 4. whether update in covisible graph
     // 5. whether add into backend
     bool        outlier_;               // whether this is an outlider
     
     // factory function to create mappoint
     // there will be only 1 time copy of parameters happening in the private constructor
-    static Mappoint::Ptr CreateMappoint(const Vector3d& pos);
+    static Mappoint::Ptr CreateMappoint(const Vector3d& pos, const Mat& descriptor);
 
     Vector3d GetPosition() {
         unique_lock<mutex> lock(posMutex_);
@@ -43,14 +48,12 @@ public:
         pos_ = move(pos);
     }
 
-    size_t GetId() const { 
+    const size_t& GetId() const { 
         return id_; 
     }
 
-    // Set the descriptor for temp mappoints, it will be reset once observation is added
-    void SetTempDescriptor(const Mat& descriptor) {
-        descriptor_ = descriptor.clone();
-    }
+    // Recalculate the descriptor when it's observed by several keyframes
+    void CalculateMappointDescriptor();
 
     Mat GetDescriptor() {
         unique_lock<mutex> lock(observationMutex_);
@@ -62,8 +65,10 @@ public:
         return norm_;
     }
 
+    // only be called by keyframe object
     void AddObservedByKeyframe(const shared_ptr<Frame>& kf, const size_t kptIdx);
     
+    // only be called by keyframe object
     void RemoveObservedByKeyframe(const size_t kfId);
 
     unordered_map<size_t, size_t> GetObservedByKeyframesMap() {
@@ -85,11 +90,9 @@ private:
     mutex                       observationMutex_;
     unordered_map<size_t, size_t>    observedByKfIdToKptIdx_;
 
-
     // mappoint can only be created by factory
-    Mappoint(const size_t id, const Vector3d& pos);
+    Mappoint(const size_t id, const Vector3d& pos, const Mat& descriptor);
 
-    void CalculateMappointDescriptor();
 };
 
 } // namespace

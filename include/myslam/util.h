@@ -1,7 +1,6 @@
 #ifndef MYSLAM_UTIL_H
 #define MYSLAM_UTIL_H
 
-// algorithms used in myslam
 #include "myslam/common_include.h"
 
 namespace myslam {

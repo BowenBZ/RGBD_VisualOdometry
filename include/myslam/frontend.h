@@ -1,5 +1,14 @@
 /*
- * Frontend for tracking
+ * Fontend which tracks camera poses on frames
+ *
+ * The entry point is the AddFrame function, which gets a frame pointer and computes the camera pose on that frame. Return false if the tracking fails.
+ *
+ * Frontend is reponsible for the other functions
+ * 1. compute pose for new frame
+ * 2. create temporary new mappoints for the frame
+ * 3. determine if to create new keyframe 
+ * 4. invoke backend to optimize new keyframe and new mappoints
+ * 5. invoke reviewer (if there is) to show the image frames, real-time poses and maps
  */
 
 #ifndef FrontEnd_H
@@ -31,7 +40,7 @@ public:
         LOST
     };
 
-    Frontend();
+    Frontend(const Camera::Ptr& camera);
     
     bool AddFrame( const Frame::Ptr frame );      // entry point for application
 
@@ -39,18 +48,11 @@ public:
         viewer_ = move(viewer);
     }
 
-    void SetBackend( const Backend::Ptr backend) {
-        backend_ = move(backend);
-
-        backend_->RegisterTrackingMapUpdateCallback(
-            [&](function<void(Frame::Ptr&, TrackingMap&)> updater) {
-                UpdateTrackingMap(updater);
-            });
-    }
-
     VOState GetState() const { 
         return state_;
     }
+
+    void Stop();
     
 private:  
     const vector<string> VOStateStr {
@@ -59,6 +61,7 @@ private:
         "Lost" 
     };                                          // used for logging
 
+    Camera::Ptr             camera_;
     Viewer::Ptr             viewer_;
     Backend::Ptr            backend_;
 
@@ -78,15 +81,14 @@ private:
     unordered_map<size_t, size_t>   matchedKptIdxMptIdMap_;     // matched keypoint idx to mappoint id
     unordered_map<size_t, double>   matchedKptIdxDistanceMap_;  // matched keypoint idx to distance
 
-    unordered_set<size_t>   baInlierMptIdSet_;      // inlier mappoint id after PNP estimation
+    unordered_map<size_t, size_t>   baInlierMptIdKptIdxMap_;      // inlier mappoint to kpt idx after PNP estimation
     unordered_set<size_t>   baInlierKptIdxSet_;     // inlier keypoint idx after PNP estimation
-    size_t                  numInliers_;            // inlier count, should equal to size of baInlierMptIdSet_ and baInlierKptIdxSet_
+    size_t                  numInliers_;            // inlier count, should equal to size of baInlierKptIdxSet_
     
     g2o::SparseOptimizer    optimizer_;
 
     TrackingMap             lastFrameMpts_;         // mpt of last frame including matched mpts and temp mpts 
-    list<Mappoint::Ptr>     tempMpts_;                      // temp mpts created from current frame
-    unordered_map<size_t, size_t> tempMptIdToKptIdx_;       // temp mpts id to kpt idx
+    unordered_map<Mappoint::Ptr, size_t> tempMptKptIdxMap_;   // temp mpts id to kpt idx
 
     // parameters, see config/default.yaml
     size_t                  minMatchesToUseFlannFrameTracking_;     // threshold to use flann for map matching
@@ -123,12 +125,6 @@ private:
 
     // create temp mappoints for current frame, used for next frame feature matching
     void CreateTempMappoints();
-    // create mappoints from new observed keypoint of current frame
-    void AddTempMappointsToMapManager();
-    // add observing mappoints (both previous and new created) to current keyframe
-    void AddObservingMappointsToCurrentFrame();
-    // add new mappoints to the observedMappoints of existing keyframes in tracking map
-    void AddNewMappointsObservationsForOldKeyframes();
 };
 }
 

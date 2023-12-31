@@ -71,18 +71,12 @@ int main ( int argc, char** argv )
 
     cout << "Initializing VO system ..." << endl;
     myslam::Camera::Ptr camera ( new myslam::Camera );
-    myslam::Frontend::Ptr frontend ( new myslam::Frontend );
+    myslam::Frontend::Ptr frontend ( new myslam::Frontend(camera) );
     myslam::Viewer::Ptr viewer;
     if (myslam::Config::get<int> ( "enable_viewer" )) {
         cout << "Enable to show image" << endl; 
         viewer = myslam::Viewer::Ptr( new myslam::Viewer );
         frontend->SetViewer(viewer);
-    }
-    myslam::Backend::Ptr backend;
-    if (myslam::Config::get<int> ( "enable_local_optimization" )) {
-        cout << "Enable local optimization" << endl;
-        backend = myslam::Backend::Ptr(new myslam::Backend(camera));
-        frontend->SetBackend(backend); 
     }
     cout << "Finish initialization!\n\n" << endl;
     
@@ -117,22 +111,15 @@ int main ( int argc, char** argv )
             break;
         }
 
-        writePosetoFile(fout, std::to_string(pFrame->timestamp_), pFrame->GetPose().inverse());
+        writePosetoFile(fout, std::to_string(pFrame->timestamp_), pFrame->GetTcw().inverse());
     }
 
     fout.close();
     cout << "Finished. \nWrote trajectory to " << outputPath << endl; 
-
-    if (myslam::Config::get<int> ( "enable_local_optimization" )) {
-        backend->Stop();
-    }
-
-    if (myslam::Config::get<int> ( "enable_viewer" )) {
-        viewer->Close();
-    }
-
     cout << "\nPress <enter> to continue\n"; 
     cin.get();
+
+    frontend->Stop();
 
     return 0;
 }

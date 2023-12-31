@@ -21,8 +21,8 @@ void Viewer::SetCurrentFrame(
 
 void Viewer::UpdateDrawingObjects() {
     std::unique_lock<std::mutex> lck(viewer_data_mutex_);
-    all_keyframes_ = MapManager::GetInstance().GetAllKeyframes();
-    all_mappoints_ = MapManager::GetInstance().GetAllMappoints();
+    all_keyframes_ = MapManager::Instance().GetAllKeyframes();
+    all_mappoints_ = MapManager::Instance().GetAllMappoints();
     active_mappoints_ = all_mappoints_;
 }
 
@@ -100,7 +100,7 @@ void Viewer::DrawMapPoints() {
 
 
 void Viewer::DrawFrame(Frame::Ptr frame, const float* color) {
-    SE3 Twc = frame->GetPose().inverse();
+    SE3 Twc = frame->GetTcw().inverse();
     const float sz = 1.0;
     const int line_width = 2.0;
     const float fx = 400;
@@ -149,7 +149,7 @@ void Viewer::DrawFrame(Frame::Ptr frame, const float* color) {
 }
 
 void Viewer::FollowCurrentFrame(pangolin::OpenGlRenderState& vis_camera) {
-    SE3 Twc = current_frame_->GetPose().inverse();
+    SE3 Twc = current_frame_->GetTcw().inverse();
     pangolin::OpenGlMatrix m(Twc.matrix());
     vis_camera.Follow(m, true);
 }

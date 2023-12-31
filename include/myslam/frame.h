@@ -1,5 +1,11 @@
 /*
- * Reprensents a camera frame 
+ * Reprensents a frame
+ * 
+ * Provides following functions
+ * 1. maintain the pose T_camera_from_world, detected features and descriptors
+ * 2. active search to get a keypoint match for a mappoint
+ * 3. for keyframe, maintain the observing mappoint and respective keypoint
+ * 4. for keyframe, maintain the covisible graph with other keyframes
  */
 
 #ifndef FRAME_H
@@ -20,7 +26,6 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     typedef shared_ptr<Frame> Ptr;
-    typedef unordered_map<size_t, int> CovisibleKeyframeIdToWeight;
 
     double              timestamp_;     // when it is recorded
     Camera::Ptr         camera_;        // Pinhole RGBD Camera model 
@@ -38,12 +43,12 @@ public:
     }
 
     // Get T_c_w
-    SE3 GetPose() {
+    SE3 GetTcw() {
         unique_lock<mutex> lck(poseMutex_);
         return T_c_w_;
     }
 
-    void SetPose(const SE3 pose) {
+    void SetTcw(const SE3 pose) {
         unique_lock<mutex> lck(poseMutex_);
         T_c_w_ = move(pose);
     }
@@ -91,9 +96,9 @@ public:
     void AddObservingMappoint(const Mappoint::Ptr& mpt, const size_t kptIdx);
 
     // Remove observed mappoint and also update the covisible keyframes
-    void RemoveObservedMappoint(const size_t mappointId);
+    void RemoveObservedMappoint(const size_t mptId);
 
-    unordered_set<size_t> GetObservedMappointIds() {
+    unordered_set<size_t> GetObservingMappointIds() {
         unique_lock<mutex> lck(observationMutex_);
         return observingMappointIds_;
     }
@@ -104,12 +109,25 @@ public:
         return observingMappointIds_.count(id);
     }
 
-    // Update the covisible keyframe with new weight
-    void UpdateCovisibleKeyframeWeight(const size_t id, const int weight);
-
-    unordered_set<size_t> GetCovisibleKeyframes() {
+    // Return if keypoint has matched mappoint
+    bool IsKeypointMatchWithMappoint(const size_t kptIdx, size_t& mptId) {
         unique_lock<mutex> lck(observationMutex_);
-        return activeCovisibleKeyframes_;
+        if (kptIdxToObservingMptIdMap_.count(kptIdx)) {
+            mptId = kptIdxToObservingMptIdMap_[kptIdx];
+            return true;
+        }
+
+        return false;
+    }
+
+    unordered_set<size_t> GetActiveCovisibleKfIds() {
+        unique_lock<mutex> lck(observationMutex_);
+        return activeCovisibleKfIds_;
+    }
+
+    unordered_set<size_t> GetAllCovisibleKfIds() {
+        unique_lock<mutex> lck(observationMutex_);
+        return allCovisibleKfIds_;
     }
 
 private: 
@@ -138,8 +156,13 @@ private:
 
     mutex                   observationMutex_;
     unordered_set<size_t>   observingMappointIds_;
-    CovisibleKeyframeIdToWeight allCovisibleKeyframeIdToWeight_;        // All covisible keyframes
-    unordered_set<size_t>   activeCovisibleKeyframes_;     // Covisible keyframes (has same observed mappoints >= 15) and the number of covisible mappoints
+    unordered_map<size_t, size_t>  observingMptIdToKptIdxMap_;          // observing mpt to respective keypoint idx
+    unordered_map<size_t, size_t>  kptIdxToObservingMptIdMap_;          // keypoint idx to respective mpt id
+
+    unordered_map<size_t, size_t>   allCovisibleKfIdToWeight_;    // All covisible keyframe 
+    unordered_set<size_t>           allCovisibleKfIds_;           // All covisible keyframe ids
+    unordered_set<size_t>           activeCovisibleKfIds_;        // Active covisible keyframes (has same observed mappoints >= activeCovisibleWeight_) and the number of covisible mappoints
+    size_t                          activeCovisibleWeight_;       // threshold to set active covisible keyframe
 
 
     Frame(  const size_t id, 
@@ -159,6 +182,9 @@ private:
 
     // Get nearby grid idx including the input grid
     vector<size_t> getNearbyGrids(size_t gridIdx);
+
+    // Update the covisible keyframe with new weight. Called by another object
+    void UpdateCovisibleKeyframeWeight(const size_t otherKfId, const size_t weight);
 };
 
 }

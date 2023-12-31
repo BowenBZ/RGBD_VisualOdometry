@@ -1,5 +1,11 @@
 /*
  * Backend for covisible graph (tracking map in frontend) optimization
+ *
+ * Backend is reponsible for the other functions
+ * 1. update covisible graph for new keyframe and new mappoints
+ * 2. generate more observations for new mappoints and merge mappoints
+ * 3. bundle adjustment for covisible graph of new keyframe
+ * 4. update the tracking map for frontend
  */
 
 #ifndef MYSLAM_BACKEND_H
@@ -28,11 +34,11 @@ public:
     // Stop backend processing and clean up resources
     void Stop();
 
-    void OptimizeCovisibleGraphOfKeyframe(const Frame::Ptr keyframeCurr) {
-        unique_lock<mutex> lock(backendMutex_);
-        keyframeCurr_ = move(keyframeCurr);
-        backendUpdateTrigger_.notify_one();
-    }
+    // Trigger the backend to process new keyframe
+    void ProcessNewKeyframeAsync(
+        const Frame::Ptr& keyFrame, 
+        const unordered_map<size_t, size_t>& oldMptIdKptIdxMap,
+        const unordered_map<Mappoint::Ptr, size_t>& newMptKptIdxMap);
 
 private:
 
@@ -42,30 +48,39 @@ private:
     condition_variable  backendUpdateTrigger_;
 
     Camera::Ptr         camera_;
-    Frame::Ptr          keyframeCurr_;
 
-    float               chi2Threshold_;
+    Frame::Ptr                              keyframeCurr_;
+    unordered_map<size_t, size_t>           oldMptIdKptIdxMap_;
+    unordered_map<Mappoint::Ptr, size_t>    newMptKptIdxMap_;  
+    double                                  reMatchDescriptorDistance_;
     
-    g2o::SparseOptimizer optimizer_;
+    g2o::SparseOptimizer                    optimizer_;
+    double                                  chi2Threshold_;
 
-    unordered_map<size_t, pair<Frame::Ptr, VertexPose*>> kfIdToCovKfThenVertex_;
-    unordered_map<size_t, pair<Mappoint::Ptr, VertexMappoint*>> mptIdToMptThenVertex_;
+    unordered_map<size_t, pair<Frame::Ptr, VertexPose*>>                    kfIdToCovKfThenVertex_;
+    unordered_map<size_t, pair<Mappoint::Ptr, VertexMappoint*>>             mptIdToMptThenVertex_;
     // keyframes not belonging to covisible keyframes but could observe the local mappoints
-    unordered_map<size_t, pair<Frame::Ptr, VertexPose*>> kfIdToFixedKfThenVertex_;
-    unordered_map<BinaryEdgeProjection*, pair<Frame::Ptr, Mappoint::Ptr>> edgeToKfThenMpt_;
+    unordered_map<size_t, pair<Frame::Ptr, VertexPose*>>                    kfIdToFixedKfThenVertex_;
+    unordered_map<BinaryEdgeProjection*, pair<Frame::Ptr, Mappoint::Ptr>>   edgeToKfThenMpt_;
 
     function<void(function<void(Frame::Ptr&, unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler_;
 
     // main function for backend thread
     void BackendLoop();
 
-    // real perform the optimization
-    void Optimize();
+    // add observing mappoints, including old and new, to new keyframe
+    void AddObservingMappointsToNewKeyframe();
+
+    // add the new observations for old keyframes
+    void AddNewMappointsToExistingKeyframe();
+
+    // perform the optimization for local map
+    void OptimizeLocalMap();
 
     // update frontend tracking map
     void UpdateFrontendTrackingMap();
 
-    // Clean up the allocated memory
+    // clean up the allocated memory
     void CleanUp();
 
 }; // class Backend
