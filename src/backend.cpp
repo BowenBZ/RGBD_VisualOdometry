@@ -63,23 +63,21 @@ void Backend::BackendLoop()
 }
 
 void Backend::AddObservingMappointsToNewKeyframe() {
+    // no need to update descriptor here since all mpts observed by current keyframe will be updated in the end of backend
     for (const auto& [mptId, kptIdx] : oldMptIdKptIdxMap_) {
         // old mpt may be replaced by previous new mpt
         auto mpt = MapManager::Instance().GetPotentialReplacedMappoint(mptId);
-        // the mpt may already been considered as outlier
+        // the mpt may already be considered as outlier
         if (mpt->outlier_) {
             continue;
         }
         keyframeCurr_->AddObservingMappoint(mpt, kptIdx);
-        // old mpt has new observations, update its descriptor
-        mpt->CalculateMappointDescriptor();
     }
 
     // add new created mpts observations
     for (const auto& [mpt, kptIdx]: newMptKptIdxMap_) {
         MapManager::Instance().AddMappoint(mpt);
         keyframeCurr_->AddObservingMappoint(mpt, kptIdx);
-        // new mpt just has 1 observation at this time, no need to update descriptor
     }
 }
 
@@ -157,11 +155,6 @@ void Backend::AddNewMappointsToExistingKeyframe() {
     for (auto& [oldMptId, newMptIdAndDistance]: oldMptIdToNewMptIdAndDistance) {
         auto& [newMptId, _] = newMptIdAndDistance;
         MapManager::Instance().ReplaceMappoint(oldMptId, newMptId);
-    }
-
-    // since new mpts are observed by more keyframes, update its descriptor
-    for (auto& [mpt, _]: newMptKptIdxMap_) {
-        mpt->CalculateMappointDescriptor();
     }
 
     printf("  Added new mappoint observations to old keyframes: %zu\n", observationsToAdd.size());
@@ -356,26 +349,32 @@ void Backend::UpdateFrontendTrackingMap() {
 
     frontendMapUpdateHandler_([&](Frame::Ptr& refKeyframe, unordered_map<size_t, Mappoint::Ptr>& trackingMap){
         
-        for(const auto& [kf, mptId]: observingMptToRemove_) {
-            kf->RemoveObservingMappoint(mptId);
-        }
-
-        for(const auto& mpt: observingMptToRemoveSet_) {
-            if (!mpt->outlier_) {
-                mpt->CalculateMappointDescriptor();
-            }
-        }
-
         for (const auto &[_, kfAndVertex] : kfIdToCovKfThenVertex_) {
             auto& [kf, kfVertex] = kfAndVertex;
             kf->SetTcw(kfVertex->estimate());
         }
 
+        for(const auto& [kf, mptId]: observingMptToRemove_) {
+            kf->RemoveObservingMappoint(mptId);
+        }
+
         for (const auto &[mptId, mptAndVertex] : mptIdToMptThenVertex_) {
             auto& [mpt, mptVertex] = mptAndVertex;
-            if (!mpt->outlier_ && mpt->optimized_) {
-                mpt->SetPosition(mptVertex->estimate());
+            if (mpt->outlier_) {
+                continue;
             }
+
+            mpt->SetPosition(mptVertex->estimate());
+            // since the mpt position and keyframe pose changes, update its norm direction
+            mpt->UpdateNormViewDirection();
+        }
+
+        for(const auto& mpt: observingMptToRemoveSet_) {
+            if (mpt->outlier_) {
+                continue;
+            }
+            // mpt's observedBy keyframe changes, need to recalculate descriptor
+            mpt->UpdateDescriptor();
         }
 
         refKeyframe = keyframeCurr_;

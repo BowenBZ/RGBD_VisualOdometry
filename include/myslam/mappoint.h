@@ -55,8 +55,11 @@ public:
         return id_; 
     }
 
-    // Recalculate the descriptor when it's observed by several keyframes
-    void CalculateMappointDescriptor();
+    // Recalculate the norm. Only needed to be called when mpt position changes, or observedBy keyframe is removed or pose changes
+    void UpdateNormViewDirection();
+
+    // Recalculate descriptor when it's observed by several keyframes
+    void UpdateDescriptor();
 
     Mat GetDescriptor() {
         unique_lock<mutex> lock(observationMutex_);
@@ -85,10 +88,10 @@ private:
     size_t                      id_;
 
     Mat                         descriptor_;    // Descriptor for keypoint matching, coming from the best keypoint descriptor 
-    Vector3d                    norm_;      // Normal of viewing direction 
+    Vector3d                    norm_;          // Normal of viewing direction, from mappoint to camera
 
     mutex                       posMutex_;
-    Vector3d                    pos_;       // Position in world reference frame
+    Vector3d                    pos_;           // Position in world reference frame
 
     mutex                       observationMutex_;
     unordered_map<size_t, size_t>    observedByKfIdToKptIdx_;
