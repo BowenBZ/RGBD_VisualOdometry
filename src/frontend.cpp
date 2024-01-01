@@ -20,7 +20,7 @@ Frontend::Frontend(const Camera::Ptr& camera) {
     flannMatcher_ = cv::FlannBasedMatcher(new cv::flann::LshIndexParams(5, 10, 2));
 
     // Read paras
-    orb_ = cv::ORB::create(Config::get<int>("number_of_features"),
+    orb_ = cv::ORB::create(Config::get<int>("number_of_features") / (Config::get<int>("row_section_cnt") * Config::get<int>("col_section_cnt")),
                             Config::get<double>("scale_factor"),
                             Config::get<int>("level_pyramid"));
     minMatchesToUseFlannFrameTracking_ = (size_t)Config::get<double>("min_matches_to_use_flann_frame_tracking");

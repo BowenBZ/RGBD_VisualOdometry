@@ -21,6 +21,8 @@ camera.depth_scale: 5000
 number_of_features: 500
 scale_factor: 1.2
 level_pyramid: 8
+row_section_cnt: 2
+col_section_cnt: 2
 
 # active feature matching paras
 pixel_grid_size: 10
@@ -46,7 +48,7 @@ keyframe_translation: 0.05
 
 # backend paras
 chi2_th: 1.0
-re_match_descriptor_distance: 10.0
+re_match_descriptor_distance: 5
 
 # viewer paras
 enable_viewer: 1

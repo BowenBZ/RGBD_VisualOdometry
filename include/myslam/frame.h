@@ -140,11 +140,14 @@ private:
     mutex                   poseMutex_;
     SE3                     T_c_w_;         // transform from world to camera
     
-    vector<KeyPoint>        keypoints_;     // detected keypoints
-    Mat                     descriptors_;   // extracted descriptors
+    size_t                  maxFeaturesCnt_;    // max extracted features
+    size_t                  rowSectionCnt_;     // how many section in rows for feature detection
+    size_t                  colSectionCnt_;     // how many section in cols for feature detection
+    vector<KeyPoint>        keypoints_;         // detected keypoints
+    Mat                     descriptors_;       // extracted descriptors
 
-    size_t                  imgCols;                         // width of color image
-    size_t                  imgRows;                         // height of color image
+    size_t                  imgCols_;                         // width of color image
+    size_t                  imgRows_;                         // height of color image
     size_t                  gridSize_;                       // pixel's grid size
     size_t                  gridColCnt_;                     // count of grid in image cols
     size_t                  gridRowCnt_;                     // count of grid in image rows

@@ -1,5 +1,7 @@
 #include "myslam/frame.h"
 
+#include <algorithm>
+
 #include "myslam/util.h"
 #include "myslam/mapmanager.h"
 
@@ -30,12 +32,16 @@ Frame::Frame (  const size_t id,
                 const Mat& depth )
 : id_(id), timestamp_(timestamp), camera_(camera), color_(color.clone()), depth_(depth.clone()), T_c_w_(SE3())
 {
-    imgCols = color.cols;
-    imgRows = color.rows;
+    maxFeaturesCnt_ = (size_t)Config::get<int>("number_of_features");
+    rowSectionCnt_ = (size_t)Config::get<int>("row_section_cnt");
+    colSectionCnt_ = (size_t)Config::get<int>("col_section_cnt");
+
+    imgCols_ = color.cols;
+    imgRows_ = color.rows;
 
     gridSize_ = (size_t)Config::get<double>("pixel_grid_size");
-    gridColCnt_ = (size_t)ceil((double)imgCols / gridSize_);
-    gridRowCnt_ = (size_t)ceil((double)imgRows / gridSize_);
+    gridColCnt_ = (size_t)ceil((double)imgCols_ / gridSize_);
+    gridRowCnt_ = (size_t)ceil((double)imgRows_ / gridSize_);
 
     searchGridRadius_ = Config::get<int>("search_grid_radius");
 
@@ -72,10 +78,37 @@ double Frame::GetDepth ( const KeyPoint& kp )
 }
 
 void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& detector) {
-    detector->detectAndCompute(color_, Mat(), keypoints_, descriptors_);
+    
+    size_t rowPerSection = imgRows_ / rowSectionCnt_;
+    size_t colPerSection = imgCols_ / colSectionCnt_;
+    for(size_t rowSection = 0; rowSection < rowSectionCnt_; ++rowSection) {
+        for (size_t colSection = 0; colSection < colSectionCnt_; ++colSection) {
+            size_t rowStartIdx = rowPerSection * rowSection;
+            size_t rowEndIdx = rowPerSection * (rowSection + 1);
+            size_t colStartIdx = colPerSection * colSection;
+            size_t colEndIdx = colPerSection * (colSection + 1);
+
+            cv::Range rowRange(rowStartIdx, rowEndIdx);
+            cv::Range colRange(colStartIdx, colEndIdx);
+
+            vector<KeyPoint> kpts;
+            Mat des;
+            detector->detectAndCompute(color_(rowRange, colRange), Mat(), kpts, des);
+
+            for (size_t idx = 0; idx < min(kpts.size(), maxFeaturesCnt_ / (rowSectionCnt_ * colSectionCnt_)); ++idx) {
+                auto& kpt = kpts[idx];
+                kpt.pt.x += colStartIdx;
+                kpt.pt.y += rowStartIdx;
+                keypoints_.push_back(kpt);
+                descriptors_.push_back(des.row(idx).clone());
+            }
+        }
+    }
+    
     ConstructKeypointGrids();
 
     // TODO: Since the keypoints are extracted, the color frame won't been needed unless the viewer
+    // TODO: Extract more keypoints for keyframe
 }
 
 void Frame::ConstructKeypointGrids() {
@@ -94,8 +127,8 @@ bool Frame::GetMatchedKeypoint(const Mappoint::Ptr& mpt, const bool doDirectionC
     } 
 
     Vector2d pixelPos = camera_->Camera2Pixel(posInCam);
-    if (pixelPos(0, 0) < 0 || pixelPos(0, 0) >= imgCols ||
-        pixelPos(1, 0) < 0 || pixelPos(1, 0) >= imgRows) {
+    if (pixelPos(0, 0) < 0 || pixelPos(0, 0) >= imgCols_ ||
+        pixelPos(1, 0) < 0 || pixelPos(1, 0) >= imgRows_) {
         return false;
     }
 
@@ -139,16 +172,16 @@ bool Frame::GetMatchedKeypoint(const Mappoint::Ptr& mpt, const bool doDirectionC
         });
 
     const pair<size_t, double>& bestKptToDistance = kptIdxToDistance[0];
-    // if (bestKptToDistance.second > descriptorDistanceThres_) {
-    //     return false;
-    // }
+    if (bestKptToDistance.second > descriptorDistanceThres_) {
+        return false;
+    }
 
-    // if (kptIdxToDistance.size() >= 2) {
-    //     const pair<size_t, double>& secondKptToDistance = kptIdxToDistance[1];
-    //     if (bestKptToDistance.second / secondKptToDistance.second < bestSecondaryDistanceRatio_) {
-    //         return false;
-    //     }
-    // }
+    if (kptIdxToDistance.size() >= 2) {
+        const pair<size_t, double>& secondKptToDistance = kptIdxToDistance[1];
+        if (bestKptToDistance.second / secondKptToDistance.second < bestSecondaryDistanceRatio_) {
+            return false;
+        }
+    }
     
     kptIdx = bestKptToDistance.first;
     distance = bestKptToDistance.second;
