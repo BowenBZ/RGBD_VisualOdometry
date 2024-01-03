@@ -11,34 +11,32 @@
 namespace myslam
 {
 
-MapManager::MappointIdToPtr MapManager::GetMappointsNearKeyframe(const Frame::Ptr& keyframe ) {
+void MapManager::GetMappointsNearKeyframe(const Frame::Ptr& keyframe, MappointIdToPtr& mptIdToMpt) {
+    mptIdToMpt.clear();
 
-    auto allCovisibleKfIds = keyframe->GetAllCovisibleKfIds();
+    list<size_t> allCovisibleKfIds;
+    keyframe->GetAllCovisibleKfIds(allCovisibleKfIds);
     // Add current keyFrame to the covisible keyframe map
-    allCovisibleKfIds.insert(keyframe->GetId());
-
-    unordered_map<size_t, Mappoint::Ptr> nearbyMpts;
+    allCovisibleKfIds.push_back(keyframe->GetId());
 
     // find all mappoints observed by keyframes above
     for(const auto& kfId: allCovisibleKfIds) {
         assert(keyframesDict_.count(kfId));
         auto& kf = keyframesDict_[kfId];
 
-        for(auto& mptId: kf->GetObservingMappointIds()) {
-            if (!mappointsDict_.count(mptId)) {
-                continue;
-            }
+        list<size_t> observingMptIds;
+        kf->GetObservingMappointIds(observingMptIds);
+        for(auto& mptId: observingMptIds) {
+            assert(mappointsDict_.count(mptId));
 
             auto& mpt = mappointsDict_[mptId];
             if (mpt->outlier_ || !mpt->optimized_) {
                 continue;
             }
 
-            nearbyMpts[mptId] = mpt;
+            mptIdToMpt[mptId] = mpt;
         }
     }
-
-    return nearbyMpts;
 }
 
 void MapManager::ReplaceMappoint(size_t oldMptId, size_t newMptId) {
@@ -52,8 +50,9 @@ void MapManager::ReplaceMappoint(size_t oldMptId, size_t newMptId) {
     auto& oldMpt = mappointsDict_[oldMptId];
     auto& newMpt = mappointsDict_[newMptId];
 
-    auto observedByKfMap = oldMpt->GetObservedByKeyframesMap();
-    for(auto& [kfId, kptIdx]: observedByKfMap) {
+    unordered_map<size_t, size_t> observedByKfIdToKptIdx;
+    oldMpt->GetObservedByKeyframesMap(observedByKfIdToKptIdx);
+    for(auto& [kfId, kptIdx]: observedByKfIdToKptIdx) {
         assert(keyframesDict_.count(kfId));
         auto& kf = keyframesDict_[kfId];
  

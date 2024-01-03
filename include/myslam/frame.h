@@ -98,15 +98,19 @@ public:
     // Remove observed mappoint and also update the covisible keyframes
     void RemoveObservingMappoint(const size_t mptId);
 
-    unordered_set<size_t> GetObservingMappointIds() {
+    void GetObservingMappointIds(list<size_t>& observingMptIds) {
         unique_lock<mutex> lck(observationMutex_);
-        return observingMappointIds_;
+
+        observingMptIds.clear();
+        for(auto& [mptId, _]: observingMptIdToKptIdxMap_) {
+            observingMptIds.push_back(mptId);
+        }
     }
 
     // Return if frame is already observeing mappoint
     bool IsObservingMappoint(const size_t id) {
         unique_lock<mutex> lck(observationMutex_);
-        return observingMappointIds_.count(id);
+        return observingMptIdToKptIdxMap_.count(id);
     }
 
     // Return if keypoint has matched mappoint
@@ -120,14 +124,16 @@ public:
         return false;
     }
 
-    unordered_set<size_t> GetActiveCovisibleKfIds() {
+    void GetActiveCovisibleKfIds(list<size_t>& activeCovisibleKfIds) {
         unique_lock<mutex> lck(observationMutex_);
-        return activeCovisibleKfIds_;
+        activeCovisibleKfIds.clear();
+        activeCovisibleKfIds.insert(activeCovisibleKfIds.end(), activeCovisibleKfIds_.begin(), activeCovisibleKfIds_.end());
     }
 
-    unordered_set<size_t> GetAllCovisibleKfIds() {
+    void GetAllCovisibleKfIds(list<size_t>& allCovisibleKfIds) {
         unique_lock<mutex> lck(observationMutex_);
-        return allCovisibleKfIds_;
+        allCovisibleKfIds.clear();
+        allCovisibleKfIds.insert(allCovisibleKfIds.end(), allCovisibleKfIds_.begin(), allCovisibleKfIds_.end());
     }
 
 private: 
@@ -157,10 +163,9 @@ private:
     double                  descriptorDistanceThres_;        // max distance between 2 descriptors to be considered as matched
     double                  bestSecondaryDistanceRatio_;     // min ratio between best match and secondary match to accept the best match 
 
-    mutex                   observationMutex_;
-    unordered_set<size_t>   observingMappointIds_;
-    unordered_map<size_t, size_t>  observingMptIdToKptIdxMap_;          // observing mpt to respective keypoint idx
-    unordered_map<size_t, size_t>  kptIdxToObservingMptIdMap_;          // keypoint idx to respective mpt id
+    mutex                           observationMutex_;
+    unordered_map<size_t, size_t>   observingMptIdToKptIdxMap_;          // observing mpt to respective keypoint idx
+    unordered_map<size_t, size_t>   kptIdxToObservingMptIdMap_;          // keypoint idx to respective mpt id
 
     unordered_map<size_t, size_t>   allCovisibleKfIdToWeight_;    // All covisible keyframe 
     unordered_set<size_t>           allCovisibleKfIds_;           // All covisible keyframe ids
@@ -184,7 +189,7 @@ private:
     size_t GetGridIdx(size_t colIdx, size_t rowIdx);
 
     // Get nearby grid idx including the input grid
-    vector<size_t> getNearbyGrids(size_t gridIdx);
+    void getNearbyGrids(size_t gridIdx, list<size_t>& nearbyGrids);
 
     // Update the covisible keyframe with new weight. Called by another object
     void UpdateCovisibleKeyframeWeight(const size_t otherKfId, const size_t weight);

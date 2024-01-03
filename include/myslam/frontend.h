@@ -79,6 +79,10 @@ private:
     unordered_map<size_t, size_t>   matchedKptIdxMptIdMap_;     // matched keypoint idx to mappoint id
     unordered_map<size_t, double>   matchedKptIdxDistanceMap_;  // matched keypoint idx to distance
 
+    unordered_map<size_t, size_t>   flannMatchedMptIdKptIdxMap_;     // matched mappoint id to keypoint idx
+    unordered_map<size_t, size_t>   flannMatchedKptIdxMptIdMap_;     // matched keypoint idx to mappoint id
+    unordered_map<size_t, double>   flannMatchedKptIdxDistanceMap_;  // matched keypoint idx to distance
+
     unordered_map<size_t, size_t>   baInlierMptIdKptIdxMap_;      // inlier mappoint to kpt idx after PNP estimation
     unordered_set<size_t>   baInlierKptIdxSet_;     // inlier keypoint idx after PNP estimation
     size_t                  numInliers_;            // inlier count, should equal to size of baInlierKptIdxSet_

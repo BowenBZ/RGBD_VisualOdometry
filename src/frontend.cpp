@@ -220,6 +220,7 @@ void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const
         matchedKptIdxMptIdMap_[kptIdx] = mptId;
         matchedKptIdxDistanceMap_[kptIdx] = distance;
     }
+
     assert(matchedMptIdKptIdxMap_.size() == matchedKptIdxDistanceMap_.size());
 
     // If not found enough matches, fallback to use flann
@@ -230,8 +231,19 @@ void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const
     assert(matchedMptIdKptIdxMap_.size() == matchedKptIdxDistanceMap_.size());
 
     if (matchedMptIdKptIdxMap_.size() < matchesToUseFlann) {
-        cout << "  Fallback to use all mappoints for Flann matching" << endl;
         MatchKeyPointsFlann(moreFlannMptCandidatesDes, moreFlannMptIdxToId);
+
+        if (flannMatchedMptIdKptIdxMap_.size() > matchedMptIdKptIdxMap_.size()) {
+            printf("  Matched size: %zu is too mall, fallback to use Flann matching\n", matchedMptIdKptIdxMap_.size());
+        }
+        matchedMptIdKptIdxMap_.clear();
+        matchedMptIdKptIdxMap_.insert(flannMatchedMptIdKptIdxMap_.begin(), flannMatchedMptIdKptIdxMap_.end());
+        
+        matchedKptIdxMptIdMap_.clear();
+        matchedKptIdxMptIdMap_.insert(flannMatchedKptIdxMptIdMap_.begin(), flannMatchedKptIdxMptIdMap_.end());
+
+        matchedKptIdxDistanceMap_.clear();
+        matchedKptIdxDistanceMap_.insert(flannMatchedKptIdxDistanceMap_.begin(), flannMatchedKptIdxDistanceMap_.end());
     }
     assert(matchedMptIdKptIdxMap_.size() == matchedKptIdxDistanceMap_.size());
 
@@ -240,9 +252,9 @@ void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const
 }
 
 void Frontend::MatchKeyPointsFlann(const Mat& flannMptCandidateDes, unordered_map<int, size_t>& flannMptIdxToId) {
-    matchedMptIdKptIdxMap_.clear();
-    matchedKptIdxMptIdMap_.clear();
-    matchedKptIdxDistanceMap_.clear();
+    flannMatchedMptIdKptIdxMap_.clear();
+    flannMatchedKptIdxMptIdMap_.clear();
+    flannMatchedKptIdxDistanceMap_.clear();
 
     if (flannMptCandidateDes.rows == 0) {
         return;
@@ -269,19 +281,19 @@ void Frontend::MatchKeyPointsFlann(const Mat& flannMptCandidateDes, unordered_ma
             auto& kptIdx = m.trainIdx;
 
             // Check whether this keypoint already has a better matched mappoint
-            if (matchedKptIdxDistanceMap_.count(kptIdx)) {
-                if (m.distance < matchedKptIdxDistanceMap_[kptIdx]) {
+            if (flannMatchedKptIdxDistanceMap_.count(kptIdx)) {
+                if (m.distance < flannMatchedKptIdxDistanceMap_[kptIdx]) {
                     // Remove the previous matched mappoint
-                    size_t mptIdToRemove = matchedKptIdxMptIdMap_[kptIdx];
-                    matchedMptIdKptIdxMap_.erase(mptIdToRemove);
+                    size_t mptIdToRemove = flannMatchedKptIdxMptIdMap_[kptIdx];
+                    flannMatchedMptIdKptIdxMap_.erase(mptIdToRemove);
                 } else {
                     continue;
                 }
             }
 
-            matchedMptIdKptIdxMap_[mptId] = kptIdx;
-            matchedKptIdxMptIdMap_[kptIdx] = mptId;
-            matchedKptIdxDistanceMap_[kptIdx] = m.distance;
+            flannMatchedMptIdKptIdxMap_[mptId] = kptIdx;
+            flannMatchedKptIdxMptIdMap_[kptIdx] = mptId;
+            flannMatchedKptIdxDistanceMap_[kptIdx] = m.distance;
         }
     }
 }

@@ -17,7 +17,7 @@ Frame::Ptr Frame::CreateFrame(
     const Mat& depth)
 {
     return Frame::Ptr( new Frame(
-        ++factoryId_,
+        factoryId_++,
         timestamp,
         camera,
         color,
@@ -122,13 +122,13 @@ bool Frame::GetMatchedKeypoint(const Mappoint::Ptr& mpt, const bool doDirectionC
     mayObserveMpt = false;
 
     Vector3d posInCam = camera_->World2Camera(mpt->GetPosition(), T_c_w_);
-    if (posInCam(2, 0) < 0) {
+    if (posInCam[2] < 0) {
         return false;
     } 
-
+    
     Vector2d pixelPos = camera_->Camera2Pixel(posInCam);
-    if (pixelPos(0, 0) < 0 || pixelPos(0, 0) >= imgCols_ ||
-        pixelPos(1, 0) < 0 || pixelPos(1, 0) >= imgRows_) {
+    if (pixelPos[0] < 0 || pixelPos[0] >= imgCols_ ||
+        pixelPos[1] < 0 || pixelPos[1] >= imgRows_) {
         return false;
     }
 
@@ -145,10 +145,11 @@ bool Frame::GetMatchedKeypoint(const Mappoint::Ptr& mpt, const bool doDirectionC
     // This is used by the fallback flann feature matching
     mayObserveMpt = true;
     
-    const size_t mptGridIdx = GetGridIdx(pixelPos(0, 0), pixelPos(0, 1));
-    const vector<size_t> queryGridsIdx = getNearbyGrids(mptGridIdx);
+    const size_t mptGridIdx = GetGridIdx(pixelPos[0], pixelPos[1]);
+    list<size_t> nearbyGrids;
+    getNearbyGrids(mptGridIdx, nearbyGrids);
     vector<pair<size_t, double>> kptIdxToDistance;
-    for (auto& gridIdx: queryGridsIdx) {
+    for (auto& gridIdx: nearbyGrids) {
         if (!gridToKptIdx_.count(gridIdx)) {
             continue;
         }
@@ -198,8 +199,8 @@ size_t Frame::GetGridIdx(size_t colIdx, size_t rowIdx) {
     return rowIdx * gridColCnt_ + colIdx;
 }
 
-vector<size_t> Frame::getNearbyGrids(size_t gridIdx) {
-    vector<size_t> grids;
+void Frame::getNearbyGrids(size_t gridIdx, list<size_t>& nearbyGrids) {
+    nearbyGrids.clear();
 
     size_t rowIdx = gridIdx / gridColCnt_;
     size_t colIdx = gridIdx - rowIdx * gridColCnt_;
@@ -211,27 +212,26 @@ vector<size_t> Frame::getNearbyGrids(size_t gridIdx) {
 
             if (row >= 0 && row < gridRowCnt_ &&
                 col >= 0 && col < gridColCnt_) {
-                    grids.push_back(GetGridIdx((size_t)row, (size_t)col));
+                    nearbyGrids.push_back(GetGridIdx((size_t)row, (size_t)col));
                 }
         }
     }
-
-    return grids;
 }
 
 void Frame::AddObservingMappoint(const Mappoint::Ptr& mpt, const size_t kptIdx) {
     unique_lock<mutex> lck(observationMutex_);
     
     auto mptId = mpt->GetId();
-    assert(!observingMappointIds_.count(mptId));
-    observingMappointIds_.insert(mptId);
+    assert(!observingMptIdToKptIdxMap_.count(mptId));
     observingMptIdToKptIdxMap_[mptId] = kptIdx;
     kptIdxToObservingMptIdMap_[kptIdx] = mptId;
 
     assert(mpt != nullptr);
     mpt->AddObservedByKeyframe(shared_from_this(), kptIdx);
 
-    for (auto& [otherKfId, _]: mpt->GetObservedByKeyframesMap()) {
+    unordered_map<size_t, size_t> observedByKfIdToKptIdx;
+    mpt->GetObservedByKeyframesMap(observedByKfIdToKptIdx);
+    for (auto& [otherKfId, _]: observedByKfIdToKptIdx) {
         if (otherKfId == id_) {
             continue;
         }
@@ -253,17 +253,18 @@ void Frame::AddObservingMappoint(const Mappoint::Ptr& mpt, const size_t kptIdx) 
 void Frame::RemoveObservingMappoint(const size_t mptId) {
     unique_lock<mutex> lck(observationMutex_);
 
-    assert(observingMappointIds_.count(mptId));
-    observingMappointIds_.erase(mptId);
+    assert(observingMptIdToKptIdxMap_.count(mptId));
     size_t kptIdx = observingMptIdToKptIdxMap_[mptId];
     observingMptIdToKptIdxMap_.erase(mptId);
     kptIdxToObservingMptIdMap_.erase(kptIdx);
 
-    auto mappoint = MapManager::Instance().GetMappoint(mptId);
-    assert(mappoint != nullptr);
-    mappoint->RemoveObservedByKeyframe(this->id_);
+    auto mpt = MapManager::Instance().GetMappoint(mptId);
+    assert(mpt != nullptr);
+    mpt->RemoveObservedByKeyframe(this->id_);
 
-    for (auto& [otherKFId, _]: mappoint->GetObservedByKeyframesMap()) {
+    unordered_map<size_t, size_t> observedByKfIdToKptIdx;
+    mpt->GetObservedByKeyframesMap(observedByKfIdToKptIdx);
+    for (auto& [otherKFId, _]: observedByKfIdToKptIdx) {
         if (otherKFId == this->id_) {
             continue;
         }

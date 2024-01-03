@@ -77,9 +77,10 @@ public:
     // only be called by keyframe object
     void RemoveObservedByKeyframe(const size_t kfId);
 
-    unordered_map<size_t, size_t> GetObservedByKeyframesMap() {
+    void GetObservedByKeyframesMap(unordered_map<size_t, size_t>& observedByKfIdToKptIdx) {
         unique_lock<mutex> lock(observationMutex_);
-        return observedByKfIdToKptIdx_;
+        observedByKfIdToKptIdx.clear();
+        observedByKfIdToKptIdx.insert(observedByKfIdToKptIdx_.begin(), observedByKfIdToKptIdx_.end());
     }
 
 

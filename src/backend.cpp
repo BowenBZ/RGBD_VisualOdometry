@@ -32,6 +32,7 @@ void Backend::ProcessNewKeyframeAsync(
     const unordered_map<Mappoint::Ptr, size_t>& newMptKptIdxMap) {
 
     unique_lock<mutex> lock(backendMutex_);
+    keyframePrev_ = keyframeCurr_;
     keyframeCurr_ = keyframe;
     oldMptIdKptIdxMap_.clear();
     oldMptIdKptIdxMap_.insert(oldMptIdKptIdxMap.begin(), oldMptIdKptIdxMap.end());
@@ -43,15 +44,16 @@ void Backend::ProcessNewKeyframeAsync(
 
 void Backend::BackendLoop()
 {
+    unique_lock<mutex> lock(backendMutex_);
     while (backendRunning_)
     {
-        unique_lock<mutex> lock(backendMutex_);
         backendUpdateTrigger_.wait(lock);
 
         // Need to check again because the trigger could also be triggered during deconstruction
         if (backendRunning_)
         {
-            printf("\nBackend starts processing\n");
+            printf("\n[Backend] starts processing frame: %zu\n", keyframeCurr_->GetId());
+            // ProjectMoreMappointsToNewKeyframe();
             MapManager::Instance().AddKeyframe(keyframeCurr_);
             AddObservingMappointsToNewKeyframe();
             AddNewMappointsToExistingKeyframe();
@@ -60,6 +62,56 @@ void Backend::BackendLoop()
             CleanUp();
         }
     }
+}
+
+void Backend::ProjectMoreMappointsToNewKeyframe() {
+    if (keyframePrev_ == nullptr) {
+        return;
+    }
+
+    unordered_map<size_t, Mappoint::Ptr> kptIdxNewMptMap;
+    for(auto& [mpt, kptIdx]: newMptKptIdxMap_) {
+        kptIdxNewMptMap[kptIdx] = mpt;
+    }
+
+    unordered_map<size_t, pair<size_t, double>> kptIdxToMptIdAndDistance;
+    unordered_map<size_t, Mappoint::Ptr> oldMptIdToMpt;
+    MapManager::Instance().GetMappointsNearKeyframe(keyframePrev_, oldMptIdToMpt);
+    for(auto& [oldMptId, oldMpt]: oldMptIdToMpt) {
+        // If this mpt already match with new keyframe
+        if (oldMptIdKptIdxMap_.count(oldMptId)) {
+            continue;
+        }
+
+        double distance;
+        size_t kptIdx;
+        bool mayObserveMpt;
+        // Cannot find match
+        if (!keyframeCurr_->GetMatchedKeypoint(oldMpt, false, kptIdx, distance, mayObserveMpt) || distance > reMatchDescriptorDistance_) {
+            continue;
+        }
+
+        // this kpt already has matched previous mappoint
+        if (!kptIdxNewMptMap.count(kptIdx)) {
+            continue;
+        }
+
+        // there is other old mpt matched with this new kpt
+        if (kptIdxToMptIdAndDistance.count(kptIdx) && kptIdxToMptIdAndDistance[kptIdx].second <= distance) {
+            continue;
+        }
+
+        kptIdxToMptIdAndDistance[kptIdx] = make_pair(oldMptId, distance);
+    }
+
+    for(auto& [kptIdx, oldMptIdAndDistance]: kptIdxToMptIdAndDistance) {
+        auto& [oldMptId, _] = oldMptIdAndDistance;
+        oldMptIdKptIdxMap_[oldMptId] = kptIdx;
+        auto newMpt = kptIdxNewMptMap[kptIdx];
+        newMptKptIdxMap_.erase(newMpt);
+    }
+
+    printf("[Backend] Projected %zu old mpts to new keyframe\n", kptIdxToMptIdAndDistance.size());
 }
 
 void Backend::AddObservingMappointsToNewKeyframe() {
@@ -82,15 +134,18 @@ void Backend::AddObservingMappointsToNewKeyframe() {
 }
 
 void Backend::AddNewMappointsToExistingKeyframe() {
-    auto covisibleKfIds = keyframeCurr_->GetAllCovisibleKfIds();
+    list<size_t> allCovisibleKfIds;
+    keyframeCurr_->GetAllCovisibleKfIds(allCovisibleKfIds);
     unordered_set<Frame::Ptr> covisibleKfs;
-    for (auto& kfId: covisibleKfIds) {
+    for (auto& kfId: allCovisibleKfIds) {
         auto kf = MapManager::Instance().GetKeyframe(kfId);
         if (kf == nullptr) {
             continue;
         }
         covisibleKfs.insert(kf);
-        for (auto& neighborKfId: kf->GetAllCovisibleKfIds()) {
+        list<size_t> neighborAllCovisibleKfIds;
+        kf->GetAllCovisibleKfIds(neighborAllCovisibleKfIds);
+        for (auto& neighborKfId: neighborAllCovisibleKfIds) {
             auto neighborKf = MapManager::Instance().GetKeyframe(kfId);
             if (neighborKf == nullptr) {
                 continue;
@@ -157,15 +212,16 @@ void Backend::AddNewMappointsToExistingKeyframe() {
         MapManager::Instance().ReplaceMappoint(oldMptId, newMptId);
     }
 
-    printf("  Added new mappoint observations to old keyframes: %zu\n", observationsToAdd.size());
-    printf("  Replace old mappoints with new one: %zu\n", oldMptIdToNewMptIdAndDistance.size());
+    printf("[Backend] Added new mappoint observations to old keyframes: %zu\n", observationsToAdd.size());
+    printf("[Backend] Replace old mappoints with new one: %zu\n", oldMptIdToNewMptIdAndDistance.size());
 }
 
 void Backend::OptimizeLocalMap()
 {
-    auto covisibleKfIds = keyframeCurr_->GetActiveCovisibleKfIds();
+    list<size_t> covisibleKfIds;
+    keyframeCurr_->GetActiveCovisibleKfIds(covisibleKfIds);
     // Add current keyframe
-    covisibleKfIds.insert(keyframeCurr_->GetId());
+    covisibleKfIds.push_back(keyframeCurr_->GetId());
 
     int vertexIndex = 0;
 
@@ -190,7 +246,9 @@ void Backend::OptimizeLocalMap()
         kfIdToCovKfThenVertex_[kfId] = make_pair(kf, poseVertex);
 
         // Create mappoint vertices
-        for (auto &mptId : kf->GetObservingMappointIds())
+        list<size_t> observingMptIds;
+        kf->GetObservingMappointIds(observingMptIds);
+        for (auto &mptId : observingMptIds)
         {
             if (mptIdToMptThenVertex_.count(mptId))
             {
@@ -230,7 +288,9 @@ void Backend::OptimizeLocalMap()
         // bool needTriangulate = !mpt->outlier_ && !(mpt->triangulated_ || mpt->optimized_);
         bool needTriangulate = false;
 
-        for (auto &[kfId, kptIdx] : mpt->GetObservedByKeyframesMap())
+        unordered_map<size_t, size_t> observedByKfIdToKptIdx;
+        mpt->GetObservedByKeyframesMap(observedByKfIdToKptIdx);
+        for (auto &[kfId, kptIdx] : observedByKfIdToKptIdx)
         {
             auto keyframe = MapManager::Instance().GetKeyframe(kfId);
             auto& kpt = keyframe->GetKeypoint(kptIdx);
@@ -336,7 +396,7 @@ void Backend::OptimizeLocalMap()
         }
     }
 
-    printf("Backend results:\n");
+    printf("[Backend] optimization results:\n");
     printf("  optimized pose count: %zu\n", kfIdToCovKfThenVertex_.size());
     printf("  fixed pose count: %zu\n", kfIdToFixedKfThenVertex_.size());
     printf("  optimized mappoint count: %zu\n", mptIdToMptThenVertex_.size());
@@ -380,7 +440,7 @@ void Backend::UpdateFrontendTrackingMap() {
         refKeyframe = keyframeCurr_;
         trackingMap.clear();
         // get more mappoints from all covisible keyframes of current keyframe
-        trackingMap = MapManager::Instance().GetMappointsNearKeyframe(refKeyframe);
+        MapManager::Instance().GetMappointsNearKeyframe(refKeyframe, trackingMap);
     });
 }
 

@@ -48,9 +48,12 @@ private:
 
     Camera::Ptr         camera_;
 
+    Frame::Ptr                              keyframePrev_;
     Frame::Ptr                              keyframeCurr_;
+
     unordered_map<size_t, size_t>           oldMptIdKptIdxMap_;
-    unordered_map<Mappoint::Ptr, size_t>    newMptKptIdxMap_;  
+    unordered_map<Mappoint::Ptr, size_t>    newMptKptIdxMap_;
+    
     double                                  reMatchDescriptorDistance_;
     
     g2o::SparseOptimizer                    optimizer_;
@@ -69,6 +72,9 @@ private:
 
     // main function for backend thread
     void BackendLoop();
+
+    // project more existing mappoint to new keyframe
+    void ProjectMoreMappointsToNewKeyframe();
 
     // add observing mappoints, including old and new, to new keyframe
     void AddObservingMappointsToNewKeyframe();
