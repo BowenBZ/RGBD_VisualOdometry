@@ -35,6 +35,7 @@ using cv::Point2f;
 #include <iostream>
 #include <cstdio>
 #include <list>
+#include <queue>
 #include <map>
 #include <set>
 #include <string>

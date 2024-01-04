@@ -70,7 +70,6 @@ private:
     Frame::Ptr              frameCurr_;         // current frame 
     
     TrackingMap             trackingMap_;  // the local tracking map
-    Frame::Ptr              keyframeForTrackingMap_;    // the keyframe which is used to identify the tracking map
 
     cv::Ptr<cv::ORB>        orb_;               // orb detector and computer 
     cv::FlannBasedMatcher   flannMatcher_;      // flann matcher used if active search fails
@@ -110,7 +109,7 @@ private:
     void LostHandler();
 
     // update tracking map, called by backend
-    void UpdateTrackingMap(function<void(Frame::Ptr&, TrackingMap&)> updater);
+    void UpdateTrackingMap(function<void(TrackingMap&)> updater);
 
     // match extracted features in tracking map
     void MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const bool doDirectionCheck, const size_t matchesToUseFlann);

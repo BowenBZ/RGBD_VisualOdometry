@@ -26,33 +26,36 @@ void Backend::Stop() {
     CleanUp();
 }
 
-void Backend::ProcessNewKeyframeAsync(
-    const Frame::Ptr& keyframe, 
-    const unordered_map<size_t, size_t>& oldMptIdKptIdxMap,
-    const unordered_map<Mappoint::Ptr, size_t>& newMptKptIdxMap) {
-
+void Backend::AddNewKeyframeInfo(const FrontendToBackendInfo& info) {
     unique_lock<mutex> lock(backendMutex_);
-    keyframePrev_ = keyframeCurr_;
-    keyframeCurr_ = keyframe;
-    oldMptIdKptIdxMap_.clear();
-    oldMptIdKptIdxMap_.insert(oldMptIdKptIdxMap.begin(), oldMptIdKptIdxMap.end());
-    newMptKptIdxMap_.clear();
-    newMptKptIdxMap_.insert(newMptKptIdxMap.begin(), newMptKptIdxMap.end());
 
+    FrontendToBackendInfo copyInfo;
+    copyInfo.keyframe = info.keyframe;
+    copyInfo.oldMptIdKptIdxMap.insert(info.oldMptIdKptIdxMap.begin(), info.oldMptIdKptIdxMap.end());
+    copyInfo.newMptKptIdxMap.insert(info.newMptKptIdxMap.begin(), info.newMptKptIdxMap.end());
+
+    frontendInfoToProcess_.push(copyInfo);
     backendUpdateTrigger_.notify_one();
 }
 
 void Backend::BackendLoop()
 {
-    unique_lock<mutex> lock(backendMutex_);
     while (backendRunning_)
     {
-        backendUpdateTrigger_.wait(lock);
+        unique_lock<mutex> lock(backendMutex_);
+        if (frontendInfoToProcess_.size() == 0) {
+            backendUpdateTrigger_.wait(lock);
+        }
 
         // Need to check again because the trigger could also be triggered during deconstruction
         if (backendRunning_)
         {
-            printf("\n[Backend] starts processing frame: %zu\n", keyframeCurr_->GetId());
+            printf("[Backend] info queue size: %zu\n", frontendInfoToProcess_.size());
+            PopInfoFromQueue();
+            printf("[Backend] starts processing new frame: %zu\n", keyframeCurr_->GetId());
+            // unlock so that frontend could keep sending info
+            lock.unlock();
+
             // ProjectMoreMappointsToNewKeyframe();
             MapManager::Instance().AddKeyframe(keyframeCurr_);
             AddObservingMappointsToNewKeyframe();
@@ -62,6 +65,20 @@ void Backend::BackendLoop()
             CleanUp();
         }
     }
+}
+
+void Backend::PopInfoFromQueue() {
+
+    auto& info = frontendInfoToProcess_.front();
+
+    keyframePrev_ = keyframeCurr_;
+    keyframeCurr_ = info.keyframe;
+    oldMptIdKptIdxMap_.clear();
+    oldMptIdKptIdxMap_.insert(info.oldMptIdKptIdxMap.begin(), info.oldMptIdKptIdxMap.end());
+    newMptKptIdxMap_.clear();
+    newMptKptIdxMap_.insert(info.newMptKptIdxMap.begin(), info.newMptKptIdxMap.end());
+
+    frontendInfoToProcess_.pop();
 }
 
 void Backend::ProjectMoreMappointsToNewKeyframe() {
@@ -407,7 +424,7 @@ void Backend::OptimizeLocalMap()
 
 void Backend::UpdateFrontendTrackingMap() {
 
-    frontendMapUpdateHandler_([&](Frame::Ptr& refKeyframe, unordered_map<size_t, Mappoint::Ptr>& trackingMap){
+    frontendMapUpdateHandler_([&](unordered_map<size_t, Mappoint::Ptr>& trackingMap){
         
         for (const auto &[_, kfAndVertex] : kfIdToCovKfThenVertex_) {
             auto& [kf, kfVertex] = kfAndVertex;
@@ -437,10 +454,9 @@ void Backend::UpdateFrontendTrackingMap() {
             mpt->UpdateDescriptor();
         }
 
-        refKeyframe = keyframeCurr_;
         trackingMap.clear();
         // get more mappoints from all covisible keyframes of current keyframe
-        MapManager::Instance().GetMappointsNearKeyframe(refKeyframe, trackingMap);
+        MapManager::Instance().GetMappointsNearKeyframe(keyframeCurr_, trackingMap);
     });
 }
 

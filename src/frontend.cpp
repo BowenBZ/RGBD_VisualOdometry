@@ -41,7 +41,7 @@ Frontend::Frontend(const Camera::Ptr& camera) {
     // Setup backend
     backend_ = Backend::Ptr(new myslam::Backend(camera_));
     backend_->RegisterTrackingMapUpdateCallback(
-            [&](function<void(Frame::Ptr&, TrackingMap&)> updater) {
+            [&](function<void(TrackingMap&)> updater) {
                 UpdateTrackingMap(updater);
             });
 
@@ -100,8 +100,7 @@ void Frontend::InitializationHandler() {
         MapManager::Instance().AddMappoint(mpt);
         frameCurr_->AddObservingMappoint(mpt, tempMptKptIdxMap_[mpt]);
     }
-    UpdateTrackingMap([&](Frame::Ptr& refKeyframe, TrackingMap& trackingMap) {
-        refKeyframe = frameCurr_;
+    UpdateTrackingMap([&](TrackingMap& trackingMap) {
         trackingMap.clear();
         trackingMap.insert(lastFrameMpts_.begin(), lastFrameMpts_.end());
     });
@@ -111,11 +110,11 @@ void Frontend::InitializationHandler() {
 }
 
 bool Frontend::TrackingHandler() {
+    // lock tracking map, so it cannot be updated during frontend processing
+    unique_lock<mutex> lock(trackingMapMutex_);
+
     // set an initial pose to the pose of previous pose, used for feature matching
     frameCurr_->SetTcw(framePrev_->GetTcw());
-
-    // lock tracking map
-    unique_lock<mutex> lock(trackingMapMutex_);
 
     // Compute pose based on last frame mappoints
     cout << "Frame tracking...\n";
@@ -143,10 +142,7 @@ bool Frontend::TrackingHandler() {
     } 
     cout << "Current frame is a new keyframe" << endl;
     
-    // unlock tracking map, otherwise it may cause deadly lock
-    lock.unlock();
-    // TODO: if backend is optimizaing, here will block frontend
-    backend_->ProcessNewKeyframeAsync(frameCurr_, baInlierMptIdKptIdxMap_, tempMptKptIdxMap_);
+    backend_->AddNewKeyframeInfo({frameCurr_, baInlierMptIdKptIdxMap_, tempMptKptIdxMap_});
 
     return true;
 }
@@ -155,11 +151,11 @@ void Frontend::LostHandler() {
     cout << "Tracking is lost" << endl;
 }
 
-void Frontend::UpdateTrackingMap(function<void(Frame::Ptr&, TrackingMap&)> updater) {
+void Frontend::UpdateTrackingMap(function<void(TrackingMap&)> updater) {
     unique_lock<mutex> lock(trackingMapMutex_);
 
     // Use updater to update tracking map
-    updater(keyframeForTrackingMap_, trackingMap_);
+    updater(trackingMap_);
 
     cout << "Tracking map is updated" << endl;
 }

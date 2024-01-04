@@ -18,6 +18,12 @@
 
 namespace myslam {
 
+struct FrontendToBackendInfo {
+    Frame::Ptr                              keyframe;
+    unordered_map<size_t, size_t>           oldMptIdKptIdxMap;
+    unordered_map<Mappoint::Ptr, size_t>    newMptKptIdxMap;
+};
+
 class Backend {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
@@ -26,18 +32,15 @@ public:
 
     Backend(const Camera::Ptr camera);
 
-    void RegisterTrackingMapUpdateCallback(function<void(function<void(Frame::Ptr&, unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler) {
+    void RegisterTrackingMapUpdateCallback(function<void(function<void(unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler) {
         frontendMapUpdateHandler_ = frontendMapUpdateHandler;
     }
 
     // Stop backend processing and clean up resources
     void Stop();
 
-    // Trigger the backend to process new keyframe
-    void ProcessNewKeyframeAsync(
-        const Frame::Ptr& keyFrame, 
-        const unordered_map<size_t, size_t>& oldMptIdKptIdxMap,
-        const unordered_map<Mappoint::Ptr, size_t>& newMptKptIdxMap);
+    // Add a new keyframe to the queue
+    void AddNewKeyframeInfo(const FrontendToBackendInfo& info);
 
 private:
 
@@ -50,10 +53,11 @@ private:
 
     Frame::Ptr                              keyframePrev_;
     Frame::Ptr                              keyframeCurr_;
-
     unordered_map<size_t, size_t>           oldMptIdKptIdxMap_;
     unordered_map<Mappoint::Ptr, size_t>    newMptKptIdxMap_;
     
+    queue<FrontendToBackendInfo>            frontendInfoToProcess_;
+
     double                                  reMatchDescriptorDistance_;
     
     g2o::SparseOptimizer                    optimizer_;
@@ -68,10 +72,13 @@ private:
     list<pair<Frame::Ptr, size_t>>  observingMptToRemove_;
     unordered_set<Mappoint::Ptr>    observingMptToRemoveSet_;
 
-    function<void(function<void(Frame::Ptr&, unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler_;
+    function<void(function<void(unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler_;
 
     // main function for backend thread
     void BackendLoop();
+
+    // get the info from the queue
+    void PopInfoFromQueue();
 
     // project more existing mappoint to new keyframe
     void ProjectMoreMappointsToNewKeyframe();
