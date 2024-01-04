@@ -338,6 +338,7 @@ void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
     optimizer_.clear();
 
     VertexPose *poseVertex = new VertexPose();
+    
     poseVertex->setId(0);
     poseVertex->setEstimate(pnpEstimatedPose);
     optimizer_.addVertex(poseVertex);
@@ -345,12 +346,11 @@ void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
     // edges
     vector<UnaryEdgeProjection *> edges;
 
-    for (size_t i = 0; i < inliers.rows; ++i)
+    for (size_t i = 1; i < inliers.rows; ++i)
     {
         int index = inliers.at<int>(i, 0);
         // 3D -> 2D projection
         UnaryEdgeProjection *edge = new UnaryEdgeProjection(toVector3d(pts3d[index]), camera_);
-
         edge->setId(i);
         edge->setVertex(0, poseVertex);
         edge->setMeasurement(toVec2d(pts2d[index]));

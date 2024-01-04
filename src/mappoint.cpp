@@ -36,7 +36,9 @@ void Mappoint::AddObservedByKeyframe(const shared_ptr<Frame>& kf, const size_t k
     norm_ = (norm_ + direction).normalized();
 
     // as long as the mpt is observed by keyframe, it's not outlier
-    outlier_ = false;
+    if (observedByKfIdToKptIdx_.size() > 1) {
+        outlier_ = false;
+    }
 }
 
 void Mappoint::RemoveObservedByKeyframe(const size_t keyframeId) {
@@ -44,8 +46,8 @@ void Mappoint::RemoveObservedByKeyframe(const size_t keyframeId) {
     assert(observedByKfIdToKptIdx_.count(keyframeId));
     observedByKfIdToKptIdx_.erase(keyframeId);
 
-    // if all the observations has been removed
-    if(observedByKfIdToKptIdx_.size() == 0) {
+    // if all other observations has been removed
+    if(observedByKfIdToKptIdx_.size() == 1) {
         // cout << "Mark as outlier mappint: " << id_ << endl;
         outlier_ = true;
     }
