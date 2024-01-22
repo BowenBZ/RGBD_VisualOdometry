@@ -23,6 +23,7 @@ Frontend::Frontend(const Camera::Ptr& camera) {
     orb_ = cv::ORB::create(Config::get<int>("number_of_features") / (Config::get<int>("row_section_cnt") * Config::get<int>("col_section_cnt")),
                             Config::get<double>("scale_factor"),
                             Config::get<int>("level_pyramid"));
+    useActiveSearch_ = myslam::Config::get<int> ("use_feature_active_search");
     minMatchesToUseFlannFrameTracking_ = (size_t)Config::get<double>("min_matches_to_use_flann_frame_tracking");
     minMatchesToUseFlannMapTracking_ = (size_t)Config::get<double>("min_matches_to_use_flann_map_tracking");
     minDisRatio_ = Config::get<float>("match_ratio");
@@ -168,8 +169,8 @@ void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const
     matchedKptIdxDistanceMap_.clear();
     
     // mpt candidates that pass observation check for flann matching
-    Mat flannMptCandidateDes;
-    unordered_map<int, size_t> flannMptIdxToId; 
+    // Mat flannMptCandidateDes;
+    // unordered_map<int, size_t> flannMptIdxToId; 
 
     // mpt candidates that not outlier, for flann matching
     Mat moreFlannMptCandidatesDes;
@@ -186,15 +187,21 @@ void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const
             continue;
         }
 
-        hasMatchedKeypoint = frameCurr_->GetMatchedKeypoint(mpt, doDirectionCheck, kptIdx, distance, mayObserveMpt);
-
         // Construct candidate for flann
         moreFlannMptIdxToId[moreFlannMptCandidatesDes.rows] = mptId;
         moreFlannMptCandidatesDes.push_back(mpt->GetDescriptor());
-        if (mayObserveMpt) {
-            flannMptIdxToId[flannMptCandidateDes.rows] = mptId;
-            flannMptCandidateDes.push_back(mpt->GetDescriptor());
+
+        // If not using active search, just continue here to avoid extra search
+        if (!useActiveSearch_) {
+            continue;
         }
+
+        hasMatchedKeypoint = frameCurr_->GetMatchedKeypoint(mpt, doDirectionCheck, kptIdx, distance, mayObserveMpt);
+
+        // if (mayObserveMpt) {
+        //     flannMptIdxToId[flannMptCandidateDes.rows] = mptId;
+        //     flannMptCandidateDes.push_back(mpt->GetDescriptor());
+        // }
 
         if (!hasMatchedKeypoint) {
             continue;
@@ -226,20 +233,23 @@ void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const
     // }
     assert(matchedMptIdKptIdxMap_.size() == matchedKptIdxDistanceMap_.size());
 
-    if (matchedMptIdKptIdxMap_.size() < matchesToUseFlann) {
+    if (!useActiveSearch_ || matchedMptIdKptIdxMap_.size() < matchesToUseFlann) {
         MatchKeyPointsFlann(moreFlannMptCandidatesDes, moreFlannMptIdxToId);
 
         if (flannMatchedMptIdKptIdxMap_.size() > matchedMptIdKptIdxMap_.size()) {
-            printf("  Matched size: %zu is too mall, fallback to use Flann matching\n", matchedMptIdKptIdxMap_.size());
-        }
-        matchedMptIdKptIdxMap_.clear();
-        matchedMptIdKptIdxMap_.insert(flannMatchedMptIdKptIdxMap_.begin(), flannMatchedMptIdKptIdxMap_.end());
-        
-        matchedKptIdxMptIdMap_.clear();
-        matchedKptIdxMptIdMap_.insert(flannMatchedKptIdxMptIdMap_.begin(), flannMatchedKptIdxMptIdMap_.end());
+            if (useActiveSearch_) {
+                printf("  Active searched matched size: %zu is too mall, fallback to use Flann matching\n", matchedMptIdKptIdxMap_.size());
+            }
 
-        matchedKptIdxDistanceMap_.clear();
-        matchedKptIdxDistanceMap_.insert(flannMatchedKptIdxDistanceMap_.begin(), flannMatchedKptIdxDistanceMap_.end());
+            matchedMptIdKptIdxMap_.clear();
+            matchedMptIdKptIdxMap_.insert(flannMatchedMptIdKptIdxMap_.begin(), flannMatchedMptIdKptIdxMap_.end());
+        
+            matchedKptIdxMptIdMap_.clear();
+            matchedKptIdxMptIdMap_.insert(flannMatchedKptIdxMptIdMap_.begin(), flannMatchedKptIdxMptIdMap_.end());
+
+            matchedKptIdxDistanceMap_.clear();
+            matchedKptIdxDistanceMap_.insert(flannMatchedKptIdxDistanceMap_.begin(), flannMatchedKptIdxDistanceMap_.end());
+        }
     }
     assert(matchedMptIdKptIdxMap_.size() == matchedKptIdxDistanceMap_.size());
 
@@ -356,40 +366,42 @@ void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
         edge->setMeasurement(toVec2d(pts2d[index]));
         edge->setInformation(Eigen::Matrix2d::Identity());
         auto rk = new g2o::RobustKernelHuber();
-        rk->setDelta(sqrt(7.815));
+        rk->setDelta(sqrt(baInlierThres_));
         edge->setRobustKernel(rk);
 
         edges.push_back(edge);
         optimizer_.addEdge(edge);
     }
 
-    // first round optimization
-    optimizer_.initializeOptimization(0);
-    optimizer_.optimize(10);
+    vector<bool> edgeIsOutlier (edges.size(), false);
+    for (size_t iteration = 0; iteration < 4; ++iteration) {
+        poseVertex->setEstimate(pnpEstimatedPose);
+        optimizer_.initializeOptimization(0);
+        optimizer_.optimize(10);
 
-    // remove edge outliers
-    numInliers_ = 0;
-    for (size_t i = 0; i < edges.size(); ++i)
-    {
-        auto& edge = edges[i];
-        edge->computeError();
+        // Handle outliers
+        for (size_t i = 0; i < edges.size(); ++i)
+        {
+            auto& edge = edges[i];
+            if (edgeIsOutlier[i]) {
+                edge->computeError();
+            }
 
-        // chi2 is the (u^2 + v^2)
-        if (edge->chi2() > baInlierThres_) {
-            // level 1 edges won't be optimized later
-            edge->setLevel(1);
+            // chi2 is the (u^2 + v^2)
+            if (edge->chi2() > baInlierThres_) {
+                // level 1 edges won't be optimized later
+                edge->setLevel(1);
+                edgeIsOutlier[i] = true;
+            } else {
+                edge->setLevel(0);
+                edgeIsOutlier[i] = false;
+            }
+
+            if (iteration == 2) {
+                edge->setRobustKernel(nullptr);
+            }
         }
-
-        edge->setRobustKernel(nullptr);
-
-        auto idx = inliers.at<int>(i, 0);
-        ++numInliers_;
     }
-    cout << "  Size of inlier after 1st BA: " << numInliers_ << endl;
-
-    // Second round of BA. Reinitialize to only optimize level 0 edges
-    optimizer_.initializeOptimization(0);
-    optimizer_.optimize(10);
 
     // Collect the inlier points
     baInlierMptIdKptIdxMap_.clear();
@@ -397,10 +409,7 @@ void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
     numInliers_ = 0;
     for (size_t i = 0; i < edges.size(); ++i)
     {
-        auto& edge = edges[i];
-        edge->computeError();
-
-        if (edge->level() != 0 || edge->chi2() > baInlierThres_) {
+        if (edgeIsOutlier[i]) {
             continue;
         }
 
@@ -411,7 +420,7 @@ void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
         baInlierKptIdxSet_.insert(kptIdx);
         ++numInliers_;
     }
-    cout << "  Size of inlier after 2nd BA " << numInliers_ << endl;
+    cout << "  Size of inlier after BA " << numInliers_ << endl;
 
     // Set computed pose
     frameCurr_->SetTcw(poseVertex->estimate());

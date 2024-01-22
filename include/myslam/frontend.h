@@ -92,6 +92,7 @@ private:
     unordered_map<Mappoint::Ptr, size_t> tempMptKptIdxMap_;   // temp mpts id to kpt idx
 
     // parameters, see config/default.yaml
+    bool                    useActiveSearch_;       // if trying to use active search
     size_t                  minMatchesToUseFlannFrameTracking_;     // threshold to use flann for map matching
     size_t                  minMatchesToUseFlannMapTracking_;     // threshold to use flann for map matching
     float                   minDisRatio_;       // ratio for selecting flann good matches
