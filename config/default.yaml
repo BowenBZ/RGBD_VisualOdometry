@@ -39,7 +39,7 @@ match_ratio: 2.0
 active_covisible_keyframe_weight: 15
 
 # frontend paras
-ba_inlier_threshold: 5.991
+frontend_ba_inlier_threshold: 5.991
 use_feature_active_search: 0
 max_num_lost: 10
 min_inliers_for_good_estimation: 10
@@ -48,7 +48,7 @@ keyframe_rotation: 0.05
 keyframe_translation: 0.05
 
 # backend paras
-chi2_th: 5.991
+backend_ba_inlier_threshold: 5.991
 re_match_descriptor_distance: 5
 
 # viewer paras

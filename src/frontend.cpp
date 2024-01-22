@@ -27,7 +27,7 @@ Frontend::Frontend(const Camera::Ptr& camera) {
     minMatchesToUseFlannFrameTracking_ = (size_t)Config::get<double>("min_matches_to_use_flann_frame_tracking");
     minMatchesToUseFlannMapTracking_ = (size_t)Config::get<double>("min_matches_to_use_flann_map_tracking");
     minDisRatio_ = Config::get<float>("match_ratio");
-    baInlierThres_ = Config::get<double>("ba_inlier_threshold");
+    baInlierThres_ = Config::get<double>("frontend_ba_inlier_threshold");
     minInliersForGood_ = (size_t)Config::get<int>("min_inliers_for_good_estimation");
     maxLostFrames_ = Config::get<float>("max_num_lost");
     minInliersForKeyframe_ = (size_t)Config::get<int>("min_inliers_for_new_keyframe");

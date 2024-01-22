@@ -11,7 +11,7 @@ Backend::Backend(const Camera::Ptr camera): camera_(move(camera)) {
         g2o::make_unique<BlockSolverType>(g2o::make_unique<CSparseLinearSolverType>()));
     optimizer_.setAlgorithm(solver);
     
-    chi2Threshold_ = Config::get<double>("chi2_th");
+    baInlierThres_ = Config::get<double>("backend_ba_inlier_threshold");
     reMatchDescriptorDistance_ = Config::get<double>("re_match_descriptor_distance");
 
     backendRunning_ = true;
@@ -290,7 +290,6 @@ void Backend::OptimizeLocalMap()
         }
     }
 
-    const double deltaRGBD = sqrt(7.815);
     int edgeIndex = 0;
 
     // Create pose vertices for fixed keyframe and add all edges, also perform triangulation
@@ -348,7 +347,7 @@ void Backend::OptimizeLocalMap()
             edge->setMeasurement(toVec2d(kpt.pt));
             edge->setInformation(Eigen::Matrix<double, 2, 2>::Identity());
             auto rk = new g2o::RobustKernelHuber();
-            rk->setDelta(deltaRGBD);
+            rk->setDelta(sqrt(baInlierThres_));
             edge->setRobustKernel(rk);
             optimizer_.addEdge(edge);
 
@@ -372,44 +371,34 @@ void Backend::OptimizeLocalMap()
         }
     }
 
-    // Do first round optimization
     optimizer_.initializeOptimization(0);
-    optimizer_.optimize(10);
+    optimizer_.optimize(20);
 
-    // Find the outlier observations
+    double adjustedInlierThres = baInlierThres_;
     size_t outlierCnt = 0;
-    for (auto& [edge, kfAndMpt] : edgeToKfThenMpt_)
-    {
-        edge->computeError();
-        if (edge->chi2() > chi2Threshold_)
+    // Find the outlier observations
+    for(size_t iteration = 0; iteration < 5; ++iteration) {
+        outlierCnt = 0;
+        observingMptToRemove_.clear();
+        observingMptToRemoveSet_.clear();
+        for (auto& [edge, kfAndMpt] : edgeToKfThenMpt_)
         {
             auto& [kf, mpt] = kfAndMpt;
-            observingMptToRemove_.push_back(make_pair(kf, mpt->GetId()));
-            edge->setLevel(1);
-            ++outlierCnt;
-        }
-        edge->setRobustKernel(0);
-    }
-
-    optimizer_.initializeOptimization(0);
-    optimizer_.optimize(10);
-
-    // Find more outlier observations
-    for (auto& [edge, kfAndMpt] : edgeToKfThenMpt_)
-    {
-        // skip outlier of first round
-        if (edge->level() != 0) {
-            continue;
+            if (edge->chi2() > adjustedInlierThres)
+            {
+                observingMptToRemove_.push_back(make_pair(kf, mpt->GetId()));
+                observingMptToRemoveSet_.insert(mpt);
+                ++outlierCnt;
+            } else {
+                mpt->optimized_ = true;
+            }
         }
 
-        auto& [kf, mpt] = kfAndMpt;
-        edge->computeError();
-        if (edge->chi2() > chi2Threshold_) {
-            observingMptToRemove_.push_back(make_pair(kf, mpt->GetId()));
-            observingMptToRemoveSet_.insert(mpt);
-            ++outlierCnt;
+        double outlierRatio = outlierCnt / double(edgeToKfThenMpt_.size());
+        if (outlierRatio < 0.5) {
+            break;
         } else {
-            mpt->optimized_ = true;
+            adjustedInlierThres *= 2;
         }
     }
 

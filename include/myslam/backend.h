@@ -61,7 +61,7 @@ private:
     double                                  reMatchDescriptorDistance_;
     
     g2o::SparseOptimizer                    optimizer_;
-    double                                  chi2Threshold_;
+    double                                  baInlierThres_;
 
     unordered_map<size_t, pair<Frame::Ptr, VertexPose*>>                    kfIdToCovKfThenVertex_;
     unordered_map<size_t, pair<Mappoint::Ptr, VertexMappoint*>>             mptIdToMptThenVertex_;
