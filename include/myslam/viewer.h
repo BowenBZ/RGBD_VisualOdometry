@@ -21,8 +21,11 @@ public:
 
     Viewer() {
         viewer_running_ = true;
-        viewer_thread_ = std::thread(std::bind(&Viewer::ThreadLoop, this));
+        // viewer_thread_ = std::thread(std::bind(&Viewer::ThreadLoop, this));
+        Setup();
     }
+
+    void SingleStep();
 
     void Stop() {
         viewer_running_ = false;
@@ -53,7 +56,12 @@ private:
     unordered_set<size_t> matchedKptsIdx_;
     unordered_set<size_t> inlierKptsIdx_;
 
+    pangolin::OpenGlRenderState vis_camera_;
+    pangolin::View vis_display_;
+
     void ThreadLoop();
+
+    void Setup();
 
     void DrawFrame(Frame::Ptr frame, const float* color);
 

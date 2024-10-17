@@ -25,7 +25,7 @@ class Frame : public enable_shared_from_this<Frame>
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    typedef shared_ptr<Frame> Ptr;
+    typedef std::shared_ptr<Frame> Ptr;
 
     double              timestamp_;     // when it is recorded
     Camera::Ptr         camera_;        // Pinhole RGBD Camera model 
@@ -50,7 +50,7 @@ public:
 
     void SetTcw(const SE3 pose) {
         unique_lock<mutex> lck(poseMutex_);
-        T_c_w_ = move(pose);
+        T_c_w_ = std::move(pose);
     }
     
     // Get the reference to the color image

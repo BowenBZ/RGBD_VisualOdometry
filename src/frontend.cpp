@@ -438,7 +438,7 @@ bool Frontend::IsGoodEstimation()
     }
     // check if the motion is too large
     SE3 T_r_c = framePrev_->GetTcw() * frameCurr_->GetTcw().inverse();
-    Sophus::Vector6d d = T_r_c.log();
+    Vector6d d = T_r_c.log();
     if (d.norm() > 5.0)
     {
         cout << "Current tracking is rejected because motion is too large: " << d.norm() << endl;
@@ -454,7 +454,7 @@ bool Frontend::IsKeyframe()
     }
 
     SE3 T_r_c = framePrev_->GetTcw() * frameCurr_->GetTcw().inverse();
-    Sophus::Vector6d d = T_r_c.log();
+    Vector6d d = T_r_c.log();
     Vector3d trans = d.head<3>();
     Vector3d rot = d.tail<3>();
     if (rot.norm() > keyFrameMinRot_ || trans.norm() > keyFrameMinTrans_)

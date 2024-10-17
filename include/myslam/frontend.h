@@ -29,7 +29,7 @@ class Frontend
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    typedef shared_ptr<Frontend> Ptr;
+    typedef std::shared_ptr<Frontend> Ptr;
     typedef unordered_map<size_t, Mappoint::Ptr> TrackingMap;
 
     enum VOState {
@@ -43,7 +43,7 @@ public:
     bool AddFrame( const Frame::Ptr frame );      // entry point for application
 
     void SetViewer( const Viewer::Ptr viewer) {
-        viewer_ = move(viewer);
+        viewer_ = std::move(viewer);
     }
 
     VOState GetState() const { 

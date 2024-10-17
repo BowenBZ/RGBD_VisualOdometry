@@ -23,7 +23,7 @@ class MapManager
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    typedef shared_ptr<MapManager> Ptr;
+    typedef std::shared_ptr<MapManager> Ptr;
     typedef unordered_map<size_t, Mappoint::Ptr > MappointIdToPtr;
     typedef unordered_map<size_t, Frame::Ptr > KeyframeIdToPtr;
 

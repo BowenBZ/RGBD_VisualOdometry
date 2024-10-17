@@ -60,7 +60,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     UnaryEdgeProjection(const Vector3d pos, const Camera::Ptr camera) : 
-        _mappointPos(move(pos)), _camera(move(camera)) {}
+        _mappointPos(std::move(pos)), _camera(std::move(camera)) {}
 
     // compute the projection pixel error
     virtual void computeError() override {
@@ -123,7 +123,7 @@ class BinaryEdgeProjection : public g2o::BaseBinaryEdge<2, Vector2d, VertexPose,
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
     BinaryEdgeProjection(const Camera::Ptr camera) : 
-        _camera(move(camera)) { }
+        _camera(std::move(camera)) { }
 
     virtual void computeError() override {
         const VertexPose *v0 = static_cast<VertexPose *>(_vertices[0]);

@@ -114,17 +114,21 @@ docker -t myslam /path-to-this-repo/docker/
 
 ## Explanation of VO work flow
 
-This repos is only a VO. It uses the following techniques. 
+This repos is only a VO, i.e. without loop clousure correction. It uses the following techniques. 
 
 * Use `ORB` feature to extract features, descriptors
-* Establish a map to store active mappoints and do the feature matching with new coming frame
-    * Remove mappoints points and add new space points to control the scale of the map
-* Use 3D-2D to calculate the pose
-    * Use `EPNP` to calculate the initial value of frame's pose
-    * Use BA to estimate the final pose of the frame
+* Use active search or flann to do the feature matching between mappoints and keypoints
+* Frontend uses 3D-2D methods to calculate the pose
+  * Use last frame's temporary mappoints to estimate an coarse pose, and use mappoints from tracking map to get a fine pose
+  * For each round of calculation
+    * Use `P3P` to calculate the initial value of frame's pose
+    * Use motion-only BA to estimate the final pose of the frame
+* Frontend decides keyframe which will be added to backends
 * Local backend
-    * If backend provided, use the local backend to optimize the position of active mappoints and the poses of frames
-    * If backend not provided, use the triangulation to optimize the position of active mappoints
+  * Project old mappoints to new keyframe to add more observations
+  * Project new mappoints to old keyframes to add more observations
+  * Bundle adjustment for both keyframe poses and mappoint positions
+  * Use MapManager to construct a new tracking map for frontend
 
 The workflow is as the following image. 
 

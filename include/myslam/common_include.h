@@ -12,17 +12,19 @@
 #include <Eigen/Geometry>
 using Eigen::Vector2d;
 using Eigen::Vector3d;
+using Eigen::Matrix4f;
 
 typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> MatXX;
 typedef Eigen::Matrix<double, Eigen::Dynamic, 1> VecX;
 typedef Eigen::Matrix<double, 3, 4> Mat34;
+typedef Eigen::Matrix<double, 6, 1> Vector6d;
 
 // for Sophus
-#include <sophus/se3.hpp>
-#include <sophus/so3.hpp>
+// #include <sophus/se3.hpp>
+// typedef Sophus::SE3d SE3;
 
-typedef Sophus::SE3d SE3;
-typedef Sophus::SO3d SO3;
+#include "myslam/math/se3.hpp"
+typedef myslam::math::SE3<double> SE3;
 
 // for cv
 #include <opencv2/core/core.hpp>

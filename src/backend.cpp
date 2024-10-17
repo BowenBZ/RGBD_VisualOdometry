@@ -6,7 +6,7 @@
 namespace myslam
 {
 
-Backend::Backend(const Camera::Ptr camera): camera_(move(camera)) {
+Backend::Backend(const Camera::Ptr camera): camera_(std::move(camera)) {
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
         g2o::make_unique<BlockSolverType>(g2o::make_unique<CSparseLinearSolverType>()));
     optimizer_.setAlgorithm(solver);

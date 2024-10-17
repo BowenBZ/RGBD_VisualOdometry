@@ -67,6 +67,47 @@ void Viewer::ThreadLoop() {
     }
 }
 
+void Viewer::Setup() {
+    pangolin::CreateWindowAndBind("RGBD_VO", 1024, 768);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    pangolin::OpenGlRenderState vis_camera(
+        pangolin::ProjectionMatrix(1024, 768, 400, 400, 512, 384, 0.1, 1000),
+        pangolin::ModelViewLookAt(0, -5, -10, 0, 0, 0, 0.0, -1.0, 0.0));
+    vis_camera_ = std::move(vis_camera);
+
+    // Add named OpenGL viewport to window and provide 3D Handler
+    vis_display_ =
+        pangolin::CreateDisplay()
+            .SetBounds(0.0, 1.0, 0.0, 1.0, -1024.0f / 768.0f)
+            .SetHandler(new pangolin::Handler3D(vis_camera_));
+    
+    vis_display_.Activate(vis_camera_);
+}
+
+void Viewer::SingleStep() {
+    const float red[3] = {1.0, 0, 0};
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+
+    if (current_frame_) {
+        DrawFrame(current_frame_, red);
+        // FollowCurrentFrame(vis_camera);
+
+        cv::Mat img = PlotFrameImage();
+        cv::imshow("image", img);
+        cv::waitKey(1);
+    }
+
+    // DrawOtherKeyFrames();
+    DrawMapPoints();
+
+    pangolin::FinishFrame();
+}
+
 void Viewer::DrawOtherKeyFrames() {
     const float normalColor[3] = {0, 0, 1.0};
 
@@ -112,7 +153,7 @@ void Viewer::DrawFrame(Frame::Ptr frame, const float* color) {
 
     glPushMatrix();
 
-    Sophus::Matrix4f m = Twc.matrix().template cast<float>();
+    Matrix4f m = Twc.matrix().template cast<float>();
     glMultMatrixf((GLfloat*)m.data());
 
     if (color == nullptr) {

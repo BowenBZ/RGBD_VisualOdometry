@@ -71,7 +71,8 @@ int main ( int argc, char** argv )
     myslam::Camera::Ptr camera ( new myslam::Camera );
     myslam::Frontend::Ptr frontend ( new myslam::Frontend(camera) );
     myslam::Viewer::Ptr viewer;
-    if (myslam::Config::get<int> ( "enable_viewer" )) {
+    const bool enable_viewer = myslam::Config::get<int> ( "enable_viewer" );
+    if (enable_viewer) {
         cout << "Enable to show image" << endl; 
         viewer = myslam::Viewer::Ptr( new myslam::Viewer );
         frontend->SetViewer(viewer);
@@ -110,6 +111,10 @@ int main ( int argc, char** argv )
         }
 
         writePosetoFile(fout, std::to_string(pFrame->timestamp_), pFrame->GetTcw().inverse());
+
+        if (enable_viewer) {
+            viewer->SingleStep();
+        }
     }
 
     fout.close();

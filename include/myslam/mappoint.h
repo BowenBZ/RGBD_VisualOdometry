@@ -21,7 +21,7 @@ class Mappoint
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    typedef shared_ptr<Mappoint> Ptr;
+    typedef std::shared_ptr<Mappoint> Ptr;
 
     bool        triangulated_;          // whether have been triangulated in frontend
 
@@ -48,7 +48,7 @@ public:
 
     void SetPosition(const Vector3d pos) {
         unique_lock<mutex> lock(posMutex_);
-        pos_ = move(pos);
+        pos_ = std::move(pos);
     }
 
     const size_t& GetId() const { 
@@ -72,12 +72,12 @@ public:
     }
 
     // only be called by keyframe object
-    void AddObservedByKeyframe(const shared_ptr<Frame>& kf, const size_t kptIdx);
+    void AddObservedByKeyframe(const std::shared_ptr<Frame>& kf, const size_t kptIdx);
     
     // only be called by keyframe object
     void RemoveObservedByKeyframe(const size_t kfId);
 
-    void GetObservedByKeyframesMap(unordered_map<size_t, size_t>& observedByKfIdToKptIdx) {
+    void GetObservedByKeyframesMap(std::unordered_map<size_t, size_t>& observedByKfIdToKptIdx) {
         unique_lock<mutex> lock(observationMutex_);
         observedByKfIdToKptIdx.clear();
         observedByKfIdToKptIdx.insert(observedByKfIdToKptIdx_.begin(), observedByKfIdToKptIdx_.end());
