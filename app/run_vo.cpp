@@ -117,12 +117,12 @@ int main ( int argc, char** argv )
         }
     }
 
+    frontend->Stop();
+
     fout.close();
     cout << "Finished. \nWrote trajectory to " << outputPath << endl; 
     cout << "\nPress <enter> to continue\n"; 
     cin.get();
-
-    frontend->Stop();
 
     return 0;
 }

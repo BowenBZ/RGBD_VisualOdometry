@@ -21,19 +21,16 @@ public:
     SE3() {
         rotation_ = Matrix3::Identity();
         position_ = Vector3::Zero();
-        algebra_ = SE3::log(rotation_, position_);
     }
 
     SE3(const Matrix3& rotation, const Vector3& position): rotation_(rotation), position_(position) {
         assert(SE3::isValidRotation(rotation));
-        algebra_ = SE3::log(rotation_, position_);
     }
 
     SE3(const Matrix4& transform) {
         assert(SE3::isValidTransform(transform));
         rotation_ = transform.template block<3, 3>(0, 0);
         position_ = transform.template block<3, 1>(0, 3);
-        algebra_ = SE3::log(rotation_, position_);
     }
 
 #pragma getter
@@ -65,7 +62,11 @@ public:
     }
 
     // Return the Lie algebra
-    Vector6 log() const {
+    Vector6 log() {
+        if (!algebraCalculated_) {
+            algebra_ = SE3::log(rotation_, position_);
+            algebraCalculated_ = true;
+        }
         return algebra_;
     }
 
@@ -151,7 +152,8 @@ private:
     Matrix3 rotation_;
     Vector3 position_;
     
-    // [rho, phi]^T, phi is so3
+    bool algebraCalculated_;
+    // [rho, phi]^T, phi is so3. Only get initialized when log is called the first time.
     Vector6 algebra_;
 
     static bool isValidRotation(const Matrix3& rotation) {
