@@ -25,12 +25,14 @@ public:
     }
 
     SE3(const Matrix3& rotation, const Vector3& position): rotation_(rotation), position_(position) {
+        assert(SE3::isValidRotation(rotation));
         algebra_ = SE3::log(rotation_, position_);
     }
 
     SE3(const Matrix4& transform) {
-        rotation_ = transform.block(0, 0, 3, 3);
-        position_ = transform.block(0, 3, 3, 1);
+        assert(SE3::isValidTransform(transform));
+        rotation_ = transform.template block<3, 3>(0, 0);
+        position_ = transform.template block<3, 1>(0, 3);
         algebra_ = SE3::log(rotation_, position_);
     }
 
@@ -49,16 +51,16 @@ public:
     // Return the rotation and translation matrix
     Matrix34 matrix3x4() const {
         Matrix34 output;
-        output.block(0, 0, 3, 3) = rotation_;
-        output.block(0, 3, 3, 1) = position_;
+        output.template block<3, 3>(0, 0) = rotation_;
+        output.template block<3, 1>(0, 3) = position_;
         return output;
     }
 
     // Return the 4x4 matrix
     Matrix4 matrix() const {
-        Matrix4 output;
-        output.block(0, 0, 3, 3) = rotation_;
-        output.block(0, 3, 3, 1) = position_;
+        Matrix4 output = Matrix4::Identity();
+        output.template block<3, 3>(0, 0) = rotation_;
+        output.template block<3, 1>(0, 3) = position_;
         return output;
     }
 
@@ -67,8 +69,6 @@ public:
         return algebra_;
     }
 
-#pragma transform
-
     // Return the inverse
     SE3 inverse() const {
         Matrix3 inverseR = this->rotation_.transpose();
@@ -76,10 +76,12 @@ public:
         return SE3(inverseR, inverseP);
     }
 
+#pragma exp & log
+
     // Return the Lie group
     static SE3 exp(const Vector6& algebra) {
         // Calculate so3 -> SO3
-        Vector3 phi = algebra.block(0, 0, 3, 1);
+        Vector3 phi = algebra.template tail<3>();
         FLOAT theta = phi.norm();
         Vector3 a = phi.normalized();
         Matrix3 aUp;
@@ -91,7 +93,7 @@ public:
 
         // Calculate translation part
         Matrix3 J = sinTheta / theta * Matrix3::Identity() + (1 - sinTheta / theta) * a * a.transpose() + (1 - cosTheta) / theta * aUp;
-        Vector3 rho = algebra.block(3, 0, 3, 1);
+        Vector3 rho = algebra.template head<3>();
         Vector3 p = J * rho;
 
         return SE3(R, p);
@@ -99,6 +101,8 @@ public:
 
     // Return the Lie algebra
     static Vector6 log(const Matrix3& rotation, const Vector3& position) {
+        assert(SE3::isValidRotation(rotation));
+
         Vector6 algebra;
 
         // SO3 -> so3
@@ -108,8 +112,7 @@ public:
         Vector3 a;
         Eigen::EigenSolver<Matrix3> solver(rotation);
         for (size_t i = 0; i < 3; ++i) {
-            // printf("eigen value: %zu, %f\n", i, solver.eigenvalues()[i].real());
-            if (std::abs(solver.eigenvalues()[i].real() - 1.0) < 1e-3) {
+            if (std::abs(solver.eigenvalues()[i].real() - 1.0) < 1e-6) {
                 solveSuccess = true;
                 a = solver.eigenvectors().col(i).real();
                 break;
@@ -118,7 +121,7 @@ public:
         assert(solveSuccess);
 
         Vector3 phi = theta * a;
-        algebra.block(0, 0, 3, 1) = phi;
+        algebra.template tail<3>() = phi;
 
         // Calculate translation part
         Matrix3 aUp;
@@ -128,7 +131,7 @@ public:
         Matrix3 J = sinTheta / theta * Matrix3::Identity() + (1 - sinTheta / theta) * a * a.transpose() + (1 - cosTheta) / theta * aUp;
 
         Vector3 rho = J.inverse() * position;
-        algebra.block(3, 0, 3, 1) = rho;
+        algebra.template head<3>() = rho;
 
         return algebra;
     }
@@ -147,7 +150,30 @@ public:
 private:
     Matrix3 rotation_;
     Vector3 position_;
+    
+    // [rho, phi]^T, phi is so3
     Vector6 algebra_;
+
+    static bool isValidRotation(const Matrix3& rotation) {
+        if (!(rotation.transpose() * rotation).isApprox(Matrix3::Identity(), 1e-6)) {
+            return false;
+        }
+
+        if (std::abs(rotation.determinant() - 1.0) > 1e-6) {
+            return false;
+        }
+
+        return true;
+    }
+
+    static bool isValidTransform(const Matrix4& transform) {
+        if (transform(3, 0) != 0.0 || transform(3, 1) != 0.0 ||
+            transform(3, 2) != 0.0 || transform(3, 3) != 1.0) {
+                return false;
+            }
+
+        return isValidRotation(transform.template block<3, 3>(0, 0));
+    }
 };
 
 }
