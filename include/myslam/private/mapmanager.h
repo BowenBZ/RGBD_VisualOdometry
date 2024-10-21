@@ -12,8 +12,8 @@
 #define MAPMANAGER_H
 
 #include "myslam/common_include.h"
-#include "myslam/frame.h"
-#include "myslam/mappoint.h"
+#include "myslam/private/frame.h"
+#include "myslam/private/mappoint.h"
 #include "myslam/config.h"
 
 namespace myslam

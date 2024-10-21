@@ -1,7 +1,7 @@
-#include "myslam/backend.h"
+#include "myslam/private/backend.h"
 
-#include "myslam/util.h"
-#include "myslam/mapmanager.h"
+#include "myslam/private/util.h"
+#include "myslam/private/mapmanager.h"
 
 namespace myslam
 {

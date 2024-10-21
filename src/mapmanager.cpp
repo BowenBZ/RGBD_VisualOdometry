@@ -6,7 +6,7 @@
  * MapManager will use the dataMutex_ when modifying or returning the mappoints or keyframes.
  */
 
-#include "myslam/mapmanager.h"
+#include "myslam/private/mapmanager.h"
 
 namespace myslam
 {

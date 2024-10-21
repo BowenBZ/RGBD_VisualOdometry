@@ -13,8 +13,8 @@
 
 #include "myslam/common_include.h"
 #include "myslam/camera.h"
-#include "myslam/frame.h"
-#include "myslam/g2o_types.h"
+#include "myslam/private/frame.h"
+#include "myslam/private/g2o_types.h"
 
 namespace myslam {
 

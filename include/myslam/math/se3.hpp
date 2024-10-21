@@ -33,6 +33,8 @@ public:
         position_ = transform.template block<3, 1>(0, 3);
     }
 
+    // TODO: assign operator
+
 #pragma getter
 
     // Return the 3x3 rotation matrix

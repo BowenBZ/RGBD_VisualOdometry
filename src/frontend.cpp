@@ -7,8 +7,8 @@
 #include <algorithm>
 
 #include "myslam/config.h"
-#include "myslam/g2o_types.h"
-#include "myslam/mapmanager.h"
+#include "myslam/private/g2o_types.h"
+#include "myslam/private/mapmanager.h"
 
 namespace myslam
 {
@@ -49,10 +49,16 @@ Frontend::Frontend(const Camera::Ptr& camera) {
     state_ = INITIALIZING;
 }
 
-bool Frontend::AddFrame(const Frame::Ptr frame)
+bool Frontend::AddFrame(const Measurement& measurement)
 {
     cout << "Frontend status: " << VOStateStr[state_] << endl;
     framePrev_ = frameCurr_;
+
+    Frame::Ptr frame = myslam::Frame::CreateFrame(
+            measurement.timestamp,
+            camera_,
+            measurement.color,
+            measurement.depth);
     frameCurr_ = frame;
 
     frameCurr_->ExtractKeyPointsAndComputeDescriptors(orb_);
@@ -90,6 +96,10 @@ bool Frontend::AddFrame(const Frame::Ptr frame)
     }
 
     return true;
+}
+
+SE3 Frontend::GetPose() {
+    return frameCurr_->GetTcw();
 }
 
 void Frontend::InitializationHandler() {

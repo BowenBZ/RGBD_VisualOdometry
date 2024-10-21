@@ -6,9 +6,9 @@
 #include <stdlib.h>
 #include <pangolin/pangolin.h>
 #include "myslam/common_include.h"
-#include "myslam/frame.h"
-#include "myslam/util.h"
-#include "myslam/mapmanager.h"
+#include "myslam/private/frame.h"
+#include "myslam/private/util.h"
+#include "myslam/private/mapmanager.h"
 #include <opencv2/features2d/features2d.hpp>
 
 namespace myslam {

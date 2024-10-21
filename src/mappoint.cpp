@@ -1,9 +1,9 @@
-#include "myslam/mappoint.h"
+#include "myslam/private/mappoint.h"
 
 #include "myslam/common_include.h"
-#include "myslam/util.h"
-#include "myslam/frame.h"
-#include "myslam/mapmanager.h"
+#include "myslam/private/util.h"
+#include "myslam/private/frame.h"
+#include "myslam/private/mapmanager.h"
 
 namespace myslam
 {

@@ -1,9 +1,9 @@
-#include "myslam/frame.h"
+#include "myslam/private/frame.h"
 
 #include <algorithm>
 
-#include "myslam/util.h"
-#include "myslam/mapmanager.h"
+#include "myslam/private/util.h"
+#include "myslam/private/mapmanager.h"
 
 namespace myslam
 {

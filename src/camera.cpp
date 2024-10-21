@@ -20,7 +20,7 @@
 #include "myslam/camera.h"
 
 #include "myslam/config.h"
-#include "myslam/util.h"
+#include "myslam/private/util.h"
 
 namespace myslam
 {

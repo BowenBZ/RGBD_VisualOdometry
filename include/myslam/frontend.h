@@ -17,13 +17,20 @@
 #include <opencv2/features2d/features2d.hpp>
 
 #include "myslam/common_include.h"
-#include "myslam/frame.h"
-#include "myslam/mappoint.h"
+#include "myslam/private/frame.h"
+#include "myslam/private/mappoint.h"
 #include "myslam/viewer.h"
-#include "myslam/backend.h"
+#include "myslam/private/backend.h"
 
 namespace myslam 
 {
+
+typedef struct {
+    double timestamp;
+    Mat color;
+    Mat depth;
+} Measurement;
+
 class Frontend
 {
 public:
@@ -40,7 +47,11 @@ public:
 
     Frontend(const Camera::Ptr& camera);
     
-    bool AddFrame( const Frame::Ptr frame );      // entry point for application
+    // entry point for application
+    bool AddFrame(const Measurement& measurement);
+
+    // Get the latest pose
+    SE3 GetPose();
 
     void SetViewer( const Viewer::Ptr viewer) {
         viewer_ = std::move(viewer);

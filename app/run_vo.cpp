@@ -12,7 +12,6 @@
 #include "myslam/config.h"
 #include "myslam/frontend.h"
 #include "myslam/viewer.h"
-#include "myslam/frame.h"
 
 void writePosetoFile(ofstream& outputFile, const string& timestamp, const SE3& Twc) {
     Vector3d translation = Twc.translation();
@@ -91,16 +90,17 @@ int main ( int argc, char** argv )
             cout << "Frame missing" << endl;
             break;
         }
-        myslam::Frame::Ptr pFrame = myslam::Frame::CreateFrame(
+
+        myslam::Measurement measurement {
             rgbTimes[i],
-            camera,
             color,
-            depth);
+            depth
+        };
 
         cout << "Image #" << i << endl;
         boost::timer::cpu_timer timer;
 
-        frontend->AddFrame ( pFrame );
+        frontend->AddFrame(measurement);
         
         boost::timer::cpu_times elapsed_times(timer.elapsed());
         cout << "Time cost (ms): " << (elapsed_times.user + elapsed_times.system) / pow(10.0, 6.0) << endl << endl;
@@ -110,7 +110,8 @@ int main ( int argc, char** argv )
             break;
         }
 
-        writePosetoFile(fout, std::to_string(pFrame->timestamp_), pFrame->GetTcw().inverse());
+        SE3 T_c_w = frontend->GetPose();
+        writePosetoFile(fout, std::to_string(rgbTimes[i]), T_c_w.inverse());
 
         if (enable_viewer) {
             viewer->SingleStep();

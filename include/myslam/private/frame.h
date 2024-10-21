@@ -15,7 +15,7 @@
 
 #include "myslam/common_include.h"
 #include "myslam/camera.h"
-#include "myslam/mappoint.h"
+#include "myslam/private/mappoint.h"
 
 namespace myslam 
 {
@@ -152,8 +152,8 @@ private:
     vector<KeyPoint>        keypoints_;         // detected keypoints
     Mat                     descriptors_;       // extracted descriptors
 
-    size_t                  imgCols_;                         // width of color image
-    size_t                  imgRows_;                         // height of color image
+    size_t                  imgCols_;                        // width of color image
+    size_t                  imgRows_;                        // height of color image
     size_t                  gridSize_;                       // pixel's grid size
     size_t                  gridColCnt_;                     // count of grid in image cols
     size_t                  gridRowCnt_;                     // count of grid in image rows
@@ -164,8 +164,8 @@ private:
     double                  bestSecondaryDistanceRatio_;     // min ratio between best match and secondary match to accept the best match 
 
     mutex                           observationMutex_;
-    unordered_map<size_t, size_t>   observingMptIdToKptIdxMap_;          // observing mpt to respective keypoint idx
     unordered_map<size_t, size_t>   kptIdxToObservingMptIdMap_;          // keypoint idx to respective mpt id
+    unordered_map<size_t, size_t>   observingMptIdToKptIdxMap_;          // observing mpt to respective keypoint idx
 
     unordered_map<size_t, size_t>   allCovisibleKfIdToWeight_;    // All covisible keyframe 
     unordered_set<size_t>           allCovisibleKfIds_;           // All covisible keyframe ids
