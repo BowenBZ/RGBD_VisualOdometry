@@ -413,6 +413,7 @@ void Backend::OptimizeLocalMap()
 
 void Backend::UpdateFrontendTrackingMap() {
 
+    // Also write update back at this step
     frontendMapUpdateHandler_([&](unordered_map<size_t, Mappoint::Ptr>& trackingMap){
         
         for (const auto &[_, kfAndVertex] : kfIdToCovKfThenVertex_) {

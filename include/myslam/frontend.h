@@ -31,6 +31,22 @@ typedef struct {
     Mat depth;
 } Measurement;
 
+typedef struct {
+    bool                    useActiveSearch;   // If trying to use active search
+
+    size_t                  minMatchesToUseFlannFrameTracking; // Threshold to use flann for frame-to-frame data association
+    size_t                  minMatchesToUseFlannMapTracking;   // Threshold to use flann for local map-to-frame data association
+    float                   minDisRatio;       // Ratio for selecting flann good matches
+
+    double                  baInlierThres;     // Threshold to be consider as an inlier after BA
+    size_t                  minInliersForGood; // Minimum inliers to treat current frame as good
+    size_t                  minInliersForKeyframe; // Minimum inliers to consider current frame as keyframe
+    double                  keyFrameMinRot;    // minimal rotation of two key-frames
+    double                  keyFrameMinTrans;  // minimal translation of two key-frames
+
+    size_t                  maxLostFrames;     // Max number of lost tracking frames
+} FrontendConfig;
+
 class Frontend
 {
 public:
@@ -71,25 +87,27 @@ private:
     };                                          // used for logging
 
     FrameConfig             frameConfig_;
+    FrontendConfig          frontendConfig_;
 
     Camera::Ptr             camera_;
     Viewer::Ptr             viewer_;
     Backend::Ptr            backend_;
+    MapManager::Ptr         mapManager_;
 
     VOState                 state_;             // current VO status
     size_t                  accuLostFrameNums_; // number of lost times
 
     Frame::Ptr              framePrev_;         // last frame
     Frame::Ptr              frameCurr_;         // current frame 
-    
-    TrackingMap             trackingMap_;  // the local tracking map
 
-    cv::Ptr<cv::ORB>        orb_;               // orb detector and computer 
+    cv::Ptr<cv::ORB>        orb_;               // Orb detector and computer 
     cv::FlannBasedMatcher   flannMatcher_;      // flann matcher used if active search fails
 
-    unordered_map<size_t, size_t>   matchedMptIdKptIdxMap_;     // matched mappoint id to keypoint idx
-    unordered_map<size_t, size_t>   matchedKptIdxMptIdMap_;     // matched keypoint idx to mappoint id
-    unordered_map<size_t, double>   matchedKptIdxDistanceMap_;  // matched keypoint idx to distance
+    TrackingMap             trackingMap_;       // the local tracking map
+
+    // Matched (mappoint id <-> keypoint idx of current frame)
+    unordered_map<size_t, size_t>   matchedMptIdToKptIdx_;
+    unordered_map<size_t, size_t>   matchedKptIdxToMptId_;
 
     unordered_map<size_t, size_t>   flannMatchedMptIdKptIdxMap_;     // matched mappoint id to keypoint idx
     unordered_map<size_t, size_t>   flannMatchedKptIdxMptIdMap_;     // matched keypoint idx to mappoint id
@@ -105,16 +123,7 @@ private:
     unordered_map<Mappoint::Ptr, size_t> tempMptKptIdxMap_;   // temp mpts id to kpt idx
 
     // parameters, see config/default.yaml
-    bool                    useActiveSearch_;       // if trying to use active search
-    size_t                  minMatchesToUseFlannFrameTracking_;     // threshold to use flann for map matching
-    size_t                  minMatchesToUseFlannMapTracking_;     // threshold to use flann for map matching
-    float                   minDisRatio_;       // ratio for selecting flann good matches
-    double                  baInlierThres_;     // threshold to be consider as an inlier after BA
-    size_t                  minInliersForGood_; // minimum inliers to treat current frame as good
-    size_t                  maxLostFrames_;     // max number of continuous lost times
-    size_t                  minInliersForKeyframe_; // minimum inliers to consider current frame as keyframe
-    double                  keyFrameMinRot_;    // minimal rotation of two key-frames
-    double                  keyFrameMinTrans_;  // minimal translation of two key-frames
+    
     
     mutex                   trackingMapMutex_;  // mutex for update tracking map
 
@@ -125,13 +134,13 @@ private:
     // update tracking map, called by backend
     void UpdateTrackingMap(function<void(TrackingMap&)> updater);
 
-    // match extracted features in tracking map
+    // Find matched mappoints in tracking map for keypoints extracted from current frame
     void MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const bool doDirectionCheck, const size_t matchesToUseFlann);
     // match keypoints by flann
     void MatchKeyPointsFlann(const Mat& flannMptCandidateDes, unordered_map<int, size_t>& flannMptIdxToId);
 
-    // estimate the pose with 3D-2D methods (mappoint, keypoint)
-    void EstimatePoseMotionOnlyBA(TrackingMap& trackingMap); 
+    // Estimate the pose with 3D-2D methods (mappoint, keypoint)
+    void EstimateCurrentFramePose(TrackingMap& trackingMap, const bool doMotionBA); 
 
     // measure the estimation quality
     bool IsGoodEstimation(); 

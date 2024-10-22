@@ -34,7 +34,7 @@ public:
     
     void AddKeyframe(const Frame::Ptr& frame) {
         unique_lock<mutex> lck(mutex_);
-        keyframesDict_[ frame->GetId() ] = frame;
+        keyframesDict_[frame->GetId()] = frame;
     }
 
     Frame::Ptr GetKeyframe(const size_t id) {

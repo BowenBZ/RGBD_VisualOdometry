@@ -33,6 +33,7 @@ public:
     }
 
     void SetCurrentFrame(
+        const cv::Mat& colorImage,
         const Frame::Ptr& current_frame, 
         const unordered_set<size_t>& matchedKptsIdx,
         const unordered_set<size_t>& inlierKptsIdx);
@@ -50,6 +51,7 @@ private:
     MapManager::KeyframeIdToPtr all_keyframes_;
     MapManager::MappointIdToPtr all_mappoints_;
     MapManager::MappointIdToPtr active_mappoints_;
+    cv::Mat colorImage_;
     Frame::Ptr current_frame_;
     KeyPointSet keypointsCurr_;
 
@@ -72,7 +74,7 @@ private:
     void FollowCurrentFrame(pangolin::OpenGlRenderState& vis_camera);
 
     /// plot the features in current frame into an image
-    cv::Mat PlotFrameImage();
+    void PlotFrameImage();
 
     // Get keypoint color
     cv::Scalar GetKeypointColor(size_t kptIdx);

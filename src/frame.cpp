@@ -38,26 +38,23 @@ Frame::Frame (  const FrameConfig config,
     config_ = config;
 }
 
-double Frame::GetDepth ( const KeyPoint& kp )
+double Frame::GetDepth(const KeyPoint& kp)
 {
     int x = cvRound(kp.pt.x);
     int y = cvRound(kp.pt.y);
     ushort d = depth_.ptr<ushort>(y)[x];
-    if ( d!=0 )
-    {
-        return double(d)/camera_->GetDepthScale();
+    if (d != 0) {
+        return double(d) / camera_->GetDepthScale();
     }
-    else 
-    {
-        // check the nearby points 
+    else {
+        // Check the nearby points 
         int dx[4] = {-1,0,1,0};
         int dy[4] = {0,-1,0,1};
-        for ( int i=0; i<4; i++ )
+        for (int i = 0; i < 4; i++)
         {
-            d = depth_.ptr<ushort>( y+dy[i] )[x+dx[i]];
-            if ( d!=0 )
-            {
-                return double(d)/camera_->GetDepthScale();
+            d = depth_.ptr<ushort>(y + dy[i])[x + dx[i]];
+            if (d != 0) {
+                return double(d) / camera_->GetDepthScale();
             }
         }
     }

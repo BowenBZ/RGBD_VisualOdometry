@@ -1,5 +1,5 @@
 %YAML:1.0
-# The tum dataset directory with the associate.txt fiel, change it to yours! 
+# The tum dataset directory with the associate.txt, change it to yours! 
 dataset_dir: /Users/bowen/Source/dataset/rgbd_dataset_freiburg1_room
 
 # The output trajectory file directory
@@ -22,11 +22,11 @@ frame.width: 640
 frame.height: 480
 
 # keypoints extraction paras
-number_of_features: 500
-scale_factor: 1.2
-level_pyramid: 8
-row_section_cnt: 2
-col_section_cnt: 2
+frontend.number_of_features: 500
+frontend.scale_factor: 1.2
+frontend.level_pyramid: 8
+frontend.row_section_cnt: 2
+frontend.col_section_cnt: 2
 
 # active feature matching paras
 pixel_grid_size: 10

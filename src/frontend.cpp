@@ -17,24 +17,25 @@ Frontend::Frontend(const Camera::Ptr& camera) {
 
     camera_ = camera;
 
+    // Setup frontend config
+    frontendConfig_.useActiveSearch = myslam::Config::get<int> ("use_feature_active_search");
+    frontendConfig_.minMatchesToUseFlannFrameTracking = (size_t)Config::get<double>("min_matches_to_use_flann_frame_tracking");
+    frontendConfig_.minMatchesToUseFlannMapTracking = (size_t)Config::get<double>("min_matches_to_use_flann_map_tracking");
+    frontendConfig_.minDisRatio = Config::get<float>("match_ratio");
+    frontendConfig_.baInlierThres = Config::get<double>("frontend_ba_inlier_threshold");
+    frontendConfig_.minInliersForGood = (size_t)Config::get<int>("min_inliers_for_good_estimation");
+    frontendConfig_.maxLostFrames = Config::get<float>("max_num_lost");
+    frontendConfig_.minInliersForKeyframe = (size_t)Config::get<int>("min_inliers_for_new_keyframe");
+    frontendConfig_.keyFrameMinRot = Config::get<double>("keyframe_rotation");
+    frontendConfig_.keyFrameMinTrans = Config::get<double>("keyframe_translation");
+
+    // Feature detector and matcher
+    orb_ = cv::ORB::create(Config::get<int>("frontend.number_of_features") / (Config::get<int>("frontend.row_section_cnt") * Config::get<int>("frontend.col_section_cnt")),
+                            Config::get<double>("frontend.scale_factor"),
+                            Config::get<int>("frontend.level_pyramid"));
     flannMatcher_ = cv::FlannBasedMatcher(new cv::flann::LshIndexParams(5, 10, 2));
 
-    // Read paras
-    orb_ = cv::ORB::create(Config::get<int>("number_of_features") / (Config::get<int>("row_section_cnt") * Config::get<int>("col_section_cnt")),
-                            Config::get<double>("scale_factor"),
-                            Config::get<int>("level_pyramid"));
-    useActiveSearch_ = myslam::Config::get<int> ("use_feature_active_search");
-    minMatchesToUseFlannFrameTracking_ = (size_t)Config::get<double>("min_matches_to_use_flann_frame_tracking");
-    minMatchesToUseFlannMapTracking_ = (size_t)Config::get<double>("min_matches_to_use_flann_map_tracking");
-    minDisRatio_ = Config::get<float>("match_ratio");
-    baInlierThres_ = Config::get<double>("frontend_ba_inlier_threshold");
-    minInliersForGood_ = (size_t)Config::get<int>("min_inliers_for_good_estimation");
-    maxLostFrames_ = Config::get<float>("max_num_lost");
-    minInliersForKeyframe_ = (size_t)Config::get<int>("min_inliers_for_new_keyframe");
-    keyFrameMinRot_ = Config::get<double>("keyframe_rotation");
-    keyFrameMinTrans_ = Config::get<double>("keyframe_translation");
-
-    // using motion-only bundle adjustment to optimize the pose
+    // Motion-only BA solver
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
         g2o::make_unique<BlockSolverType>(g2o::make_unique<DenseLinearSolverType>()));
     optimizer_.setAlgorithm(solver);
@@ -46,10 +47,13 @@ Frontend::Frontend(const Camera::Ptr& camera) {
                 UpdateTrackingMap(updater);
             });
 
+    // Setup map manager
+    mapManager_ = MapManager::Ptr(&MapManager::Instance());
+
     // Setup frame configs
-    frameConfig_.maxFeaturesCnt = (size_t)Config::get<int>("number_of_features");
-    frameConfig_.rowSectionCnt = (size_t)Config::get<int>("row_section_cnt");
-    frameConfig_.colSectionCnt = (size_t)Config::get<int>("col_section_cnt");
+    frameConfig_.maxFeaturesCnt = (size_t)Config::get<int>("frontend.number_of_features");
+    frameConfig_.rowSectionCnt = (size_t)Config::get<int>("frontend.row_section_cnt");
+    frameConfig_.colSectionCnt = (size_t)Config::get<int>("frontend.col_section_cnt");
 
     frameConfig_.imgCols = (size_t)Config::get<int>("frame.width");
     frameConfig_.imgRows = (size_t)Config::get<int>("frame.height");
@@ -107,11 +111,11 @@ bool Frontend::AddFrame(const Measurement& measurement)
     if (viewer_)
     {
         unordered_set<size_t> matchedKptsIdx;
-        for (const auto& [kptIdx, _]: matchedKptIdxMptIdMap_) {
+        for (const auto& [kptIdx, _]: matchedKptIdxToMptId_) {
             matchedKptsIdx.insert(kptIdx);
         }
 
-        viewer_->SetCurrentFrame(frameCurr_, matchedKptsIdx, baInlierKptIdxSet_);
+        viewer_->SetCurrentFrame(measurement.color, frameCurr_, matchedKptsIdx, baInlierKptIdxSet_);
         viewer_->UpdateDrawingObjects();
     }
 
@@ -123,15 +127,15 @@ SE3 Frontend::GetPose() {
 }
 
 void Frontend::InitializationHandler() {
-    // the first frame is a keyframe
-    MapManager::Instance().AddKeyframe(frameCurr_);
+    // The first frame is a keyframe
+    mapManager_->AddKeyframe(frameCurr_);
     CreateTempMappoints();
     assert(lastFrameMpts_.size() == tempMptKptIdxMap_.size());
     for(auto& [mptId, mpt]: lastFrameMpts_) {
-        MapManager::Instance().AddMappoint(mpt);
+        mapManager_->AddMappoint(mpt);
         frameCurr_->AddObservingMappoint(mpt, tempMptKptIdxMap_[mpt]);
     }
-    UpdateTrackingMap([&](TrackingMap& trackingMap) {
+    UpdateTrackingMap([this](TrackingMap& trackingMap) {
         trackingMap.clear();
         trackingMap.insert(lastFrameMpts_.begin(), lastFrameMpts_.end());
     });
@@ -141,21 +145,21 @@ void Frontend::InitializationHandler() {
 }
 
 bool Frontend::TrackingHandler() {
-    // lock tracking map, so it cannot be updated during frontend processing
+    // Lock tracking map, so it cannot be updated during frontend processing
     unique_lock<mutex> lock(trackingMapMutex_);
 
-    // set an initial pose to the pose of previous pose, used for feature matching
+    // Set an initial pose to the pose of previous pose, used for feature matching
     frameCurr_->SetTcw(framePrev_->GetTcw());
 
     // Compute pose based on last frame mappoints
-    cout << "Frame tracking...\n";
-    MatchKeyPointsWithMappoints(lastFrameMpts_, false, minMatchesToUseFlannFrameTracking_);
-    EstimatePoseMotionOnlyBA(lastFrameMpts_);
+    printf("Frame tracking");
+    MatchKeyPointsWithMappoints(lastFrameMpts_, false, frontendConfig_.minMatchesToUseFlannFrameTracking);
+    EstimateCurrentFramePose(lastFrameMpts_, false);
 
     // Compute pose based on tracking map
-    cout << "Map tracking...\n";
-    MatchKeyPointsWithMappoints(trackingMap_, true, minMatchesToUseFlannMapTracking_);
-    EstimatePoseMotionOnlyBA(trackingMap_);
+    printf("Map tracking");
+    MatchKeyPointsWithMappoints(trackingMap_, true, frontendConfig_.minMatchesToUseFlannMapTracking);
+    EstimateCurrentFramePose(trackingMap_, true);
 
     // Create temp mappoints for next frame tracking
     CreateTempMappoints();
@@ -163,7 +167,7 @@ bool Frontend::TrackingHandler() {
     if (!IsGoodEstimation()) {
         cout << "Cannot estimate Pose" << endl;
         accuLostFrameNums_++;
-        state_ = (++accuLostFrameNums_ > maxLostFrames_) ? LOST : TRACKING;
+        state_ = (++accuLostFrameNums_ > frontendConfig_.maxLostFrames) ? LOST : TRACKING;
         return false;
     } 
     accuLostFrameNums_ = 0;
@@ -193,16 +197,16 @@ void Frontend::UpdateTrackingMap(function<void(TrackingMap&)> updater) {
 
 void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const bool doDirectionCheck, const size_t matchesToUseFlann)
 {
-    // Search for the matched keypoint for mappoints from local map
-    matchedMptIdKptIdxMap_.clear();
-    matchedKptIdxMptIdMap_.clear();
-    matchedKptIdxDistanceMap_.clear();
+    // Search for matched mappoints for keypoints in tracking map
+    matchedMptIdToKptIdx_.clear();
+    matchedKptIdxToMptId_.clear();
+    unordered_map<size_t, double> matchedKptIdxToDistance;
     
     // mpt candidates that pass observation check for flann matching
     // Mat flannMptCandidateDes;
     // unordered_map<int, size_t> flannMptIdxToId; 
 
-    // mpt candidates that not outlier, for flann matching
+    // Mpt candidates that not outlier, for flann matching
     Mat moreFlannMptCandidatesDes;
     unordered_map<int, size_t> moreFlannMptIdxToId; 
 
@@ -212,7 +216,7 @@ void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const
     bool hasMatchedKeypoint; 
     for (auto &[mptId, mpt] : trackingMap)
     {
-        // mpt in tracking map are guranteed to be non-outlier and has been optimized by backend. But check in case
+        // mpt in tracking map are guaranteed to be non-outlier and has been optimized by backend. But check in case
         if (mpt->outlier_) {
             continue;
         }
@@ -222,7 +226,7 @@ void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const
         moreFlannMptCandidatesDes.push_back(mpt->GetDescriptor());
 
         // If not using active search, just continue here to avoid extra search
-        if (!useActiveSearch_) {
+        if (!frontendConfig_.useActiveSearch) {
             continue;
         }
 
@@ -238,53 +242,53 @@ void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const
         }
 
         // Check whether this keypoint already has a better matched mappoint
-        if (matchedKptIdxDistanceMap_.count(kptIdx)) {
-            if (distance < matchedKptIdxDistanceMap_[kptIdx]) {
+        if (matchedKptIdxToDistance.count(kptIdx)) {
+            if (distance < matchedKptIdxToDistance[kptIdx]) {
                 // Remove the previous matched mappoint
-                size_t mptIdToRemove = matchedKptIdxMptIdMap_[kptIdx];
-                matchedMptIdKptIdxMap_.erase(mptIdToRemove);
+                size_t mptIdToRemove = matchedKptIdxToMptId_[kptIdx];
+                matchedMptIdToKptIdx_.erase(mptIdToRemove);
             } else {
                 continue;
             }
         }
 
         // add as a match
-        matchedMptIdKptIdxMap_[mptId] = kptIdx;
-        matchedKptIdxMptIdMap_[kptIdx] = mptId;
-        matchedKptIdxDistanceMap_[kptIdx] = distance;
+        matchedMptIdToKptIdx_[mptId] = kptIdx;
+        matchedKptIdxToMptId_[kptIdx] = mptId;
+        matchedKptIdxToDistance[kptIdx] = distance;
     }
 
-    assert(matchedMptIdKptIdxMap_.size() == matchedKptIdxDistanceMap_.size());
+    assert(matchedMptIdToKptIdx_.size() == matchedKptIdxToDistance.size());
 
     // If not found enough matches, fallback to use flann
     // if (matchedMptIdKptIdxMap_.size() < matchesToUseFlann) {
     //     cout << "  Fallback to use Flann matching" << endl;
     //     MatchKeyPointsFlann(flannMptCandidateDes, flannMptIdxToId);
     // }
-    assert(matchedMptIdKptIdxMap_.size() == matchedKptIdxDistanceMap_.size());
+    assert(matchedMptIdToKptIdx_.size() == matchedKptIdxToDistance.size());
 
-    if (!useActiveSearch_ || matchedMptIdKptIdxMap_.size() < matchesToUseFlann) {
+    if (!frontendConfig_.useActiveSearch || matchedMptIdToKptIdx_.size() < matchesToUseFlann) {
         MatchKeyPointsFlann(moreFlannMptCandidatesDes, moreFlannMptIdxToId);
 
-        if (flannMatchedMptIdKptIdxMap_.size() > matchedMptIdKptIdxMap_.size()) {
-            if (useActiveSearch_) {
-                printf("  Active searched matched size: %zu is too mall, fallback to use Flann matching\n", matchedMptIdKptIdxMap_.size());
+        if (flannMatchedMptIdKptIdxMap_.size() > matchedMptIdToKptIdx_.size()) {
+            if (frontendConfig_.useActiveSearch) {
+                printf("  Active searched matched size: %zu is too mall, fallback to use Flann matching\n", matchedMptIdToKptIdx_.size());
             }
 
-            matchedMptIdKptIdxMap_.clear();
-            matchedMptIdKptIdxMap_.insert(flannMatchedMptIdKptIdxMap_.begin(), flannMatchedMptIdKptIdxMap_.end());
+            matchedMptIdToKptIdx_.clear();
+            matchedMptIdToKptIdx_.insert(flannMatchedMptIdKptIdxMap_.begin(), flannMatchedMptIdKptIdxMap_.end());
         
-            matchedKptIdxMptIdMap_.clear();
-            matchedKptIdxMptIdMap_.insert(flannMatchedKptIdxMptIdMap_.begin(), flannMatchedKptIdxMptIdMap_.end());
+            matchedKptIdxToMptId_.clear();
+            matchedKptIdxToMptId_.insert(flannMatchedKptIdxMptIdMap_.begin(), flannMatchedKptIdxMptIdMap_.end());
 
-            matchedKptIdxDistanceMap_.clear();
-            matchedKptIdxDistanceMap_.insert(flannMatchedKptIdxDistanceMap_.begin(), flannMatchedKptIdxDistanceMap_.end());
+            matchedKptIdxToDistance.clear();
+            matchedKptIdxToDistance.insert(flannMatchedKptIdxDistanceMap_.begin(), flannMatchedKptIdxDistanceMap_.end());
         }
     }
-    assert(matchedMptIdKptIdxMap_.size() == matchedKptIdxDistanceMap_.size());
+    assert(matchedMptIdToKptIdx_.size() == matchedKptIdxToDistance.size());
 
     cout << "  Size of tracking map: " << trackingMap.size() << endl;
-    cout << "  Size of matched <mappoint, keypoint> pairs: " << matchedMptIdKptIdxMap_.size() << endl;
+    cout << "  Size of matched <mappoint, keypoint> pairs: " << matchedMptIdToKptIdx_.size() << endl;
 }
 
 void Frontend::MatchKeyPointsFlann(const Mat& flannMptCandidateDes, unordered_map<int, size_t>& flannMptIdxToId) {
@@ -306,7 +310,7 @@ void Frontend::MatchKeyPointsFlann(const Mat& flannMptCandidateDes, unordered_ma
                         [](const cv::DMatch &m1, const cv::DMatch &m2)
                         { return m1.distance < m2.distance; })
                         ->distance;
-    float maxDis = max<float>(min_dis * minDisRatio_, 30.0);
+    float maxDis = max<float>(min_dis * frontendConfig_.minDisRatio, 30.0);
 
     for (cv::DMatch &m : matches)
     {
@@ -335,30 +339,31 @@ void Frontend::MatchKeyPointsFlann(const Mat& flannMptCandidateDes, unordered_ma
 }
 
 
-void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
+void Frontend::EstimateCurrentFramePose(TrackingMap& trackingMap, const bool doMotionBA)
 {
-    // construct the 3d 2d observations
+    // Construct the 3d-2d observations
     vector<size_t> mptIds;
     vector<size_t> kptIdxs;
     vector<Point3f> pts3d;
     vector<Point2f> pts2d;
 
-    for (auto& [mptId, kptIdx] : matchedMptIdKptIdxMap_) {
+    for (auto& [mptId, kptIdx] : matchedMptIdToKptIdx_) {
         mptIds.push_back(mptId);
         kptIdxs.push_back(kptIdx);
         pts3d.push_back(toPoint3f(trackingMap[mptId]->GetPosition()));
         pts2d.push_back(frameCurr_->GetKeypoint(kptIdx).pt);
     }
 
-    // use P3P to compute the initial pose
+    // Use P3P with RANSAC to compute the initial pose
     Mat initRotMat, rotVec, tranVec, inliers;
     cv::eigen2cv(frameCurr_->GetTcw().rotationMatrix(), initRotMat);
     cv::Rodrigues(initRotMat, rotVec);
     cv::eigen2cv(frameCurr_->GetTcw().translation(), tranVec);
 
-    cv::solvePnPRansac(pts3d, pts2d, camera_->GetCameraMatrix(), Mat(),
-                        rotVec, tranVec, true,
-                        100, 4.0, 0.99,
+    cv::solvePnPRansac(pts3d, pts2d, 
+            camera_->GetCameraMatrix(), Mat(),
+                    rotVec, tranVec, true,
+                    100, 4.0, 0.99,
                         inliers, cv::SOLVEPNP_P3P);
 
     numInliers_ = inliers.rows;
@@ -373,6 +378,11 @@ void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
     cv::cv2eigen(rotMat, rotMatEigen);
     cv::cv2eigen(tranVec, tranVecEigen);
     SE3 pnpEstimatedPose = SE3(rotMatEigen, tranVecEigen);
+
+    if (!doMotionBA) {
+        frameCurr_->SetTcw(pnpEstimatedPose);
+        return;
+    }
 
     // clear previous allocated vertex and edge
     optimizer_.clear();
@@ -396,7 +406,7 @@ void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
         edge->setMeasurement(toVec2d(pts2d[index]));
         edge->setInformation(Eigen::Matrix2d::Identity());
         auto rk = new g2o::RobustKernelHuber();
-        rk->setDelta(sqrt(baInlierThres_));
+        rk->setDelta(sqrt(frontendConfig_.baInlierThres));
         edge->setRobustKernel(rk);
 
         edges.push_back(edge);
@@ -418,7 +428,7 @@ void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
             }
 
             // chi2 is the (u^2 + v^2)
-            if (edge->chi2() > baInlierThres_) {
+            if (edge->chi2() > frontendConfig_.baInlierThres) {
                 // level 1 edges won't be optimized later
                 edge->setLevel(1);
                 edgeIsOutlier[i] = true;
@@ -461,7 +471,7 @@ void Frontend::EstimatePoseMotionOnlyBA(TrackingMap& trackingMap)
 bool Frontend::IsGoodEstimation()
 {
     // check if inliers number meet the threshold
-    if (numInliers_ < minInliersForGood_)
+    if (numInliers_ < frontendConfig_.minInliersForGood)
     {
         cout << "Current tracking is rejected because inlier is too small: " << numInliers_ << endl;
         return false;
@@ -479,7 +489,7 @@ bool Frontend::IsGoodEstimation()
 
 bool Frontend::IsKeyframe()
 {
-    if (numInliers_ < minInliersForKeyframe_) {
+    if (numInliers_ < frontendConfig_.minInliersForKeyframe) {
         return true;
     }
 
@@ -487,7 +497,7 @@ bool Frontend::IsKeyframe()
     Vector6d d = T_r_c.log();
     Vector3d trans = d.head<3>();
     Vector3d rot = d.tail<3>();
-    if (rot.norm() > keyFrameMinRot_ || trans.norm() > keyFrameMinTrans_)
+    if (rot.norm() > frontendConfig_.keyFrameMinRot || trans.norm() > frontendConfig_.keyFrameMinTrans)
     {
         return true;
     }
@@ -499,9 +509,9 @@ void Frontend::CreateTempMappoints() {
     tempMptKptIdxMap_.clear();
     for (size_t kptIdx = 0; kptIdx < frameCurr_->GetKeypointsSize(); ++kptIdx)
     {
-        // temp mappoint doesn't have matched previous mappoint
+        // No need to create new mappoint if the keypoint has matched mappoint from local map
         if (baInlierKptIdxSet_.count(kptIdx)) {
-            auto& mpt = trackingMap_[matchedKptIdxMptIdMap_[kptIdx]];
+            auto& mpt = trackingMap_[matchedKptIdxToMptId_[kptIdx]];
             lastFrameMpts_[mpt->GetId()] = mpt;
             continue;
         }
@@ -515,13 +525,15 @@ void Frontend::CreateTempMappoints() {
         Vector3d mptPos = camera_->Pixel2World(
             kpt, frameCurr_->GetTcw(), depth);
         
-        // create a mappoint
+        // Create a mappoint
         // all parameters will have a deep copy inside the constructor
         Mappoint::Ptr mpt = Mappoint::CreateMappoint(mptPos, frameCurr_->GetDescriptor(kptIdx));
 
         lastFrameMpts_[mpt->GetId()] = mpt;
         tempMptKptIdxMap_[mpt] = kptIdx;
     }
+    // After creating temporary mappoints, the raw color and depth are not needed.
+    frameCurr_->ReleaseRawFrameData();
     cout << "Created temp mappoints: " << tempMptKptIdxMap_.size() << endl;
 }
 

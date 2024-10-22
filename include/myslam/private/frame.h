@@ -12,6 +12,7 @@
 #define FRAME_H
 
 #include <opencv2/features2d/features2d.hpp>
+#include <optional>
 
 #include "myslam/common_include.h"
 #include "myslam/camera.h"
@@ -46,7 +47,6 @@ public:
 
     typedef std::shared_ptr<Frame> Ptr;
 
-    double              timestamp_;     // when it is recorded
     Camera::Ptr         camera_;        // Pinhole RGBD Camera model 
 
     // factory function
@@ -72,15 +72,17 @@ public:
         unique_lock<mutex> lck(poseMutex_);
         T_c_w_ = std::move(pose);
     }
-    
-    // Get the reference to the color image
-    const Mat& GetImage() {
-        return color_;
-    }
 
     // find the depth in depth map
-    double GetDepth( const KeyPoint& kp );
+    double GetDepth(const KeyPoint& kp);
     
+    // Release the RGB and depth image after temporary mappoint creation
+    void ReleaseRawFrameData() {
+        // OpenCV Mat will automatically decrease the reference count
+        color_ = cv::Mat();
+        depth_ = cv::Mat();
+    }
+
     // Get Camera Center
     Vector3d GetCamCenter() const {
         return T_c_w_.inverse().translation();
@@ -110,9 +112,11 @@ public:
     // Get matched keypoint idx for the mappoint
     bool GetMatchedKeypoint(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, double& distance, bool& mayObserveMpt);
 
-    // 1. Add observing mappoint 
-    // 2. Update the covisible keyframes
-    // 3. Add observedBy keyframe to the mappoint
+    /*
+    * 1. Add observing mappoint 
+    * 2. Add observedBy keyframe to the mappoint
+    * 3. Update the covisible keyframes
+    */ 
     void AddObservingMappoint(const Mappoint::Ptr& mpt, const size_t kptIdx);
 
     // Remove observed mappoint and also update the covisible keyframes
@@ -159,10 +163,12 @@ public:
 private: 
     static size_t           factoryId_;
     size_t                  id_;            // id of this frame
+    double                  timestamp_;     // timestamp of RGB image
+
     FrameConfig             config_;
 
-    Mat                     color_;         // color image
-    Mat                     depth_;         // depth image 
+    Mat                     color_;         // color image, become null after temporary mappoint creation
+    Mat                     depth_;         // depth image, become null after temporary mappoint creation
 
     mutex                   poseMutex_;
     SE3                     T_c_w_;         // transform from world to camera

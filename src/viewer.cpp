@@ -7,11 +7,13 @@ namespace myslam {
 
 
 void Viewer::SetCurrentFrame(
+    const cv::Mat& colorImage,
     const Frame::Ptr& current_frame, 
     const unordered_set<size_t>& matchedKptsIdx,
     const unordered_set<size_t>& inlierKptsIdx) {
 
     unique_lock<mutex> lck(viewer_data_mutex_);
+    colorImage_ = colorImage.clone();
     current_frame_ = current_frame;
     matchedKptsIdx_.clear();
     matchedKptsIdx_.insert(matchedKptsIdx.begin(), matchedKptsIdx.end());
@@ -54,8 +56,8 @@ void Viewer::ThreadLoop() {
             DrawFrame(current_frame_, red);
             // FollowCurrentFrame(vis_camera);
 
-            cv::Mat img = PlotFrameImage();
-            cv::imshow("image", img);
+            PlotFrameImage();
+            cv::imshow("image", colorImage_);
             cv::waitKey(1);
         }
 
@@ -97,8 +99,8 @@ void Viewer::SingleStep() {
         DrawFrame(current_frame_, red);
         // FollowCurrentFrame(vis_camera);
 
-        cv::Mat img = PlotFrameImage();
-        cv::imshow("image", img);
+        PlotFrameImage();
+        cv::imshow("image", colorImage_);
         cv::waitKey(1);
     }
 
@@ -195,13 +197,11 @@ void Viewer::FollowCurrentFrame(pangolin::OpenGlRenderState& vis_camera) {
     vis_camera.Follow(m, true);
 }
 
-cv::Mat Viewer::PlotFrameImage() {
-    cv::Mat img_out = current_frame_->GetImage().clone();
+void Viewer::PlotFrameImage() {
     for(size_t idx = 0; idx < current_frame_->GetKeypointsSize(); ++idx) {
-        cv::circle(img_out, current_frame_->GetKeypoint(idx).pt, 2, 
+        cv::circle(colorImage_, current_frame_->GetKeypoint(idx).pt, 2, 
                    GetKeypointColor(idx), 2);
     }
-    return img_out;
 }
 
 cv::Scalar Viewer::GetKeypointColor(size_t kptIdx) {
