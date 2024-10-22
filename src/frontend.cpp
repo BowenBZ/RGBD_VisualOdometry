@@ -46,6 +46,25 @@ Frontend::Frontend(const Camera::Ptr& camera) {
                 UpdateTrackingMap(updater);
             });
 
+    // Setup frame configs
+    frameConfig_.maxFeaturesCnt = (size_t)Config::get<int>("number_of_features");
+    frameConfig_.rowSectionCnt = (size_t)Config::get<int>("row_section_cnt");
+    frameConfig_.colSectionCnt = (size_t)Config::get<int>("col_section_cnt");
+
+    frameConfig_.imgCols = (size_t)Config::get<int>("frame.width");
+    frameConfig_.imgRows = (size_t)Config::get<int>("frame.height");
+
+    frameConfig_.gridSize = (size_t)Config::get<double>("pixel_grid_size");
+    frameConfig_.gridColCnt = (size_t)ceil((double)frameConfig_.imgCols / frameConfig_.gridSize);
+    frameConfig_.gridRowCnt = (size_t)ceil((double)frameConfig_.imgCols / frameConfig_.gridSize);
+
+    frameConfig_.searchGridRadius = Config::get<int>("search_grid_radius");
+
+    frameConfig_.descriptorDistanceThres = Config::get<double>("max_descriptor_distance");
+    frameConfig_.bestSecondaryDistanceRatio = Config::get<double>("min_best_secondary_distance_ratio");
+
+    frameConfig_.activeCovisibleWeight = (size_t)Config::get<double>("active_covisible_keyframe_weight");
+
     state_ = INITIALIZING;
 }
 
@@ -54,7 +73,8 @@ bool Frontend::AddFrame(const Measurement& measurement)
     cout << "Frontend status: " << VOStateStr[state_] << endl;
     framePrev_ = frameCurr_;
 
-    Frame::Ptr frame = myslam::Frame::CreateFrame(
+    Frame::Ptr frame = Frame::CreateFrame(
+            frameConfig_,
             measurement.timestamp,
             camera_,
             measurement.color,

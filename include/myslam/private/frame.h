@@ -20,6 +20,25 @@
 namespace myslam 
 {
 
+typedef struct {
+    size_t      maxFeaturesCnt;    // max extracted features
+    size_t      rowSectionCnt;     // how many section in rows for feature detection
+    size_t      colSectionCnt;     // how many section in cols for feature detection
+
+    size_t      imgCols;           // width of color image
+    size_t      imgRows;           // height of color image
+
+    size_t      gridSize;          // pixel's grid size
+    size_t      gridColCnt;        // count of grid in image cols
+    size_t      gridRowCnt;        // count of grid in image rows
+
+    int         searchGridRadius;               // the radius of grid searching area
+    double      descriptorDistanceThres;        // max distance between 2 descriptors to be considered as matched
+    double      bestSecondaryDistanceRatio;     // min ratio between best match and secondary match to accept the best match 
+
+    size_t      activeCovisibleWeight;          // threshold to set active covisible keyframe
+} FrameConfig;
+
 class Frame : public enable_shared_from_this<Frame>
 {
 public:
@@ -32,6 +51,7 @@ public:
 
     // factory function
     static Frame::Ptr CreateFrame(
+        const FrameConfig& config,
         const double timestamp, 
         const Camera::Ptr& camera, 
         const Mat& color, 
@@ -139,6 +159,7 @@ public:
 private: 
     static size_t           factoryId_;
     size_t                  id_;            // id of this frame
+    FrameConfig             config_;
 
     Mat                     color_;         // color image
     Mat                     depth_;         // depth image 
@@ -146,22 +167,10 @@ private:
     mutex                   poseMutex_;
     SE3                     T_c_w_;         // transform from world to camera
     
-    size_t                  maxFeaturesCnt_;    // max extracted features
-    size_t                  rowSectionCnt_;     // how many section in rows for feature detection
-    size_t                  colSectionCnt_;     // how many section in cols for feature detection
     vector<KeyPoint>        keypoints_;         // detected keypoints
     Mat                     descriptors_;       // extracted descriptors
 
-    size_t                  imgCols_;                        // width of color image
-    size_t                  imgRows_;                        // height of color image
-    size_t                  gridSize_;                       // pixel's grid size
-    size_t                  gridColCnt_;                     // count of grid in image cols
-    size_t                  gridRowCnt_;                     // count of grid in image rows
     unordered_map<size_t, list<size_t>> gridToKptIdx_;       // idx of keypoints for a grid
-
-    int                     searchGridRadius_;               // the radius of grid searching area
-    double                  descriptorDistanceThres_;        // max distance between 2 descriptors to be considered as matched
-    double                  bestSecondaryDistanceRatio_;     // min ratio between best match and secondary match to accept the best match 
 
     mutex                           observationMutex_;
     unordered_map<size_t, size_t>   kptIdxToObservingMptIdMap_;          // keypoint idx to respective mpt id
@@ -170,10 +179,10 @@ private:
     unordered_map<size_t, size_t>   allCovisibleKfIdToWeight_;    // All covisible keyframe 
     unordered_set<size_t>           allCovisibleKfIds_;           // All covisible keyframe ids
     unordered_set<size_t>           activeCovisibleKfIds_;        // Active covisible keyframes (has same observed mappoints >= activeCovisibleWeight_) and the number of covisible mappoints
-    size_t                          activeCovisibleWeight_;       // threshold to set active covisible keyframe
 
 
-    Frame(  const size_t id, 
+    Frame(  const FrameConfig config,
+            const size_t id, 
             const double timestamp, 
             const Camera::Ptr& camera, 
             const Mat& color, 

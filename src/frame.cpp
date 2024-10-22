@@ -11,12 +11,14 @@ namespace myslam
 size_t Frame::factoryId_ = 0;
 
 Frame::Ptr Frame::CreateFrame(
+    const FrameConfig& config,
     const double timestamp, 
     const Camera::Ptr& camera, 
     const Mat& color, 
     const Mat& depth)
 {
     return Frame::Ptr( new Frame(
+        config,
         factoryId_++,
         timestamp,
         camera,
@@ -25,30 +27,15 @@ Frame::Ptr Frame::CreateFrame(
     );
 }
 
-Frame::Frame (  const size_t id, 
+Frame::Frame (  const FrameConfig config,
+                const size_t id, 
                 const double timestamp, 
                 const Camera::Ptr& camera, 
                 const Mat& color, 
                 const Mat& depth )
 : id_(id), timestamp_(timestamp), camera_(camera), color_(color.clone()), depth_(depth.clone()), T_c_w_(SE3())
 {
-    maxFeaturesCnt_ = (size_t)Config::get<int>("number_of_features");
-    rowSectionCnt_ = (size_t)Config::get<int>("row_section_cnt");
-    colSectionCnt_ = (size_t)Config::get<int>("col_section_cnt");
-
-    imgCols_ = color.cols;
-    imgRows_ = color.rows;
-
-    gridSize_ = (size_t)Config::get<double>("pixel_grid_size");
-    gridColCnt_ = (size_t)ceil((double)imgCols_ / gridSize_);
-    gridRowCnt_ = (size_t)ceil((double)imgRows_ / gridSize_);
-
-    searchGridRadius_ = Config::get<int>("search_grid_radius");
-
-    descriptorDistanceThres_ = Config::get<double>("max_descriptor_distance");
-    bestSecondaryDistanceRatio_ = Config::get<double>("min_best_secondary_distance_ratio");
-
-    activeCovisibleWeight_ = (size_t)Config::get<double>("active_covisible_keyframe_weight");
+    config_ = config;
 }
 
 double Frame::GetDepth ( const KeyPoint& kp )
@@ -79,10 +66,10 @@ double Frame::GetDepth ( const KeyPoint& kp )
 
 void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& detector) {
     
-    size_t rowPerSection = imgRows_ / rowSectionCnt_;
-    size_t colPerSection = imgCols_ / colSectionCnt_;
-    for(size_t rowSection = 0; rowSection < rowSectionCnt_; ++rowSection) {
-        for (size_t colSection = 0; colSection < colSectionCnt_; ++colSection) {
+    size_t rowPerSection = config_.imgRows / config_.rowSectionCnt;
+    size_t colPerSection = config_.imgCols / config_.colSectionCnt;
+    for(size_t rowSection = 0; rowSection < config_.rowSectionCnt; ++rowSection) {
+        for (size_t colSection = 0; colSection < config_.colSectionCnt; ++colSection) {
             size_t rowStartIdx = rowPerSection * rowSection;
             size_t rowEndIdx = rowPerSection * (rowSection + 1);
             size_t colStartIdx = colPerSection * colSection;
@@ -95,7 +82,7 @@ void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& 
             Mat des;
             detector->detectAndCompute(color_(rowRange, colRange), Mat(), kpts, des);
 
-            for (size_t idx = 0; idx < min(kpts.size(), maxFeaturesCnt_ / (rowSectionCnt_ * colSectionCnt_)); ++idx) {
+            for (size_t idx = 0; idx < min(kpts.size(), config_.maxFeaturesCnt / (config_.rowSectionCnt * config_.colSectionCnt)); ++idx) {
                 auto& kpt = kpts[idx];
                 kpt.pt.x += colStartIdx;
                 kpt.pt.y += rowStartIdx;
@@ -127,8 +114,8 @@ bool Frame::GetMatchedKeypoint(const Mappoint::Ptr& mpt, const bool doDirectionC
     } 
     
     Vector2d pixelPos = camera_->Camera2Pixel(posInCam);
-    if (pixelPos[0] < 0 || pixelPos[0] >= imgCols_ ||
-        pixelPos[1] < 0 || pixelPos[1] >= imgRows_) {
+    if (pixelPos[0] < 0 || pixelPos[0] >= config_.imgCols ||
+        pixelPos[1] < 0 || pixelPos[1] >= config_.imgRows) {
         return false;
     }
 
@@ -173,13 +160,13 @@ bool Frame::GetMatchedKeypoint(const Mappoint::Ptr& mpt, const bool doDirectionC
         });
 
     const pair<size_t, double>& bestKptToDistance = kptIdxToDistance[0];
-    if (bestKptToDistance.second > descriptorDistanceThres_) {
+    if (bestKptToDistance.second > config_.descriptorDistanceThres) {
         return false;
     }
 
     if (kptIdxToDistance.size() >= 2) {
         const pair<size_t, double>& secondKptToDistance = kptIdxToDistance[1];
-        if (bestKptToDistance.second / secondKptToDistance.second < bestSecondaryDistanceRatio_) {
+        if (bestKptToDistance.second / secondKptToDistance.second < config_.bestSecondaryDistanceRatio) {
             return false;
         }
     }
@@ -190,28 +177,28 @@ bool Frame::GetMatchedKeypoint(const Mappoint::Ptr& mpt, const bool doDirectionC
 }
 
 size_t Frame::GetGridIdx(double x, double y) {
-    size_t colIdx = (size_t)floor(x / gridSize_);
-    size_t rowIdx = (size_t)floor(y / gridSize_);
+    size_t colIdx = (size_t)floor(x / config_.gridSize);
+    size_t rowIdx = (size_t)floor(y / config_.gridSize);
     return GetGridIdx(colIdx, rowIdx);
 }
 
 size_t Frame::GetGridIdx(size_t colIdx, size_t rowIdx) {
-    return rowIdx * gridColCnt_ + colIdx;
+    return rowIdx * config_.gridColCnt + colIdx;
 }
 
 void Frame::getNearbyGrids(size_t gridIdx, list<size_t>& nearbyGrids) {
     nearbyGrids.clear();
 
-    size_t rowIdx = gridIdx / gridColCnt_;
-    size_t colIdx = gridIdx - rowIdx * gridColCnt_;
+    size_t rowIdx = gridIdx / config_.gridColCnt;
+    size_t colIdx = gridIdx - rowIdx * config_.gridColCnt;
 
-    for (int drow = -searchGridRadius_; drow <= searchGridRadius_; ++drow) {
-        for (int dcol = -searchGridRadius_; dcol <= searchGridRadius_; ++dcol) {
+    for (int drow = -config_.searchGridRadius; drow <= config_.searchGridRadius; ++drow) {
+        for (int dcol = -config_.searchGridRadius; dcol <= config_.searchGridRadius; ++dcol) {
             int row = (int)rowIdx + drow;
             int col = (int)colIdx + dcol;
 
-            if (row >= 0 && row < gridRowCnt_ &&
-                col >= 0 && col < gridColCnt_) {
+            if (row >= 0 && row < config_.gridRowCnt &&
+                col >= 0 && col < config_.gridColCnt) {
                     nearbyGrids.push_back(GetGridIdx((size_t)row, (size_t)col));
                 }
         }
@@ -242,7 +229,7 @@ void Frame::AddObservingMappoint(const Mappoint::Ptr& mpt, const size_t kptIdx) 
 
         ++allCovisibleKfIdToWeight_[otherKfId];
         allCovisibleKfIds_.insert(otherKfId);
-        if (allCovisibleKfIdToWeight_[otherKfId] >= activeCovisibleWeight_) {
+        if (allCovisibleKfIdToWeight_[otherKfId] >= config_.activeCovisibleWeight) {
             activeCovisibleKfIds_.insert(otherKfId);
         }
 
@@ -278,7 +265,7 @@ void Frame::RemoveObservingMappoint(const size_t mptId) {
         if (newWeight == 0) {
             allCovisibleKfIdToWeight_.erase(otherKFId);
             allCovisibleKfIds_.erase(otherKFId);
-        } else if (newWeight < activeCovisibleWeight_) {
+        } else if (newWeight < config_.activeCovisibleWeight) {
             activeCovisibleKfIds_.erase(otherKFId);
         }
         
@@ -296,7 +283,7 @@ void Frame::UpdateCovisibleKeyframeWeight(const size_t otherKfId, const size_t w
         allCovisibleKfIdToWeight_.erase(otherKfId);
         allCovisibleKfIds_.erase(otherKfId);
         activeCovisibleKfIds_.erase(otherKfId);
-    } else if (weight >= activeCovisibleWeight_) {
+    } else if (weight >= config_.activeCovisibleWeight) {
         allCovisibleKfIdToWeight_[otherKfId] = weight;
         allCovisibleKfIds_.insert(otherKfId);
         activeCovisibleKfIds_.insert(otherKfId);

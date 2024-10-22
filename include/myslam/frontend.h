@@ -70,6 +70,8 @@ private:
         "Lost" 
     };                                          // used for logging
 
+    FrameConfig             frameConfig_;
+
     Camera::Ptr             camera_;
     Viewer::Ptr             viewer_;
     Backend::Ptr            backend_;

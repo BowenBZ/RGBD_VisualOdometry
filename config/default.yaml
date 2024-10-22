@@ -1,6 +1,6 @@
 %YAML:1.0
 # The tum dataset directory with the associate.txt fiel, change it to yours! 
-dataset_dir: /home/zbw/Desktop/dataset/rgbd_dataset_freiburg1_xyz
+dataset_dir: /Users/bowen/Source/dataset/rgbd_dataset_freiburg1_room
 
 # The output trajectory file directory
 output_file: ./output/output.txt
@@ -16,6 +16,10 @@ camera.cx: 318.6
 camera.cy: 255.3
 
 camera.depth_scale: 5000
+
+# Frame configs
+frame.width: 640
+frame.height: 480
 
 # keypoints extraction paras
 number_of_features: 500
@@ -52,4 +56,4 @@ backend_ba_inlier_threshold: 5.991
 re_match_descriptor_distance: 5
 
 # viewer paras
-enable_viewer: 1
+enable_viewer: 0
