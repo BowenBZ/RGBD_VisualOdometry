@@ -40,6 +40,17 @@ typedef struct {
     size_t      activeCovisibleWeight;          // threshold to set active covisible keyframe
 } FrameConfig;
 
+typedef struct {
+    // detected keypoints
+    KeyPoint keypoint;
+    // extracted descriptors     
+    Mat descriptor;
+
+    // Matched mappoint id. Only get populated if it's a keyframe
+    // A feature point may not have matched mappoint if no matching found & no depth value found.
+    optional<size_t> optMatchedMptId;
+} KeypointInfo;
+
 class Frame : public enable_shared_from_this<Frame>
 {
 public:
@@ -93,17 +104,19 @@ public:
     void ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& detector);
 
     const size_t GetKeypointsSize() const {
-        return keypoints_.size();
+        return keypointInfo_.size();
     }
 
     // Return the reference to keypoint
     const KeyPoint& GetKeypoint(size_t idx) const {
-        return keypoints_[idx];
+        assert(idx < keypointInfo_.size());
+        return keypointInfo_[idx].keypoint;
     }
 
     // Return the descriptor as a referene to the single row Mat
     Mat GetDescriptor(size_t idx) const {
-        return descriptors_.row(idx);
+        assert(idx < keypointInfo_.size());
+        return keypointInfo_[idx].descriptor;
     }
 
     // Return all descriptors
@@ -112,7 +125,7 @@ public:
     }
 
     // Get matched keypoint idx for the mappoint
-    bool GetMatchedKeypoint(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, double& distance, bool& mayObserveMpt);
+    bool SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, double& distance, bool& mayObserveMpt);
 
 #pragma mark - observing relationships
 
@@ -134,7 +147,7 @@ public:
 
     void GetObservingMappointIds(list<size_t>& observingMptIds) {
         observingMptIds.clear();
-        for(auto& [mptId, _]: observingMptIdToKptIdxMap_) {
+        for(auto& [mptId, _]: observingMptIdToKptIdx_) {
             observingMptIds.push_back(mptId);
         }
     }
@@ -145,23 +158,21 @@ public:
 
     // Return if frame is already observeing mappoint
     bool IsObservingMappoint(const size_t id) {
-        return observingMptIdToKptIdxMap_.count(id);
+        return observingMptIdToKptIdx_.count(id);
     }
 
     // Return the matched mappoint id matched with given keypoint index
     optional<size_t> GetMatchedMappointIdForKeypoint(const size_t kptIdx) {
-        if (!kptIdxToObservingMptIdMap_.count(kptIdx)) {
-            return nullopt;
-        }
-        return kptIdxToObservingMptIdMap_[kptIdx];
+        assert(kptIdx < keypointInfo_.size());
+        return keypointInfo_[kptIdx].optMatchedMptId;
     }
 
     // Return the idx of the keypoint matched with given mappoint
     optional<size_t> GetMatchedKeypointIdxForMappoint(const size_t& mptId) {
-        if (!observingMptIdToKptIdxMap_.count(mptId)) {
+        if (!observingMptIdToKptIdx_.count(mptId)) {
             return nullopt;
         }
-        return observingMptIdToKptIdxMap_[mptId];
+        return observingMptIdToKptIdx_[mptId];
     }
 
 #pragma mark - covisible keyframes
@@ -189,18 +200,17 @@ private:
     mutex                   poseMutex_;
     SE3                     T_c_w_;         // transform from world to camera
     
-    vector<KeyPoint>        keypoints_;         // detected keypoints
-    Mat                     descriptors_;       // extracted descriptors
+    // detected feature points info
+    vector<KeypointInfo>    keypointInfo_;
+    Mat                     descriptors_;
 
     unordered_map<size_t, list<size_t>> gridToKptIdx_;       // idx of keypoints for a grid
 
     // Only keyframe will use following fields. 
     // No need to add lock to the observation relationship, since frontend and backend won't modify the observation relationship the same time.
 
-    // <keypoint idx, mpt id>
-    unordered_map<size_t, size_t>   kptIdxToObservingMptIdMap_;
     // <mpt id, keypoint idx>
-    unordered_map<size_t, size_t>   observingMptIdToKptIdxMap_;
+    unordered_map<size_t, size_t>   observingMptIdToKptIdx_;
     // id of mappoints created from this frame
     vector<size_t>                  newCreatedMptId_;
 

@@ -231,7 +231,7 @@ void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const
             continue;
         }
 
-        hasMatchedKeypoint = frameCurr_->GetMatchedKeypoint(mpt, doDirectionCheck, kptIdx, distance, mayObserveMpt);
+        hasMatchedKeypoint = frameCurr_->SearchKeypointMatchCandidate(mpt, doDirectionCheck, kptIdx, distance, mayObserveMpt);
 
         // if (mayObserveMpt) {
         //     flannMptIdxToId[flannMptCandidateDes.rows] = mptId;

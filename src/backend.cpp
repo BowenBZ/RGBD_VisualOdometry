@@ -95,7 +95,7 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
         size_t kptIdx;
         bool mayObserveMpt;
         // Cannot find match
-        if (!keyframeCurr_->GetMatchedKeypoint(oldMpt, false, kptIdx, distance, mayObserveMpt) || distance > config_.reMatchDescriptorDistance) {
+        if (!keyframeCurr_->SearchKeypointMatchCandidate(oldMpt, false, kptIdx, distance, mayObserveMpt) || distance > config_.reMatchDescriptorDistance) {
             continue;
         }
 
@@ -128,7 +128,7 @@ void Backend::ProjectNewMappointsToExistingKeyframe() {
     keyframeCurr_->GetAllCovisibleKfIds(allCovisibleKfIds);
     unordered_set<Frame::Ptr> covisibleKfs;
     for (auto& kfId: allCovisibleKfIds) {
-        auto kf = MapManager::Instance().GetKeyframe(kfId);
+        auto kf = mapManager_->GetKeyframe(kfId);
         if (kf == nullptr) {
             continue;
         }
@@ -136,7 +136,7 @@ void Backend::ProjectNewMappointsToExistingKeyframe() {
         list<size_t> neighborAllCovisibleKfIds;
         kf->GetAllCovisibleKfIds(neighborAllCovisibleKfIds);
         for (auto& neighborKfId: neighborAllCovisibleKfIds) {
-            auto neighborKf = MapManager::Instance().GetKeyframe(kfId);
+            auto neighborKf = mapManager_->GetKeyframe(kfId);
             if (neighborKf == nullptr) {
                 continue;
             }
@@ -164,7 +164,7 @@ void Backend::ProjectNewMappointsToExistingKeyframe() {
         
         for (auto& mptId: keyframeCurr_->GetNewCreatedMappointIds()) {
             auto mpt = mapManager_->GetMappoint(mptId);
-            if (!kf->GetMatchedKeypoint(mpt, false, kptIdx, distance, mayObserveMpt) || 
+            if (!kf->SearchKeypointMatchCandidate(mpt, false, kptIdx, distance, mayObserveMpt) || 
                 distance > config_.reMatchDescriptorDistance) {
                 continue;
             }

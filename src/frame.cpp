@@ -85,7 +85,7 @@ void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& 
                 auto& kpt = kpts[idx];
                 kpt.pt.x += colStartIdx;
                 kpt.pt.y += rowStartIdx;
-                keypoints_.push_back(kpt);
+                keypointInfo_.push_back({kpt, des.row(idx).clone(), nullopt});
                 descriptors_.push_back(des.row(idx).clone());
             }
         }
@@ -98,13 +98,14 @@ void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& 
 }
 
 void Frame::ConstructKeypointGrids() {
-    for (size_t i = 0; i < keypoints_.size(); ++i) {
-        size_t gridIdx = GetGridIdx(keypoints_[i].pt.x, keypoints_[i].pt.y);
+    for (size_t i = 0; i < keypointInfo_.size(); ++i) {
+        auto& kptPos = keypointInfo_[i].keypoint.pt;
+        size_t gridIdx = GetGridIdx(kptPos.x, kptPos.y);
         gridToKptIdx_[gridIdx].push_back(i);
     }
 }
 
-bool Frame::GetMatchedKeypoint(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, double& distance, bool& mayObserveMpt) {
+bool Frame::SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, double& distance, bool& mayObserveMpt) {
     mayObserveMpt = false;
 
     Vector3d posInCam = camera_->World2Camera(mpt->GetPosition(), T_c_w_);
@@ -142,8 +143,8 @@ bool Frame::GetMatchedKeypoint(const Mappoint::Ptr& mpt, const bool doDirectionC
 
         for (auto& kptIdx: gridToKptIdx_[gridIdx]) {
             double distance = ComputeDescriptorDistance(
-                mpt->GetDescriptor(), 0,
-                descriptors_, kptIdx);
+                mpt->GetDescriptor(), 0, 
+                keypointInfo_[kptIdx].descriptor, 0);
 
             kptIdxToDistance.push_back({kptIdx, distance});
         }
@@ -208,9 +209,12 @@ void Frame::getNearbyGrids(size_t gridIdx, list<size_t>& nearbyGrids) {
 
 void Frame::AddObservingMappoint(const size_t kptIdx, const Mappoint::Ptr& mpt) {
     auto& mptId = mpt->GetId();
-    assert(!observingMptIdToKptIdxMap_.count(mptId));
-    observingMptIdToKptIdxMap_[mptId] = kptIdx;
-    kptIdxToObservingMptIdMap_[kptIdx] = mptId;
+    
+    assert(!keypointInfo_[kptIdx].optMatchedMptId.has_value());
+    keypointInfo_[kptIdx].optMatchedMptId = mptId;
+
+    assert(!observingMptIdToKptIdx_.count(mptId));
+    observingMptIdToKptIdx_[mptId] = kptIdx;
 
     mpt->AddObservedByKeyframe(shared_from_this());
     mpt->UpdateDescriptor();
@@ -236,9 +240,13 @@ void Frame::AddObservingMappoint(const size_t kptIdx, const Mappoint::Ptr& mpt) 
 
 void Frame::AddObservingMappointCreatedFromThisFrame(const size_t kptIdx, const Mappoint::Ptr& mpt) {
     auto& mptId = mpt->GetId();
-    assert(!observingMptIdToKptIdxMap_.count(mptId));
-    observingMptIdToKptIdxMap_[mptId] = kptIdx;
-    kptIdxToObservingMptIdMap_[kptIdx] = mptId;
+
+    assert(!keypointInfo_[kptIdx].optMatchedMptId.has_value());
+    keypointInfo_[kptIdx].optMatchedMptId = mptId;
+
+    assert(!observingMptIdToKptIdx_.count(mptId));
+    observingMptIdToKptIdx_[mptId] = kptIdx;
+
     newCreatedMptId_.push_back(mptId);
 
     mpt->AddObservedByKeyframe(shared_from_this());
@@ -247,10 +255,13 @@ void Frame::AddObservingMappointCreatedFromThisFrame(const size_t kptIdx, const 
 }
 
 void Frame::RemoveObservingMappoint(const size_t mptId) {
-    assert(observingMptIdToKptIdxMap_.count(mptId));
-    size_t kptIdx = observingMptIdToKptIdxMap_[mptId];
-    observingMptIdToKptIdxMap_.erase(mptId);
-    kptIdxToObservingMptIdMap_.erase(kptIdx);
+    assert(observingMptIdToKptIdx_.count(mptId));
+    size_t kptIdx = observingMptIdToKptIdx_[mptId];
+
+    assert(keypointInfo_[kptIdx].optMatchedMptId.has_value());
+    keypointInfo_[kptIdx].optMatchedMptId = nullopt;
+
+    observingMptIdToKptIdx_.erase(mptId);
 
     auto mpt = MapManager::Instance().GetMappoint(mptId);
     assert(mpt != nullptr);
