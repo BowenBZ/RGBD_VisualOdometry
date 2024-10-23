@@ -50,18 +50,18 @@ void MapManager::ReplaceMappoint(size_t oldMptId, size_t newMptId) {
     auto& oldMpt = mappointsDict_[oldMptId];
     auto& newMpt = mappointsDict_[newMptId];
 
-    unordered_map<size_t, size_t> observedByKfIdToKptIdx;
-    oldMpt->GetObservedByKeyframesMap(observedByKfIdToKptIdx);
-    for(auto& [kfId, kptIdx]: observedByKfIdToKptIdx) {
+    for(auto& kfId: oldMpt->GetObservedByKeyframeIds()) {
         assert(keyframesDict_.count(kfId));
         auto& kf = keyframesDict_[kfId];
+        const auto& optkptIdx = kf->GetMatchedKeypointIdxForMappoint(oldMptId);
+        assert(optkptIdx.has_value());
  
         kf->RemoveObservingMappoint(oldMptId);
         // If the kf already observes the newMpt, which could happen when several old mpts need to be replaced by the same new mpt. This means those points should be merged together, so just remove one observation
         if (kf->IsObservingMappoint(newMptId)) {
             kf->RemoveObservingMappoint(newMptId);
         }
-        kf->AddObservingMappoint(newMpt, kptIdx);
+        kf->AddObservingMappoint(optkptIdx.value(), newMpt);
     }
     mappointsDict_.erase(oldMptId);
 }

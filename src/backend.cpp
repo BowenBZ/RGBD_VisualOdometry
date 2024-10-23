@@ -1,5 +1,6 @@
 #include "myslam/private/backend.h"
 
+#include "mappoint.h"
 #include "myslam/private/util.h"
 #include "myslam/private/mapmanager.h"
 
@@ -7,13 +8,15 @@ namespace myslam
 {
 
 Backend::Backend(const Camera::Ptr camera): camera_(std::move(camera)) {
+    config_.baInlierThres = Config::get<double>("backend.ba_inlier_threshold");
+    config_.reMatchDescriptorDistance = Config::get<double>("backend.re_match_descriptor_distance");
+
+    mapManager_ = MapManager::Ptr(&MapManager::Instance());
+
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
         g2o::make_unique<BlockSolverType>(g2o::make_unique<CSparseLinearSolverType>()));
     optimizer_.setAlgorithm(solver);
     
-    baInlierThres_ = Config::get<double>("backend_ba_inlier_threshold");
-    reMatchDescriptorDistance_ = Config::get<double>("re_match_descriptor_distance");
-
     backendRunning_ = true;
     backendThread_ = std::thread(std::bind(&Backend::BackendLoop, this));
 }
@@ -26,15 +29,10 @@ void Backend::Stop() {
     CleanUp();
 }
 
-void Backend::AddNewKeyframeInfo(const FrontendToBackendInfo& info) {
+void Backend::AddNewKeyframeInfoToQueue(const size_t keyframeId) {
     unique_lock<mutex> lock(backendMutex_);
 
-    FrontendToBackendInfo copyInfo;
-    copyInfo.keyframe = info.keyframe;
-    copyInfo.oldMptIdKptIdxMap.insert(info.oldMptIdKptIdxMap.begin(), info.oldMptIdKptIdxMap.end());
-    copyInfo.newMptKptIdxMap.insert(info.newMptKptIdxMap.begin(), info.newMptKptIdxMap.end());
-
-    frontendInfoToProcess_.push(copyInfo);
+    newKeyframeIdQueue_.push(keyframeId);
     backendUpdateTrigger_.notify_one();
 }
 
@@ -43,23 +41,24 @@ void Backend::BackendLoop()
     while (backendRunning_)
     {
         unique_lock<mutex> lock(backendMutex_);
-        if (frontendInfoToProcess_.size() == 0) {
+        if (newKeyframeIdQueue_.size() == 0) {
+            isIdle_ = true;
             backendUpdateTrigger_.wait(lock);
         }
+        isIdle_ = false;
 
         // Need to check again because the trigger could also be triggered during deconstruction
         if (backendRunning_)
         {
-            printf("[Backend] info queue size: %zu\n", frontendInfoToProcess_.size());
+            printf("[Backend] info queue size: %zu\n", newKeyframeIdQueue_.size());
             PopInfoFromQueue();
             printf("[Backend] starts processing new frame: %zu\n", keyframeCurr_->GetId());
             // unlock so that frontend could keep sending info
             lock.unlock();
 
             // ProjectMoreMappointsToNewKeyframe();
-            MapManager::Instance().AddKeyframe(keyframeCurr_);
-            AddObservingMappointsToNewKeyframe();
-            AddNewMappointsToExistingKeyframe();
+            ProjectNewMappointsToExistingKeyframe();
+
             OptimizeLocalMap();
             UpdateFrontendTrackingMap();
             CleanUp();
@@ -69,16 +68,13 @@ void Backend::BackendLoop()
 
 void Backend::PopInfoFromQueue() {
 
-    auto& info = frontendInfoToProcess_.front();
+    auto& keyframeId = newKeyframeIdQueue_.front();
 
     keyframePrev_ = keyframeCurr_;
-    keyframeCurr_ = info.keyframe;
-    oldMptIdKptIdxMap_.clear();
-    oldMptIdKptIdxMap_.insert(info.oldMptIdKptIdxMap.begin(), info.oldMptIdKptIdxMap.end());
-    newMptKptIdxMap_.clear();
-    newMptKptIdxMap_.insert(info.newMptKptIdxMap.begin(), info.newMptKptIdxMap.end());
+    keyframeCurr_ = mapManager_->GetKeyframe(keyframeId);
+    assert(keyframeCurr_);
 
-    frontendInfoToProcess_.pop();
+    newKeyframeIdQueue_.pop();
 }
 
 void Backend::ProjectMoreMappointsToNewKeyframe() {
@@ -86,17 +82,12 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
         return;
     }
 
-    unordered_map<size_t, Mappoint::Ptr> kptIdxNewMptMap;
-    for(auto& [mpt, kptIdx]: newMptKptIdxMap_) {
-        kptIdxNewMptMap[kptIdx] = mpt;
-    }
-
     unordered_map<size_t, pair<size_t, double>> kptIdxToMptIdAndDistance;
     unordered_map<size_t, Mappoint::Ptr> oldMptIdToMpt;
-    MapManager::Instance().GetMappointsNearKeyframe(keyframePrev_, oldMptIdToMpt);
+    mapManager_->GetMappointsNearKeyframe(keyframePrev_, oldMptIdToMpt);
     for(auto& [oldMptId, oldMpt]: oldMptIdToMpt) {
-        // If this mpt already match with new keyframe
-        if (oldMptIdKptIdxMap_.count(oldMptId)) {
+        // Check if this mpt already match with new keyframe
+        if (keyframeCurr_->IsObservingMappoint(oldMptId)) {
             continue;
         }
 
@@ -104,12 +95,13 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
         size_t kptIdx;
         bool mayObserveMpt;
         // Cannot find match
-        if (!keyframeCurr_->GetMatchedKeypoint(oldMpt, false, kptIdx, distance, mayObserveMpt) || distance > reMatchDescriptorDistance_) {
+        if (!keyframeCurr_->GetMatchedKeypoint(oldMpt, false, kptIdx, distance, mayObserveMpt) || distance > config_.reMatchDescriptorDistance) {
             continue;
         }
 
         // this kpt already has matched previous mappoint
-        if (!kptIdxNewMptMap.count(kptIdx)) {
+        // TODO: check if this mappoint is new created
+        if (keyframeCurr_->GetMatchedMappointIdForKeypoint(kptIdx).has_value()) {
             continue;
         }
 
@@ -121,36 +113,17 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
         kptIdxToMptIdAndDistance[kptIdx] = make_pair(oldMptId, distance);
     }
 
+    // Add the new observations
     for(auto& [kptIdx, oldMptIdAndDistance]: kptIdxToMptIdAndDistance) {
         auto& [oldMptId, _] = oldMptIdAndDistance;
-        oldMptIdKptIdxMap_[oldMptId] = kptIdx;
-        auto newMpt = kptIdxNewMptMap[kptIdx];
-        newMptKptIdxMap_.erase(newMpt);
+        auto& oldMpt = oldMptIdToMpt[oldMptId];
+        keyframeCurr_->AddObservingMappoint(kptIdx, oldMpt);
     }
 
     printf("[Backend] Projected %zu old mpts to new keyframe\n", kptIdxToMptIdAndDistance.size());
 }
 
-void Backend::AddObservingMappointsToNewKeyframe() {
-    // no need to update descriptor here since all mpts observed by current keyframe will be updated in the end of backend
-    for (const auto& [mptId, kptIdx] : oldMptIdKptIdxMap_) {
-        // old mpt may be replaced by previous new mpt
-        auto mpt = MapManager::Instance().GetPotentialReplacedMappoint(mptId);
-        // the mpt may already be considered as outlier
-        if (mpt->outlier_) {
-            continue;
-        }
-        keyframeCurr_->AddObservingMappoint(mpt, kptIdx);
-    }
-
-    // add new created mpts observations
-    for (const auto& [mpt, kptIdx]: newMptKptIdxMap_) {
-        MapManager::Instance().AddMappoint(mpt);
-        keyframeCurr_->AddObservingMappoint(mpt, kptIdx);
-    }
-}
-
-void Backend::AddNewMappointsToExistingKeyframe() {
+void Backend::ProjectNewMappointsToExistingKeyframe() {
     list<size_t> allCovisibleKfIds;
     keyframeCurr_->GetAllCovisibleKfIds(allCovisibleKfIds);
     unordered_set<Frame::Ptr> covisibleKfs;
@@ -184,19 +157,23 @@ void Backend::AddNewMappointsToExistingKeyframe() {
     double distance;
     size_t kptIdx;
     bool mayObserveMpt;
-    size_t oldMptId;
 
     for (auto& kf: covisibleKfs) {
 
         kptIdxToMptAndDistance.clear();
-        for (auto& [mpt, _]: newMptKptIdxMap_) {
-            if (!kf->GetMatchedKeypoint(mpt, false, kptIdx, distance, mayObserveMpt) || distance > reMatchDescriptorDistance_) {
+        
+        for (auto& mptId: keyframeCurr_->GetNewCreatedMappointIds()) {
+            auto mpt = mapManager_->GetMappoint(mptId);
+            if (!kf->GetMatchedKeypoint(mpt, false, kptIdx, distance, mayObserveMpt) || 
+                distance > config_.reMatchDescriptorDistance) {
                 continue;
             }
 
             // check if the old keyframe keypoint already has matched mappoint
-            if (kf->IsKeypointMatchWithMappoint(kptIdx, oldMptId)) {
+            const auto& optMptId = kf->GetMatchedMappointIdForKeypoint(kptIdx);
+            if (optMptId.has_value()) {
                 // if a previous matched keypoint could be matched with several new mappoints, find the best one for it
+                const size_t& oldMptId = optMptId.value();
                 if (oldMptIdToNewMptIdAndDistance.count(oldMptId) && 
                     distance >= oldMptIdToNewMptIdAndDistance[oldMptId].second) {
                     continue;
@@ -220,7 +197,7 @@ void Backend::AddNewMappointsToExistingKeyframe() {
 
     // add new observations
     for (auto& [kf, mpt, kptIdx]: observationsToAdd) {
-        kf->AddObservingMappoint(mpt, kptIdx);
+        kf->AddObservingMappoint(kptIdx, mpt);
     }
 
     // replace the previous mpt with the new mpt
@@ -304,12 +281,12 @@ void Backend::OptimizeLocalMap()
         // bool needTriangulate = !mpt->outlier_ && !(mpt->triangulated_ || mpt->optimized_);
         bool needTriangulate = false;
 
-        unordered_map<size_t, size_t> observedByKfIdToKptIdx;
-        mpt->GetObservedByKeyframesMap(observedByKfIdToKptIdx);
-        for (auto &[kfId, kptIdx] : observedByKfIdToKptIdx)
+        for (auto &kfId : mpt->GetObservedByKeyframeIds())
         {
-            auto keyframe = MapManager::Instance().GetKeyframe(kfId);
-            auto& kpt = keyframe->GetKeypoint(kptIdx);
+            auto keyframe = mapManager_->GetKeyframe(kfId);
+            const auto& optkptIdx = keyframe->GetMatchedKeypointIdxForMappoint(mptId);
+            assert(optkptIdx.has_value());
+            auto& measurement = keyframe->GetKeypoint(optkptIdx.value()).pt;
 
             if (keyframe == nullptr)
             {
@@ -344,10 +321,10 @@ void Backend::OptimizeLocalMap()
             edge->setVertex(0, poseVertex);
             edge->setVertex(1, mptVertex);
             edge->setId(++edgeIndex);
-            edge->setMeasurement(toVec2d(kpt.pt));
+            edge->setMeasurement(toVector2d(measurement));
             edge->setInformation(Eigen::Matrix<double, 2, 2>::Identity());
             auto rk = new g2o::RobustKernelHuber();
-            rk->setDelta(sqrt(baInlierThres_));
+            rk->setDelta(sqrt(config_.baInlierThres));
             edge->setRobustKernel(rk);
             optimizer_.addEdge(edge);
 
@@ -355,7 +332,7 @@ void Backend::OptimizeLocalMap()
 
             if (needTriangulate) {
                 poses.push_back(keyframe->GetTcw());
-                normalizedPos.push_back(keyframe->camera_->Pixel2Camera(kpt.pt));
+                normalizedPos.push_back(keyframe->camera_->Pixel2Camera(measurement));
             }
         }
 
@@ -374,7 +351,7 @@ void Backend::OptimizeLocalMap()
     optimizer_.initializeOptimization(0);
     optimizer_.optimize(20);
 
-    double adjustedInlierThres = baInlierThres_;
+    double adjustedInlierThres = config_.baInlierThres;
     size_t outlierCnt = 0;
     // Find the outlier observations
     for(size_t iteration = 0; iteration < 5; ++iteration) {

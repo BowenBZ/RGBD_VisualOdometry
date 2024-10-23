@@ -24,38 +24,29 @@ Mappoint::Mappoint(const size_t id, const Vector3d& pos, const Mat& descriptor)
   triangulated_(false), optimized_(false), outlier_(false) { }
 
 
-void Mappoint::AddObservedByKeyframe(const shared_ptr<Frame>& kf, const size_t kptIdx) {
-    unique_lock<mutex> lock(observationMutex_);
-    auto kfId = kf->GetId();
-    assert(!observedByKfIdToKptIdx_.count(kfId));
+void Mappoint::AddObservedByKeyframe(const shared_ptr<Frame>& kf) {
+    const auto& kfId = kf->GetId();
+    assert(!observedByKfId_.count(kfId));
 
-    observedByKfIdToKptIdx_[kfId] = kptIdx;
+    observedByKfId_.insert(kfId);
 
     // Update the mpt average viewing direction
     auto direction = (pos_ - kf->GetCamCenter()).normalized();
     norm_ = (norm_ + direction).normalized();
 
-    // as long as the mpt is observed by keyframe, it's not outlier
-    if (observedByKfIdToKptIdx_.size() > 1) {
-        outlier_ = false;
-    }
+    // TODO: need to update descriptor at this step?
 }
 
 void Mappoint::RemoveObservedByKeyframe(const size_t keyframeId) {
-    unique_lock<mutex> lck(observationMutex_);
-    assert(observedByKfIdToKptIdx_.count(keyframeId));
-    observedByKfIdToKptIdx_.erase(keyframeId);
+    assert(observedByKfId_.count(keyframeId));
+    observedByKfId_.erase(keyframeId);
 
-    // if all other observations has been removed
-    if(observedByKfIdToKptIdx_.size() == 1) {
-        // cout << "Mark as outlier mappint: " << id_ << endl;
-        outlier_ = true;
-    }
+    // TODO: need to update descriptor at this step? 
 }
 
 void Mappoint::UpdateNormViewDirection() {
     Vector3d direction(0, 0, 0);
-    for(auto& [kfId, kptIdx]: observedByKfIdToKptIdx_) {
+    for(auto& kfId: observedByKfId_) {
         auto kf = MapManager::Instance().GetKeyframe(kfId);
         direction += (pos_ - kf->GetCamCenter()).normalized();
     }
@@ -64,7 +55,7 @@ void Mappoint::UpdateNormViewDirection() {
 
 void Mappoint::UpdateDescriptor() {
     // When the observed by keyframe is less than 2, no need to calculate
-    if (observedByKfIdToKptIdx_.size() <= 2) {
+    if (observedByKfId_.size() <= 2) {
         return;
     }
 
@@ -72,9 +63,11 @@ void Mappoint::UpdateDescriptor() {
     vector<Mat> descriptors;
     size_t desCnt = descriptors.size();
     descriptors.reserve(desCnt);
-    for(auto& [kfId, kptIdx]: observedByKfIdToKptIdx_) {
+    for(auto& kfId: observedByKfId_) {
         auto kf = MapManager::Instance().GetKeyframe(kfId);
-        descriptors.push_back(kf->GetDescriptor(kptIdx));
+        const auto& optkptIdx = kf->GetMatchedKeypointIdxForMappoint(id_);
+        assert(optkptIdx.has_value());
+        descriptors.push_back(kf->GetDescriptor(optkptIdx.value()));
     }
 
     // Calculate the distance between descriptors

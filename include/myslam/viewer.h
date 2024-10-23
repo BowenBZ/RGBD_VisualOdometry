@@ -35,8 +35,7 @@ public:
     void SetCurrentFrame(
         const cv::Mat& colorImage,
         const Frame::Ptr& current_frame, 
-        const unordered_set<size_t>& matchedKptsIdx,
-        const unordered_set<size_t>& inlierKptsIdx);
+        const unordered_set<size_t>& matchedKptsIdx);
 
     /*
       Update the all_keyframes_ and all_mappoints_
@@ -56,7 +55,6 @@ private:
     KeyPointSet keypointsCurr_;
 
     unordered_set<size_t> matchedKptsIdx_;
-    unordered_set<size_t> inlierKptsIdx_;
 
     pangolin::OpenGlRenderState vis_camera_;
     pangolin::View vis_display_;

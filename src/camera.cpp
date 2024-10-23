@@ -68,7 +68,7 @@ Vector3d Camera::Pixel2Camera ( const Vector2d& p_p, double depth )
 
 Vector3d Camera::Pixel2Camera ( const Point2f& p_p, double depth )
 {
-    return Pixel2Camera(toVec2d(p_p), depth);
+    return Pixel2Camera(toVector2d(p_p), depth);
 }
 
 Vector2d Camera::World2Pixel ( const Vector3d& p_w, const SE3& T_c_w )
@@ -83,7 +83,7 @@ Vector3d Camera::Pixel2World ( const Vector2d& p_p, const SE3& T_c_w, double dep
 
 Vector3d Camera::Pixel2World ( const KeyPoint& p_p, const SE3& T_c_w, double depth )
 {
-    return Pixel2World(toVec2d(p_p), T_c_w, depth);
+    return Pixel2World(toVector2d(p_p), T_c_w, depth);
 }
 
 }

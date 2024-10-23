@@ -8,6 +8,9 @@ output_file: ./output/output.txt
 # single step mode
 single_step: 0
 
+# viewer paras
+enable_viewer: 0
+
 # camera intrinsics
 # Freiburg 1 RGB
 camera.fx: 517.3
@@ -35,25 +38,22 @@ max_descriptor_distance: 30
 min_best_secondary_distance_ratio: 0.5
 
 # flann feature matching paras
-min_matches_to_use_flann_frame_tracking: 200
-min_matches_to_use_flann_map_tracking: 250
-match_ratio: 2.0
+frontend.min_matches_to_use_flann_frame_tracking: 200
+frontend.min_matches_to_use_flann_map_tracking: 250
+frontend.match_ratio: 2.0
 
 # covisible paras
 active_covisible_keyframe_weight: 15
 
 # frontend paras
-frontend_ba_inlier_threshold: 5.991
-use_feature_active_search: 0
-max_num_lost: 10
-min_inliers_for_good_estimation: 10
-min_inliers_for_new_keyframe: 30
-keyframe_rotation: 0.05
-keyframe_translation: 0.05
+frontend.ba_inlier_threshold: 5.991
+frontend.use_feature_active_search: 0
+frontend.max_num_lost: 10
+frontend.min_inliers_for_good_estimation: 10
+frontend.min_inliers_for_new_keyframe: 30
+frontend.max_frame_rotation_allowed: 0.05
+frontend.max_frame_translation_allowed: 0.05
 
 # backend paras
-backend_ba_inlier_threshold: 5.991
-re_match_descriptor_distance: 5
-
-# viewer paras
-enable_viewer: 0
+backend.ba_inlier_threshold: 5.991
+backend.re_match_descriptor_distance: 5

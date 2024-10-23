@@ -9,16 +9,13 @@ namespace myslam {
 void Viewer::SetCurrentFrame(
     const cv::Mat& colorImage,
     const Frame::Ptr& current_frame, 
-    const unordered_set<size_t>& matchedKptsIdx,
-    const unordered_set<size_t>& inlierKptsIdx) {
+    const unordered_set<size_t>& matchedKptsIdx) {
 
     unique_lock<mutex> lck(viewer_data_mutex_);
     colorImage_ = colorImage.clone();
     current_frame_ = current_frame;
     matchedKptsIdx_.clear();
-    matchedKptsIdx_.insert(matchedKptsIdx.begin(), matchedKptsIdx.end());
-    inlierKptsIdx_.clear();
-    inlierKptsIdx_.insert(inlierKptsIdx.begin(), inlierKptsIdx.end());
+    matchedKptsIdx_ = std::move(matchedKptsIdx);
 }
 
 void Viewer::UpdateDrawingObjects() {
@@ -205,14 +202,9 @@ void Viewer::PlotFrameImage() {
 }
 
 cv::Scalar Viewer::GetKeypointColor(size_t kptIdx) {
-    // inlier points are green
-    if(inlierKptsIdx_.count(kptIdx)) {
-        return cv::Scalar(0, 255, 0);
-    }
-
-    // Matched but outlier points are blue
+    // Matched kpt are green
     if(matchedKptsIdx_.count(kptIdx)) {
-        return cv::Scalar(255, 0, 0);
+        return cv::Scalar(0, 255, 0);
     }
 
     // Unmatched point is red

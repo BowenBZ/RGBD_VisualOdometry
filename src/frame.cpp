@@ -61,6 +61,8 @@ double Frame::GetDepth(const KeyPoint& kp)
     return -1.0;
 }
 
+#pragma mark - Feature matching
+
 void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& detector) {
     
     size_t rowPerSection = config_.imgRows / config_.rowSectionCnt;
@@ -202,20 +204,18 @@ void Frame::getNearbyGrids(size_t gridIdx, list<size_t>& nearbyGrids) {
     }
 }
 
-void Frame::AddObservingMappoint(const Mappoint::Ptr& mpt, const size_t kptIdx) {
-    unique_lock<mutex> lck(observationMutex_);
-    
-    auto mptId = mpt->GetId();
+#pragma mark - observing relationships
+
+void Frame::AddObservingMappoint(const size_t kptIdx, const Mappoint::Ptr& mpt) {
+    auto& mptId = mpt->GetId();
     assert(!observingMptIdToKptIdxMap_.count(mptId));
     observingMptIdToKptIdxMap_[mptId] = kptIdx;
     kptIdxToObservingMptIdMap_[kptIdx] = mptId;
 
-    assert(mpt != nullptr);
-    mpt->AddObservedByKeyframe(shared_from_this(), kptIdx);
+    mpt->AddObservedByKeyframe(shared_from_this());
+    mpt->UpdateDescriptor();
 
-    unordered_map<size_t, size_t> observedByKfIdToKptIdx;
-    mpt->GetObservedByKeyframesMap(observedByKfIdToKptIdx);
-    for (auto& [otherKfId, _]: observedByKfIdToKptIdx) {
+    for (auto& otherKfId: mpt->GetObservedByKeyframeIds()) {
         if (otherKfId == id_) {
             continue;
         }
@@ -234,9 +234,19 @@ void Frame::AddObservingMappoint(const Mappoint::Ptr& mpt, const size_t kptIdx) 
     }
 }
 
-void Frame::RemoveObservingMappoint(const size_t mptId) {
-    unique_lock<mutex> lck(observationMutex_);
+void Frame::AddObservingMappointCreatedFromThisFrame(const size_t kptIdx, const Mappoint::Ptr& mpt) {
+    auto& mptId = mpt->GetId();
+    assert(!observingMptIdToKptIdxMap_.count(mptId));
+    observingMptIdToKptIdxMap_[mptId] = kptIdx;
+    kptIdxToObservingMptIdMap_[kptIdx] = mptId;
+    newCreatedMptId_.push_back(mptId);
 
+    mpt->AddObservedByKeyframe(shared_from_this());
+
+    // No need to update covisible graph since this mappoint is only observed by this frame.
+}
+
+void Frame::RemoveObservingMappoint(const size_t mptId) {
     assert(observingMptIdToKptIdxMap_.count(mptId));
     size_t kptIdx = observingMptIdToKptIdxMap_[mptId];
     observingMptIdToKptIdxMap_.erase(mptId);
@@ -246,9 +256,7 @@ void Frame::RemoveObservingMappoint(const size_t mptId) {
     assert(mpt != nullptr);
     mpt->RemoveObservedByKeyframe(this->id_);
 
-    unordered_map<size_t, size_t> observedByKfIdToKptIdx;
-    mpt->GetObservedByKeyframesMap(observedByKfIdToKptIdx);
-    for (auto& [otherKFId, _]: observedByKfIdToKptIdx) {
+    for (auto& otherKFId: mpt->GetObservedByKeyframeIds()) {
         if (otherKFId == this->id_) {
             continue;
         }
@@ -272,10 +280,9 @@ void Frame::RemoveObservingMappoint(const size_t mptId) {
     // TODO: if all the observations has been removed, consider this keyframe as outlier?
 }
 
+#pragma mark - covisible keyframes
 
 void Frame::UpdateCovisibleKeyframeWeight(const size_t otherKfId, const size_t weight) {
-    unique_lock<mutex> lck(observationMutex_);
-
     if (weight == 0) {
         allCovisibleKfIdToWeight_.erase(otherKfId);
         allCovisibleKfIds_.erase(otherKfId);

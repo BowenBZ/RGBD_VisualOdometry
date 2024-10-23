@@ -15,14 +15,14 @@
 #include "myslam/camera.h"
 #include "myslam/private/frame.h"
 #include "myslam/private/g2o_types.h"
+#include "myslam/private/mapmanager.h"
 
 namespace myslam {
 
-struct FrontendToBackendInfo {
-    Frame::Ptr                              keyframe;
-    unordered_map<size_t, size_t>           oldMptIdKptIdxMap;
-    unordered_map<Mappoint::Ptr, size_t>    newMptKptIdxMap;
-};
+typedef struct {
+    double  reMatchDescriptorDistance;
+    double  baInlierThres;
+} BackendConfig;
 
 class Backend {
 public:
@@ -40,9 +40,15 @@ public:
     void Stop();
 
     // Add a new keyframe to the queue
-    void AddNewKeyframeInfo(const FrontendToBackendInfo& info);
+    void AddNewKeyframeInfoToQueue(const size_t keyframeId);
+
+    // If backend is idle
+    bool IsIdle() const {
+        return isIdle_;
+    }
 
 private:
+    BackendConfig       config_;
 
     thread              backendThread_;
     bool                backendRunning_;
@@ -50,18 +56,17 @@ private:
     condition_variable  backendUpdateTrigger_;
 
     Camera::Ptr         camera_;
+    MapManager::Ptr     mapManager_;
 
-    Frame::Ptr                              keyframePrev_;
-    Frame::Ptr                              keyframeCurr_;
-    unordered_map<size_t, size_t>           oldMptIdKptIdxMap_;
-    unordered_map<Mappoint::Ptr, size_t>    newMptKptIdxMap_;
-    
-    queue<FrontendToBackendInfo>            frontendInfoToProcess_;
+    bool                isIdle_;
 
-    double                                  reMatchDescriptorDistance_;
+    // Queue to store new keyframe id from frontend
+    queue<size_t>       newKeyframeIdQueue_;
+
+    Frame::Ptr          keyframePrev_;
+    Frame::Ptr          keyframeCurr_;
     
-    g2o::SparseOptimizer                    optimizer_;
-    double                                  baInlierThres_;
+    g2o::SparseOptimizer                                                    optimizer_;
 
     unordered_map<size_t, pair<Frame::Ptr, VertexPose*>>                    kfIdToCovKfThenVertex_;
     unordered_map<size_t, pair<Mappoint::Ptr, VertexMappoint*>>             mptIdToMptThenVertex_;
@@ -87,7 +92,7 @@ private:
     void AddObservingMappointsToNewKeyframe();
 
     // add the new observations for old keyframes
-    void AddNewMappointsToExistingKeyframe();
+    void ProjectNewMappointsToExistingKeyframe();
 
     // perform the optimization for local map
     void OptimizeLocalMap();

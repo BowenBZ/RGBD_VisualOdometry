@@ -30,12 +30,12 @@ inline bool Triangulation(const vector<SE3>&        poses,
     return false;
 }
 
-inline Vector2d toVec2d(const Point2f& pt) {
+inline Vector2d toVector2d(const Point2f& pt) {
     return Vector2d ( pt.x, pt.y );
 }
 
-inline Vector2d toVec2d(const KeyPoint& kp) {
-    return toVec2d( kp.pt );
+inline Vector2d toVector2d(const KeyPoint& kp) {
+    return toVector2d( kp.pt );
 }
 
 inline Vector3d toVector3d(const Point3f& pt) {

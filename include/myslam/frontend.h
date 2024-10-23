@@ -41,8 +41,8 @@ typedef struct {
     double                  baInlierThres;     // Threshold to be consider as an inlier after BA
     size_t                  minInliersForGood; // Minimum inliers to treat current frame as good
     size_t                  minInliersForKeyframe; // Minimum inliers to consider current frame as keyframe
-    double                  keyFrameMinRot;    // minimal rotation of two key-frames
-    double                  keyFrameMinTrans;  // minimal translation of two key-frames
+    double                  maxFrameRotAllowed;    // minimal rotation of two key-frames
+    double                  maxFrameTransAllowed;  // minimal translation of two key-frames
 
     size_t                  maxLostFrames;     // Max number of lost tracking frames
 } FrontendConfig;
@@ -103,29 +103,22 @@ private:
     cv::Ptr<cv::ORB>        orb_;               // Orb detector and computer 
     cv::FlannBasedMatcher   flannMatcher_;      // flann matcher used if active search fails
 
-    TrackingMap             trackingMap_;       // the local tracking map
+    // mutex for update tracking map
+    mutex                   trackingMapMutex_;
+    // the local tracking map sent from backend
+    TrackingMap             trackingMap_;       
+    // Mappoints observed by last frame, including matched mappoints from trackingMap_ and new mappoints created from last frame 
+    TrackingMap             lastFrameMpts_;
 
-    // Matched (mappoint id <-> keypoint idx of current frame)
-    unordered_map<size_t, size_t>   matchedMptIdToKptIdx_;
+    // Matched (keypoint idx of current frame -> mappoint id)
     unordered_map<size_t, size_t>   matchedKptIdxToMptId_;
-
-    unordered_map<size_t, size_t>   flannMatchedMptIdKptIdxMap_;     // matched mappoint id to keypoint idx
-    unordered_map<size_t, size_t>   flannMatchedKptIdxMptIdMap_;     // matched keypoint idx to mappoint id
-    unordered_map<size_t, double>   flannMatchedKptIdxDistanceMap_;  // matched keypoint idx to distance
-
-    unordered_map<size_t, size_t>   baInlierMptIdKptIdxMap_;      // inlier mappoint to kpt idx after PNP estimation
-    unordered_set<size_t>   baInlierKptIdxSet_;     // inlier keypoint idx after PNP estimation
-    size_t                  numInliers_;            // inlier count, should equal to size of baInlierKptIdxSet_
+    // Matched (keypoint idx of current frame -> mappoint id) using FLANN
+    unordered_map<size_t, size_t>   flannMatchedKptIdxMptIdMap_;    
     
     g2o::SparseOptimizer    optimizer_;
 
-    TrackingMap             lastFrameMpts_;         // mpt of last frame including matched mpts and temp mpts 
-    unordered_map<Mappoint::Ptr, size_t> tempMptKptIdxMap_;   // temp mpts id to kpt idx
-
-    // parameters, see config/default.yaml
-    
-    
-    mutex                   trackingMapMutex_;  // mutex for update tracking map
+    // (keypoint idx of current frame -> new created mappoints from current frame)
+    unordered_map<size_t, Mappoint::Ptr> kptIdxToNewMpt_;
 
     void InitializationHandler();
     bool TrackingHandler();
@@ -149,6 +142,9 @@ private:
 
     // create temp mappoints for current frame, used for next frame feature matching
     void CreateTempMappoints();
+
+    // Send keyframe to backend
+    void SendKeyframeToBackend();
 };
 }
 

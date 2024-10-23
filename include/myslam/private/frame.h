@@ -88,6 +88,8 @@ public:
         return T_c_w_.inverse().translation();
     }
 
+#pragma mark - Feature matching
+
     void ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& detector);
 
     const size_t GetKeypointsSize() const {
@@ -112,50 +114,64 @@ public:
     // Get matched keypoint idx for the mappoint
     bool GetMatchedKeypoint(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, double& distance, bool& mayObserveMpt);
 
+#pragma mark - observing relationships
+
     /*
+    * Add the observation relationship for existing mappoints already in MapManager
     * 1. Add observing mappoint 
-    * 2. Add observedBy keyframe to the mappoint
+    * 2. Add observedBy keyframe to the mappoint, update the average descriptor of the mappoint
     * 3. Update the covisible keyframes
     */ 
-    void AddObservingMappoint(const Mappoint::Ptr& mpt, const size_t kptIdx);
+    void AddObservingMappoint(const size_t kptIdx, const Mappoint::Ptr& mpt);
+
+    /*
+    * Add the observation relationship for new created mappoints from this frame
+    */
+    void AddObservingMappointCreatedFromThisFrame(const size_t kptIdx, const Mappoint::Ptr& mpt);
 
     // Remove observed mappoint and also update the covisible keyframes
     void RemoveObservingMappoint(const size_t mptId);
 
     void GetObservingMappointIds(list<size_t>& observingMptIds) {
-        unique_lock<mutex> lck(observationMutex_);
-
         observingMptIds.clear();
         for(auto& [mptId, _]: observingMptIdToKptIdxMap_) {
             observingMptIds.push_back(mptId);
         }
     }
 
+    vector<size_t>& GetNewCreatedMappointIds() {
+        return newCreatedMptId_;
+    }
+
     // Return if frame is already observeing mappoint
     bool IsObservingMappoint(const size_t id) {
-        unique_lock<mutex> lck(observationMutex_);
         return observingMptIdToKptIdxMap_.count(id);
     }
 
-    // Return if keypoint has matched mappoint
-    bool IsKeypointMatchWithMappoint(const size_t kptIdx, size_t& mptId) {
-        unique_lock<mutex> lck(observationMutex_);
-        if (kptIdxToObservingMptIdMap_.count(kptIdx)) {
-            mptId = kptIdxToObservingMptIdMap_[kptIdx];
-            return true;
+    // Return the matched mappoint id matched with given keypoint index
+    optional<size_t> GetMatchedMappointIdForKeypoint(const size_t kptIdx) {
+        if (!kptIdxToObservingMptIdMap_.count(kptIdx)) {
+            return nullopt;
         }
-
-        return false;
+        return kptIdxToObservingMptIdMap_[kptIdx];
     }
 
+    // Return the idx of the keypoint matched with given mappoint
+    optional<size_t> GetMatchedKeypointIdxForMappoint(const size_t& mptId) {
+        if (!observingMptIdToKptIdxMap_.count(mptId)) {
+            return nullopt;
+        }
+        return observingMptIdToKptIdxMap_[mptId];
+    }
+
+#pragma mark - covisible keyframes
+
     void GetActiveCovisibleKfIds(list<size_t>& activeCovisibleKfIds) {
-        unique_lock<mutex> lck(observationMutex_);
         activeCovisibleKfIds.clear();
         activeCovisibleKfIds.insert(activeCovisibleKfIds.end(), activeCovisibleKfIds_.begin(), activeCovisibleKfIds_.end());
     }
 
     void GetAllCovisibleKfIds(list<size_t>& allCovisibleKfIds) {
-        unique_lock<mutex> lck(observationMutex_);
         allCovisibleKfIds.clear();
         allCovisibleKfIds.insert(allCovisibleKfIds.end(), allCovisibleKfIds_.begin(), allCovisibleKfIds_.end());
     }
@@ -178,9 +194,15 @@ private:
 
     unordered_map<size_t, list<size_t>> gridToKptIdx_;       // idx of keypoints for a grid
 
-    mutex                           observationMutex_;
-    unordered_map<size_t, size_t>   kptIdxToObservingMptIdMap_;          // keypoint idx to respective mpt id
-    unordered_map<size_t, size_t>   observingMptIdToKptIdxMap_;          // observing mpt to respective keypoint idx
+    // Only keyframe will use following fields. 
+    // No need to add lock to the observation relationship, since frontend and backend won't modify the observation relationship the same time.
+
+    // <keypoint idx, mpt id>
+    unordered_map<size_t, size_t>   kptIdxToObservingMptIdMap_;
+    // <mpt id, keypoint idx>
+    unordered_map<size_t, size_t>   observingMptIdToKptIdxMap_;
+    // id of mappoints created from this frame
+    vector<size_t>                  newCreatedMptId_;
 
     unordered_map<size_t, size_t>   allCovisibleKfIdToWeight_;    // All covisible keyframe 
     unordered_set<size_t>           allCovisibleKfIds_;           // All covisible keyframe ids

@@ -62,25 +62,23 @@ public:
     void UpdateDescriptor();
 
     Mat GetDescriptor() {
-        unique_lock<mutex> lock(observationMutex_);
         return descriptor_;
     }
 
     Vector3d GetNormDirection() {
-        unique_lock<mutex> lock(observationMutex_);
         return norm_;
     }
 
+#pragma mark - Observation relationships
+
     // only be called by keyframe object
-    void AddObservedByKeyframe(const std::shared_ptr<Frame>& kf, const size_t kptIdx);
+    void AddObservedByKeyframe(const std::shared_ptr<Frame>& kf);
     
     // only be called by keyframe object
     void RemoveObservedByKeyframe(const size_t kfId);
 
-    void GetObservedByKeyframesMap(std::unordered_map<size_t, size_t>& observedByKfIdToKptIdx) {
-        unique_lock<mutex> lock(observationMutex_);
-        observedByKfIdToKptIdx.clear();
-        observedByKfIdToKptIdx.insert(observedByKfIdToKptIdx_.begin(), observedByKfIdToKptIdx_.end());
+    unordered_set<size_t>& GetObservedByKeyframeIds() {
+        return observedByKfId_;
     }
 
 
@@ -94,8 +92,8 @@ private:
     mutex                       posMutex_;
     Vector3d                    pos_;           // Position in world reference frame
 
-    mutex                       observationMutex_;
-    unordered_map<size_t, size_t>    observedByKfIdToKptIdx_;
+    // No need to add lock since frontend and backend won't update at the same time.
+    unordered_set<size_t>       observedByKfId_;
 
     // mappoint can only be created by factory
     Mappoint(const size_t id, const Vector3d& pos, const Mat& descriptor);
