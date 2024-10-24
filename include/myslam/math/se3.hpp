@@ -33,7 +33,12 @@ public:
         position_ = transform.template block<3, 1>(0, 3);
     }
 
-    // TODO: assign operator
+    SE3& operator=(const SE3& other) {
+        this->rotation_ = other.rotation_;
+        this->position_ = other.position_;
+        this->algebra_ = other.algebra_;
+        return *this;
+    }
 
 #pragma getter
 

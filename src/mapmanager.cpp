@@ -24,9 +24,7 @@ void MapManager::GetMappointsNearKeyframe(const Frame::Ptr& keyframe, MappointId
         assert(keyframesDict_.count(kfId));
         auto& kf = keyframesDict_[kfId];
 
-        list<size_t> observingMptIds;
-        kf->GetObservingMappointIds(observingMptIds);
-        for(auto& mptId: observingMptIds) {
+        for(auto& [mptId, _]: kf->GetAllObservingMptIdToKptIdx()) {
             assert(mappointsDict_.count(mptId));
 
             auto& mpt = mappointsDict_[mptId];

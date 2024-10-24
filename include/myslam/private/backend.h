@@ -24,6 +24,13 @@ typedef struct {
     double  baInlierThres;
 } BackendConfig;
 
+typedef struct {
+    BinaryEdgeProjection* edge;
+    bool isOutlier;
+    Frame::Ptr keyframe;
+    Mappoint::Ptr mappoint;
+} GraphEdgeInfo;
+
 class Backend {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
@@ -72,7 +79,7 @@ private:
     unordered_map<size_t, pair<Mappoint::Ptr, VertexMappoint*>>             mptIdToMptThenVertex_;
     // keyframes not belonging to covisible keyframes but could observe the local mappoints
     unordered_map<size_t, pair<Frame::Ptr, VertexPose*>>                    kfIdToFixedKfThenVertex_;
-    unordered_map<BinaryEdgeProjection*, pair<Frame::Ptr, Mappoint::Ptr>>   edgeToKfThenMpt_;
+    list<GraphEdgeInfo>                                                     edges_;
 
     list<pair<Frame::Ptr, size_t>>  observingMptToRemove_;
     unordered_set<Mappoint::Ptr>    observingMptToRemoveSet_;

@@ -74,13 +74,11 @@ public:
     }
 
     // Get T_c_w
-    SE3 GetTcw() {
-        unique_lock<mutex> lck(poseMutex_);
+    SE3 GetTcw() const {
         return T_c_w_;
     }
 
     void SetTcw(const SE3 pose) {
-        unique_lock<mutex> lck(poseMutex_);
         T_c_w_ = std::move(pose);
     }
 
@@ -131,7 +129,7 @@ public:
 
     /*
     * Add the observation relationship for existing mappoints already in MapManager
-    * 1. Add observing mappoint 
+    * 1. Add observing mappoint (idx -> mptId, mptId -> idx)
     * 2. Add observedBy keyframe to the mappoint, update the average descriptor of the mappoint
     * 3. Update the covisible keyframes
     */ 
@@ -145,18 +143,15 @@ public:
     // Remove observed mappoint and also update the covisible keyframes
     void RemoveObservingMappoint(const size_t mptId);
 
-    void GetObservingMappointIds(list<size_t>& observingMptIds) {
-        observingMptIds.clear();
-        for(auto& [mptId, _]: observingMptIdToKptIdx_) {
-            observingMptIds.push_back(mptId);
-        }
+    const unordered_map<size_t, size_t>& GetAllObservingMptIdToKptIdx() {
+        return observingMptIdToKptIdx_;
     }
 
-    vector<size_t>& GetNewCreatedMappointIds() {
+    const vector<size_t>& GetNewCreatedMappointIds() {
         return newCreatedMptId_;
     }
 
-    // Return if frame is already observeing mappoint
+    // Return if frame observes a mappoint
     bool IsObservingMappoint(const size_t id) {
         return observingMptIdToKptIdx_.count(id);
     }
@@ -184,7 +179,9 @@ public:
 
     void GetAllCovisibleKfIds(list<size_t>& allCovisibleKfIds) {
         allCovisibleKfIds.clear();
-        allCovisibleKfIds.insert(allCovisibleKfIds.end(), allCovisibleKfIds_.begin(), allCovisibleKfIds_.end());
+        for (auto& [kfId, _]: allCovisibleKfIdToWeight_) {
+            allCovisibleKfIds.push_back(kfId);
+        }
     }
 
 private: 
@@ -197,7 +194,6 @@ private:
     Mat                     color_;         // color image, become null after temporary mappoint creation
     Mat                     depth_;         // depth image, become null after temporary mappoint creation
 
-    mutex                   poseMutex_;
     SE3                     T_c_w_;         // transform from world to camera
     
     // detected feature points info
@@ -214,17 +210,18 @@ private:
     // id of mappoints created from this frame
     vector<size_t>                  newCreatedMptId_;
 
-    unordered_map<size_t, size_t>   allCovisibleKfIdToWeight_;    // All covisible keyframe 
-    unordered_set<size_t>           allCovisibleKfIds_;           // All covisible keyframe ids
-    unordered_set<size_t>           activeCovisibleKfIds_;        // Active covisible keyframes (has same observed mappoints >= activeCovisibleWeight_) and the number of covisible mappoints
+    // <covisible keyframe id, weight>
+    unordered_map<size_t, size_t>   allCovisibleKfIdToWeight_;
+    // Active covisible keyframes ids (has same observed mappoints >= activeCovisibleWeight_)
+    unordered_set<size_t>           activeCovisibleKfIds_;
 
 
-    Frame(  const FrameConfig config,
-            const size_t id, 
-            const double timestamp, 
-            const Camera::Ptr& camera, 
-            const Mat& color, 
-            const Mat& depth );
+    Frame(const FrameConfig config,
+          const size_t id, 
+          const double timestamp, 
+          const Camera::Ptr& camera, 
+          const Mat& color, 
+          const Mat& depth);
 
     // Construct the keypoint grids for active search and match
     void ConstructKeypointGrids();

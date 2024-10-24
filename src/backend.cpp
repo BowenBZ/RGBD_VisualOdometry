@@ -57,7 +57,7 @@ void Backend::BackendLoop()
             lock.unlock();
 
             // ProjectMoreMappointsToNewKeyframe();
-            ProjectNewMappointsToExistingKeyframe();
+            // ProjectNewMappointsToExistingKeyframe();
 
             OptimizeLocalMap();
             UpdateFrontendTrackingMap();
@@ -222,12 +222,8 @@ void Backend::OptimizeLocalMap()
     // Create pose vertices and mappoint vertices for covisible keyframes
     for (auto &kfId : covisibleKfIds)
     {
-        auto kf = MapManager::Instance().GetKeyframe(kfId);
-
-        if (kf == nullptr)
-        {
-            continue;
-        }
+        auto kf = mapManager_->GetKeyframe(kfId);
+        assert(kf);
 
         // Create camera pose vertex
         VertexPose* poseVertex = new VertexPose;
@@ -240,18 +236,15 @@ void Backend::OptimizeLocalMap()
         kfIdToCovKfThenVertex_[kfId] = make_pair(kf, poseVertex);
 
         // Create mappoint vertices
-        list<size_t> observingMptIds;
-        kf->GetObservingMappointIds(observingMptIds);
-        for (auto &mptId : observingMptIds)
+        for (auto &[mptId, _] : kf->GetAllObservingMptIdToKptIdx())
         {
-            if (mptIdToMptThenVertex_.count(mptId))
-            {
+            if (mptIdToMptThenVertex_.count(mptId)) {
                 continue;
             }
 
-            auto mpt = MapManager::Instance().GetMappoint(mptId);
-            if (mpt == nullptr || mpt->outlier_)
-            {
+            auto mpt = mapManager_->GetMappoint(mptId);
+            assert(mpt);
+            if (mpt->outlier_) {
                 continue;
             }
 
@@ -269,7 +262,7 @@ void Backend::OptimizeLocalMap()
 
     int edgeIndex = 0;
 
-    // Create pose vertices for fixed keyframe and add all edges, also perform triangulation
+    // Add all measurement edges, and fixed pose pose vertices, also perform triangulation
     size_t triangulatedCnt = 0;
     for (auto& [mptId, mptAndVertex] : mptIdToMptThenVertex_)
     {   
@@ -281,38 +274,32 @@ void Backend::OptimizeLocalMap()
         // bool needTriangulate = !mpt->outlier_ && !(mpt->triangulated_ || mpt->optimized_);
         bool needTriangulate = false;
 
-        for (auto &kfId : mpt->GetObservedByKeyframeIds())
-        {
+        for (auto &kfId : mpt->GetObservedByKeyframeIds()) {
             auto keyframe = mapManager_->GetKeyframe(kfId);
+            assert(keyframe);
+
             const auto& optkptIdx = keyframe->GetMatchedKeypointIdxForMappoint(mptId);
             assert(optkptIdx.has_value());
             auto& measurement = keyframe->GetKeypoint(optkptIdx.value()).pt;
 
-            if (keyframe == nullptr)
-            {
-                continue;
-            }
             // TODO: check is keyframe is outlier
 
             VertexPose* poseVertex;
-            // If the keyframe is covisible keyFrame
-            if (kfIdToCovKfThenVertex_.count(kfId))
-            {
+            if (kfIdToCovKfThenVertex_.count(kfId)) {
+                // If the keyframe is a covisible keyframe
                 poseVertex = kfIdToCovKfThenVertex_[kfId].second;
             }
-            else
-            {
-                // else needs to create a new vertex for fixed keyFrame
-                VertexPose* fixedPoseVertex = new VertexPose;
-                fixedPoseVertex->setId(++vertexIndex);
-                fixedPoseVertex->setEstimate(keyframe->GetTcw());
-                fixedPoseVertex->setFixed(true);
-                optimizer_.addVertex(fixedPoseVertex);
+            else {
+                // Otherwise this keyframe is a 2nd-order covisible keyframe.
+                // It needs to be added into the graph optimization but it's pose should keep fixed.
+                poseVertex = new VertexPose;
+                poseVertex->setId(++vertexIndex);
+                poseVertex->setEstimate(keyframe->GetTcw());
+                poseVertex->setFixed(true);
+                optimizer_.addVertex(poseVertex);
 
                 // Record in map
-                kfIdToFixedKfThenVertex_[kfId] = make_pair(keyframe, fixedPoseVertex);
-
-                poseVertex = fixedPoseVertex;
+                kfIdToFixedKfThenVertex_[kfId] = make_pair(keyframe, poseVertex);
             }
 
             // Add edge
@@ -328,7 +315,7 @@ void Backend::OptimizeLocalMap()
             edge->setRobustKernel(rk);
             optimizer_.addEdge(edge);
 
-            edgeToKfThenMpt_[edge] = make_pair(keyframe, mpt);
+            edges_.push_back({edge, false, keyframe, mpt});
 
             if (needTriangulate) {
                 poses.push_back(keyframe->GetTcw());
@@ -348,33 +335,43 @@ void Backend::OptimizeLocalMap()
         }
     }
 
-    optimizer_.initializeOptimization(0);
-    optimizer_.optimize(20);
-
     double adjustedInlierThres = config_.baInlierThres;
     size_t outlierCnt = 0;
-    // Find the outlier observations
-    for(size_t iteration = 0; iteration < 5; ++iteration) {
+
+    // Optimize 4 * 20 steps
+    for(size_t iteration = 0; iteration < 4; ++iteration) {
+        optimizer_.initializeOptimization(0);
+        optimizer_.optimize(20);
+
         outlierCnt = 0;
         observingMptToRemove_.clear();
         observingMptToRemoveSet_.clear();
-        for (auto& [edge, kfAndMpt] : edgeToKfThenMpt_)
-        {
-            auto& [kf, mpt] = kfAndMpt;
-            if (edge->chi2() > adjustedInlierThres)
-            {
+
+        for (auto& [edge, isOutlier, kf, mpt] : edges_) {
+            // Compute error for outlier edges since they won't be calculated during optimization
+            if (isOutlier) {
+                edge->computeError();
+            }
+
+            // chi2 is the (u^2 + v^2)
+            if (edge->chi2() > adjustedInlierThres) {
+                // level 1 edges won't be optimized later
+                edge->setLevel(1);
+                isOutlier = true;
                 observingMptToRemove_.push_back(make_pair(kf, mpt->GetId()));
                 observingMptToRemoveSet_.insert(mpt);
                 ++outlierCnt;
             } else {
-                mpt->optimized_ = true;
+                edge->setLevel(0);
+                isOutlier = false;
             }
+
+            mpt->optimized_ = isOutlier;
         }
 
-        double outlierRatio = outlierCnt / double(edgeToKfThenMpt_.size());
-        if (outlierRatio < 0.5) {
-            break;
-        } else {
+        // Loose the threshold if the outlier is too much
+        double outlierRatio = outlierCnt / double(edges_.size());
+        if (outlierRatio > 0.5) {
             adjustedInlierThres *= 2;
         }
     }
@@ -384,7 +381,7 @@ void Backend::OptimizeLocalMap()
     printf("  fixed pose count: %zu\n", kfIdToFixedKfThenVertex_.size());
     printf("  optimized mappoint count: %zu\n", mptIdToMptThenVertex_.size());
     printf("  triangulated mappoints count: %zu\n", triangulatedCnt);
-    printf("  edge count: %zu\n", edgeToKfThenMpt_.size());
+    printf("  edge count: %zu\n", edges_.size());
     printf("  outlier edge count: %zu\n\n", outlierCnt);
 }
 
@@ -432,7 +429,7 @@ void Backend::CleanUp() {
     kfIdToCovKfThenVertex_.clear();
     mptIdToMptThenVertex_.clear();
     kfIdToFixedKfThenVertex_.clear();
-    edgeToKfThenMpt_.clear();
+    edges_.clear();
 
     observingMptToRemove_.clear();
     observingMptToRemoveSet_.clear();

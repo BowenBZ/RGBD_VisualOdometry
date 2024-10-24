@@ -228,13 +228,13 @@ void Frame::AddObservingMappoint(const size_t kptIdx, const Mappoint::Ptr& mpt) 
         assert(otherKF != nullptr);
         assert(otherKF->IsObservingMappoint(mptId));
 
-        ++allCovisibleKfIdToWeight_[otherKfId];
-        allCovisibleKfIds_.insert(otherKfId);
-        if (allCovisibleKfIdToWeight_[otherKfId] >= config_.activeCovisibleWeight) {
+        auto& covisibleWeight = allCovisibleKfIdToWeight_[otherKfId];
+        ++covisibleWeight;
+        if (covisibleWeight >= config_.activeCovisibleWeight) {
             activeCovisibleKfIds_.insert(otherKfId);
         }
 
-        otherKF->UpdateCovisibleKeyframeWeight(id_, allCovisibleKfIdToWeight_[otherKfId]);
+        otherKF->UpdateCovisibleKeyframeWeight(id_, covisibleWeight);
     }
 }
 
@@ -276,16 +276,15 @@ void Frame::RemoveObservingMappoint(const size_t mptId) {
         assert(otherKF != nullptr);
         assert(otherKF->IsObservingMappoint(mptId));
 
-        --allCovisibleKfIdToWeight_[otherKFId];
-        size_t newWeight = allCovisibleKfIdToWeight_[otherKFId];
-        if (newWeight == 0) {
+        auto& covisibleWeight = allCovisibleKfIdToWeight_[otherKFId];
+        --covisibleWeight;
+        if (covisibleWeight == 0) {
             allCovisibleKfIdToWeight_.erase(otherKFId);
-            allCovisibleKfIds_.erase(otherKFId);
-        } else if (newWeight < config_.activeCovisibleWeight) {
+        } else if (covisibleWeight < config_.activeCovisibleWeight) {
             activeCovisibleKfIds_.erase(otherKFId);
         }
         
-        otherKF->UpdateCovisibleKeyframeWeight(this->id_, newWeight);
+        otherKF->UpdateCovisibleKeyframeWeight(this->id_, covisibleWeight);
     }
 
     // TODO: if all the observations has been removed, consider this keyframe as outlier?
@@ -296,15 +295,12 @@ void Frame::RemoveObservingMappoint(const size_t mptId) {
 void Frame::UpdateCovisibleKeyframeWeight(const size_t otherKfId, const size_t weight) {
     if (weight == 0) {
         allCovisibleKfIdToWeight_.erase(otherKfId);
-        allCovisibleKfIds_.erase(otherKfId);
         activeCovisibleKfIds_.erase(otherKfId);
     } else if (weight >= config_.activeCovisibleWeight) {
         allCovisibleKfIdToWeight_[otherKfId] = weight;
-        allCovisibleKfIds_.insert(otherKfId);
         activeCovisibleKfIds_.insert(otherKfId);
     } else {
         allCovisibleKfIdToWeight_[otherKfId] = weight;
-        allCovisibleKfIds_.insert(otherKfId);
         activeCovisibleKfIds_.erase(otherKfId);
     }
 }

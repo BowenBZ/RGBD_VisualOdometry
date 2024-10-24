@@ -41,13 +41,11 @@ public:
     // there will be only 1 time copy of parameters happening in the private constructor
     static Mappoint::Ptr CreateMappoint(const Vector3d& pos, const Mat& descriptor);
 
-    Vector3d GetPosition() {
-        unique_lock<mutex> lock(posMutex_);
+    const Vector3d& GetPosition() const {
         return pos_;
     }
 
     void SetPosition(const Vector3d pos) {
-        unique_lock<mutex> lock(posMutex_);
         pos_ = std::move(pos);
     }
 
@@ -61,7 +59,7 @@ public:
     // Recalculate descriptor when it's observed by several keyframes
     void UpdateDescriptor();
 
-    Mat GetDescriptor() {
+    const Mat& GetDescriptor() {
         return descriptor_;
     }
 
@@ -81,16 +79,17 @@ public:
         return observedByKfId_;
     }
 
-
 private:
     static size_t               factoryId_;
     size_t                      id_;
 
-    Mat                         descriptor_;    // Descriptor for keypoint matching, coming from the best keypoint descriptor 
-    Vector3d                    norm_;          // Normal of viewing direction, from mappoint to camera
+    // Descriptor for keypoint matching, coming from the best keypoint descriptor 
+    Mat                         descriptor_;
+    // Normal of viewing direction, from mappoint to camera
+    Vector3d                    norm_;
 
-    mutex                       posMutex_;
-    Vector3d                    pos_;           // Position in world reference frame
+    // Position in world reference frame
+    Vector3d                    pos_;           
 
     // No need to add lock since frontend and backend won't update at the same time.
     unordered_set<size_t>       observedByKfId_;
