@@ -129,26 +129,26 @@ public:
 
     /*
     * Add the observation relationship for existing mappoints already in MapManager
-    * 1. Add observing mappoint (idx -> mptId, mptId -> idx)
+    * 1. Add observing mappoint (idx <-> mptId)
     * 2. Add observedBy keyframe to the mappoint, update the average descriptor of the mappoint
-    * 3. Update the covisible keyframes
+    * 3. Update the "only" observing mappoint of the anchor keyframe of this mappoint
+    * 4. Update the covisible keyframes
     */ 
-    void AddObservingMappoint(const size_t kptIdx, const Mappoint::Ptr& mpt);
+    void AddObservingMappointCreatedFromOtherFrame(const size_t kptIdx, const Mappoint::Ptr& mpt);
 
     /*
     * Add the observation relationship for new created mappoints from this frame
+    * 1. Add observing mappoint (idx <-> mptId)
+    * 2. Add "only" observing mappoint
+    * 3. Add observedBy keyframe to the mappoint
     */
     void AddObservingMappointCreatedFromThisFrame(const size_t kptIdx, const Mappoint::Ptr& mpt);
 
     // Remove observed mappoint and also update the covisible keyframes
-    void RemoveObservingMappoint(const size_t mptId);
+    void RemoveObservingMappointCreatedFromOtherFrame(const size_t mptId);
 
     const unordered_map<size_t, size_t>& GetAllObservingMptIdToKptIdx() {
         return observingMptIdToKptIdx_;
-    }
-
-    const vector<size_t>& GetNewCreatedMappointIds() {
-        return newCreatedMptId_;
     }
 
     // Return if frame observes a mappoint
@@ -168,6 +168,23 @@ public:
             return nullopt;
         }
         return observingMptIdToKptIdx_[mptId];
+    }
+
+#pragma mark - only observing relationships
+
+    const unordered_set<size_t>& GetMappointIdsOnlyObservedByThisFrame() {
+        return onlyThisObservedMptId_;
+    }
+
+    void AddOnlyThisObservedMpt(const size_t mptId) {
+        onlyThisObservedMptId_.insert(mptId);
+    }
+
+    // Remove the "only" observation. Note this frame may still observe the mappoint
+    void RemoveOnlyThisObservedMpt(const size_t mptId) {
+        if (onlyThisObservedMptId_.count(mptId)) {
+            onlyThisObservedMptId_.erase(mptId);
+        }
     }
 
 #pragma mark - covisible keyframes
@@ -207,8 +224,8 @@ private:
 
     // <mpt id, keypoint idx>
     unordered_map<size_t, size_t>   observingMptIdToKptIdx_;
-    // id of mappoints created from this frame
-    vector<size_t>                  newCreatedMptId_;
+    // id of mappoints only observed by this frame
+    unordered_set<size_t>           onlyThisObservedMptId_;
 
     // <covisible keyframe id, weight>
     unordered_map<size_t, size_t>   allCovisibleKfIdToWeight_;

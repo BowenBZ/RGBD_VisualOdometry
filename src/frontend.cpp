@@ -11,6 +11,7 @@
 
 #include "g2o/core/robust_kernel_impl.h"
 #include "myslam/config.h"
+#include "myslam/private/frame.h"
 #include "myslam/private/g2o_types.h"
 #include "myslam/private/mapmanager.h"
 
@@ -78,6 +79,9 @@ Frontend::Frontend(const Camera::Ptr& camera) {
 
 bool Frontend::AddFrame(const Measurement& measurement)
 {
+    // Lock tracking map, so it cannot be updated during frontend processing
+    unique_lock<mutex> lock(trackingMapMutex_);
+
     cout << "Frontend status: " << VOStateStr[state_] << endl;
     framePrev_ = frameCurr_;
 
@@ -133,25 +137,22 @@ SE3 Frontend::GetPose() {
 void Frontend::InitializationHandler() {
     // The first frame is a keyframe
     mapManager_->AddKeyframe(frameCurr_);
+    keyframeCurr_ = frameCurr_;
+
     CreateTempMappoints();
     assert(lastFrameMpts_.size() == kptIdxToNewMpt_.size());
     for(auto& [kptIdx, mpt]: kptIdxToNewMpt_) {
         mapManager_->AddMappoint(mpt);
         frameCurr_->AddObservingMappointCreatedFromThisFrame(kptIdx, mpt);
     }
-    UpdateTrackingMap([this](TrackingMap& trackingMap) {
-        trackingMap.clear();
-        trackingMap.insert(lastFrameMpts_.begin(), lastFrameMpts_.end());
-    });
+    trackingMap_.clear();
+    trackingMap_.insert(lastFrameMpts_.begin(), lastFrameMpts_.end());
 
     // RGBD camera only needs 1 frame to configure since it could get the depth information
     state_ = TRACKING;
 }
 
 bool Frontend::TrackingHandler() {
-    // Lock tracking map, so it cannot be updated during frontend processing
-    unique_lock<mutex> lock(trackingMapMutex_);
-
     // Set an initial pose to the pose of previous pose, used for feature matching
     frameCurr_->SetTcw(framePrev_->GetTcw());
 
@@ -191,8 +192,32 @@ void Frontend::LostHandler() {
 void Frontend::UpdateTrackingMap(function<void(TrackingMap&)> updater) {
     unique_lock<mutex> lock(trackingMapMutex_);
 
+    const SE3 old_T_kf_from_w = keyframeCurr_->GetTcw();
+
     // Use updater to update tracking map
     updater(trackingMap_);
+
+    // If the reference frame is different from keyframe, we also need to adjust the pose of the current frame
+    if (frameCurr_ != keyframeCurr_) {
+        const SE3 old_T_c_from_w = frameCurr_->GetTcw();
+        const SE3 T_c_from_kf = old_T_c_from_w * old_T_kf_from_w.inverse();
+        
+        // Relative pose between frame and keyframe remains unchanged
+        const SE3 new_T_kf_from_w = keyframeCurr_->GetTcw();
+        const SE3 new_T_c_from_w = T_c_from_kf * new_T_kf_from_w;
+
+        frameCurr_->SetTcw(new_T_c_from_w);
+
+        const SE3 T = new_T_c_from_w.inverse() * old_T_c_from_w;
+        // Update the mappoint position only observed by last frame
+        for (auto& [mptId, mpt]: lastFrameMpts_) {
+            if (!trackingMap_.count(mptId)) {
+                const Vector3d& oldPosition = mpt->GetPosition();
+                const Vector3d newPosition = T * mpt->GetPosition();
+                mpt->SetPosition(newPosition);
+            }
+        }
+    }
 
     cout << "Tracking map is updated" << endl;
 }
@@ -517,20 +542,21 @@ void Frontend::CreateTempMappoints() {
 void Frontend::SendKeyframeToBackend() {
     // Backend is idle when we could send new keyframe to backend
 
-    // Firstly add the observation relationships to keyframe
+    // Firstly add this keyframe to map manager
+    mapManager_->AddKeyframe(frameCurr_);
+    keyframeCurr_ = frameCurr_;
+
+    // Then add new keyframe's observation relationships for previous mappoints
     for (const auto& [kptIdx, mptId] : matchedKptIdxToMptId_) {
         auto& mpt = trackingMap_[mptId];
-        frameCurr_->AddObservingMappoint(kptIdx, mpt);
+        frameCurr_->AddObservingMappointCreatedFromOtherFrame(kptIdx, mpt);
     }
 
-    // Then add the observation relationship for new created mappoints, and add the mappoints to map manager
+    // Then add the new mappoints to map manager, and new keyframe's observation relationship
     for (const auto& [kptIdx, mpt ]: kptIdxToNewMpt_) {
-        frameCurr_->AddObservingMappointCreatedFromThisFrame(kptIdx, mpt);
         mapManager_->AddMappoint(mpt);
+        frameCurr_->AddObservingMappointCreatedFromThisFrame(kptIdx, mpt);
     }
-
-    // Also add this frame to map manager
-    mapManager_->AddKeyframe(frameCurr_);
 
     // Add keyframe id to backend's queue
     backend_->AddNewKeyframeInfoToQueue(frameCurr_->GetId());

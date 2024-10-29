@@ -82,7 +82,6 @@ private:
     list<GraphEdgeInfo>                                                     edges_;
 
     list<pair<Frame::Ptr, size_t>>  observingMptToRemove_;
-    unordered_set<Mappoint::Ptr>    observingMptToRemoveSet_;
 
     function<void(function<void(unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler_;
 

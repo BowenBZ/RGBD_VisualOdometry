@@ -4,6 +4,8 @@
 #include "myslam/private/util.h"
 #include "myslam/private/mapmanager.h"
 
+#include <boost/timer/timer.hpp>
+
 namespace myslam
 {
 
@@ -56,10 +58,15 @@ void Backend::BackendLoop()
             // unlock so that frontend could keep sending info
             lock.unlock();
 
+            boost::timer::cpu_timer timer;
+
             // ProjectMoreMappointsToNewKeyframe();
             // ProjectNewMappointsToExistingKeyframe();
 
             OptimizeLocalMap();
+
+            boost::timer::cpu_times elapsed_times(timer.elapsed());
+            printf("[Backend] Time cost (ms): %f\n\n", (elapsed_times.user + elapsed_times.system) / pow(10.0, 6.0));
             UpdateFrontendTrackingMap();
             CleanUp();
         }
@@ -117,7 +124,7 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
     for(auto& [kptIdx, oldMptIdAndDistance]: kptIdxToMptIdAndDistance) {
         auto& [oldMptId, _] = oldMptIdAndDistance;
         auto& oldMpt = oldMptIdToMpt[oldMptId];
-        keyframeCurr_->AddObservingMappoint(kptIdx, oldMpt);
+        keyframeCurr_->AddObservingMappointCreatedFromOtherFrame(kptIdx, oldMpt);
     }
 
     printf("[Backend] Projected %zu old mpts to new keyframe\n", kptIdxToMptIdAndDistance.size());
@@ -162,7 +169,7 @@ void Backend::ProjectNewMappointsToExistingKeyframe() {
 
         kptIdxToMptAndDistance.clear();
         
-        for (auto& mptId: keyframeCurr_->GetNewCreatedMappointIds()) {
+        for (auto& mptId: keyframeCurr_->GetMappointIdsOnlyObservedByThisFrame()) {
             auto mpt = mapManager_->GetMappoint(mptId);
             if (!kf->SearchKeypointMatchCandidate(mpt, false, kptIdx, distance, mayObserveMpt) || 
                 distance > config_.reMatchDescriptorDistance) {
@@ -197,7 +204,7 @@ void Backend::ProjectNewMappointsToExistingKeyframe() {
 
     // add new observations
     for (auto& [kf, mpt, kptIdx]: observationsToAdd) {
-        kf->AddObservingMappoint(kptIdx, mpt);
+        kf->AddObservingMappointCreatedFromOtherFrame(kptIdx, mpt);
     }
 
     // replace the previous mpt with the new mpt
@@ -244,6 +251,9 @@ void Backend::OptimizeLocalMap()
 
             auto mpt = mapManager_->GetMappoint(mptId);
             assert(mpt);
+            if (mpt->GetObservedByKeyframeIds().size() == 1) {
+                continue;
+            }
             if (mpt->outlier_) {
                 continue;
             }
@@ -345,7 +355,6 @@ void Backend::OptimizeLocalMap()
 
         outlierCnt = 0;
         observingMptToRemove_.clear();
-        observingMptToRemoveSet_.clear();
 
         for (auto& [edge, isOutlier, kf, mpt] : edges_) {
             // Compute error for outlier edges since they won't be calculated during optimization
@@ -354,12 +363,11 @@ void Backend::OptimizeLocalMap()
             }
 
             // chi2 is the (u^2 + v^2)
-            if (edge->chi2() > adjustedInlierThres) {
+            if (edge->chi2() > config_.baInlierThres) {
                 // level 1 edges won't be optimized later
                 edge->setLevel(1);
                 isOutlier = true;
                 observingMptToRemove_.push_back(make_pair(kf, mpt->GetId()));
-                observingMptToRemoveSet_.insert(mpt);
                 ++outlierCnt;
             } else {
                 edge->setLevel(0);
@@ -390,13 +398,29 @@ void Backend::UpdateFrontendTrackingMap() {
     // Also write update back at this step
     frontendMapUpdateHandler_([&](unordered_map<size_t, Mappoint::Ptr>& trackingMap){
         
-        for (const auto &[_, kfAndVertex] : kfIdToCovKfThenVertex_) {
-            auto& [kf, kfVertex] = kfAndVertex;
-            kf->SetTcw(kfVertex->estimate());
+        for(const auto& [kf, mptId]: observingMptToRemove_) {
+            kf->RemoveObservingMappointCreatedFromOtherFrame(mptId);
+
+            // mpt's observedBy keyframe changes, need to recalculate descriptor
+            auto mpt = mapManager_->GetMappoint(mptId);
+            mpt->UpdateDescriptor();
         }
 
-        for(const auto& [kf, mptId]: observingMptToRemove_) {
-            kf->RemoveObservingMappoint(mptId);
+        for (const auto &[_, kfAndVertex] : kfIdToCovKfThenVertex_) {
+            auto& [kf, kfVertex] = kfAndVertex;
+            const SE3 oldTcw = kf->GetTcw();
+            const SE3 newTcw = kfVertex->estimate();
+            kf->SetTcw(newTcw);
+
+            const SE3 T = newTcw.inverse() * oldTcw;
+            // Update the mappoint position only observed by this keyframe
+            for(auto& mptId: kf->GetMappointIdsOnlyObservedByThisFrame()) {
+                auto mpt = mapManager_->GetMappoint(mptId);
+                assert(mpt);
+
+                const Vector3d newPosition = T * mpt->GetPosition();
+                mpt->SetPosition(newPosition);
+            }
         }
 
         for (const auto &[mptId, mptAndVertex] : mptIdToMptThenVertex_) {
@@ -410,17 +434,9 @@ void Backend::UpdateFrontendTrackingMap() {
             mpt->UpdateNormViewDirection();
         }
 
-        for(const auto& mpt: observingMptToRemoveSet_) {
-            if (mpt->outlier_) {
-                continue;
-            }
-            // mpt's observedBy keyframe changes, need to recalculate descriptor
-            mpt->UpdateDescriptor();
-        }
-
         trackingMap.clear();
         // get more mappoints from all covisible keyframes of current keyframe
-        MapManager::Instance().GetMappointsNearKeyframe(keyframeCurr_, trackingMap);
+        mapManager_->GetMappointsNearKeyframe(keyframeCurr_, trackingMap);
     });
 }
 
@@ -432,7 +448,6 @@ void Backend::CleanUp() {
     edges_.clear();
 
     observingMptToRemove_.clear();
-    observingMptToRemoveSet_.clear();
 
     // The algorithm, vertex and edges will be deallocated by g2o
     optimizer_.clear();

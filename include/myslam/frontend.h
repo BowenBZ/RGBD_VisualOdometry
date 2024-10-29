@@ -99,6 +99,7 @@ private:
 
     Frame::Ptr              framePrev_;         // last frame
     Frame::Ptr              frameCurr_;         // current frame 
+    Frame::Ptr              keyframeCurr_;      // current keyframe
 
     cv::Ptr<cv::ORB>        orb_;               // Orb detector and computer 
     cv::FlannBasedMatcher   flannMatcher_;      // flann matcher used if active search fails

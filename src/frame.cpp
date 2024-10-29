@@ -207,18 +207,30 @@ void Frame::getNearbyGrids(size_t gridIdx, list<size_t>& nearbyGrids) {
 
 #pragma mark - observing relationships
 
-void Frame::AddObservingMappoint(const size_t kptIdx, const Mappoint::Ptr& mpt) {
+void Frame::AddObservingMappointCreatedFromOtherFrame(const size_t kptIdx, const Mappoint::Ptr& mpt) {
     auto& mptId = mpt->GetId();
     
+    // Add the <kpt idx, mpt id> relationship
     assert(!keypointInfo_[kptIdx].optMatchedMptId.has_value());
     keypointInfo_[kptIdx].optMatchedMptId = mptId;
 
     assert(!observingMptIdToKptIdx_.count(mptId));
     observingMptIdToKptIdx_[mptId] = kptIdx;
 
+    // Update mpt
     mpt->AddObservedByKeyframe(shared_from_this());
     mpt->UpdateDescriptor();
 
+    // Update the only observation of the anchor keyframe id of the mappoint 
+    assert(mpt->GetObservedByKeyframeIds().size() > 1);
+    if (mpt->GetObservedByKeyframeIds().size() == 2) {
+        const size_t anchorKfId = mpt->GetAnchoringKeyframeId();
+        assert(anchorKfId != id_);
+        auto anchorKf = MapManager::Instance().GetKeyframe(anchorKfId);
+        anchorKf->RemoveOnlyThisObservedMpt(mptId);
+    }
+
+    // Update covisible graph
     for (auto& otherKfId: mpt->GetObservedByKeyframeIds()) {
         if (otherKfId == id_) {
             continue;
@@ -241,20 +253,25 @@ void Frame::AddObservingMappoint(const size_t kptIdx, const Mappoint::Ptr& mpt) 
 void Frame::AddObservingMappointCreatedFromThisFrame(const size_t kptIdx, const Mappoint::Ptr& mpt) {
     auto& mptId = mpt->GetId();
 
+    // Add the <kpt idx, mpt id> relationship
     assert(!keypointInfo_[kptIdx].optMatchedMptId.has_value());
     keypointInfo_[kptIdx].optMatchedMptId = mptId;
 
     assert(!observingMptIdToKptIdx_.count(mptId));
     observingMptIdToKptIdx_[mptId] = kptIdx;
 
-    newCreatedMptId_.push_back(mptId);
+    // Add this mpt id to new observed set, since this mappoint is created from this keyframe
+    AddOnlyThisObservedMpt(mptId);
 
+    // Update mpt
+    mpt->AddAnchoringKeyframeId(id_);
     mpt->AddObservedByKeyframe(shared_from_this());
 
     // No need to update covisible graph since this mappoint is only observed by this frame.
 }
 
-void Frame::RemoveObservingMappoint(const size_t mptId) {
+void Frame::RemoveObservingMappointCreatedFromOtherFrame(const size_t mptId) {
+    // Remove the <kpt idx, mpt id> relationship
     assert(observingMptIdToKptIdx_.count(mptId));
     size_t kptIdx = observingMptIdToKptIdx_[mptId];
 
@@ -263,10 +280,20 @@ void Frame::RemoveObservingMappoint(const size_t mptId) {
 
     observingMptIdToKptIdx_.erase(mptId);
 
+    // Remove the observedBy relationship from the mappoint
+    // Note the observation from anchor keyframe cannot be removed
     auto mpt = MapManager::Instance().GetMappoint(mptId);
     assert(mpt != nullptr);
+    const size_t anchorKfId = mpt->GetAnchoringKeyframeId();
+    assert(anchorKfId != id_);
     mpt->RemoveObservedByKeyframe(this->id_);
 
+    if (mpt->GetObservedByKeyframeIds().size() == 1) {
+        auto anchorKf = MapManager::Instance().GetKeyframe(anchorKfId);
+        anchorKf->AddOnlyThisObservedMpt(mptId);
+    }
+
+    // Update covisible graph
     for (auto& otherKFId: mpt->GetObservedByKeyframeIds()) {
         if (otherKFId == this->id_) {
             continue;

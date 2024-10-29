@@ -79,6 +79,14 @@ public:
         return observedByKfId_;
     }
 
+    void AddAnchoringKeyframeId(const size_t keyframeId) {
+        anchorKfId_ = keyframeId;
+    }
+
+    const size_t& GetAnchoringKeyframeId() const {
+        return anchorKfId_;
+    }
+
 private:
     static size_t               factoryId_;
     size_t                      id_;
@@ -93,6 +101,9 @@ private:
 
     // No need to add lock since frontend and backend won't update at the same time.
     unordered_set<size_t>       observedByKfId_;
+
+    // The keyframe this mappoint is created from
+    size_t                      anchorKfId_;
 
     // mappoint can only be created by factory
     Mappoint(const size_t id, const Vector3d& pos, const Mat& descriptor);
