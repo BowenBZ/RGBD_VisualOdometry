@@ -16,6 +16,7 @@
 #include "myslam/private/frame.h"
 #include "myslam/private/g2o_types.h"
 #include "myslam/private/mapmanager.h"
+#include "myslam/private/mappoint.h"
 
 namespace myslam {
 
@@ -81,7 +82,9 @@ private:
     unordered_map<size_t, pair<Frame::Ptr, VertexPose*>>                    kfIdToFixedKfThenVertex_;
     list<GraphEdgeInfo>                                                     edges_;
 
-    list<pair<Frame::Ptr, size_t>>  observingMptToRemove_;
+    list<pair<Frame::Ptr, size_t>>                                          observingMptToRemove_;
+    // New created mappoints for current keyframe that needs to be removed, since we found previous matched mappoint
+    list<size_t>                                                            newMptIdToRemove_;
 
     function<void(function<void(unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler_;
 

@@ -60,7 +60,7 @@ void Backend::BackendLoop()
 
             boost::timer::cpu_timer timer;
 
-            // ProjectMoreMappointsToNewKeyframe();
+            ProjectMoreMappointsToNewKeyframe();
             // ProjectNewMappointsToExistingKeyframe();
 
             OptimizeLocalMap();
@@ -90,11 +90,11 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
     }
 
     unordered_map<size_t, pair<size_t, double>> kptIdxToMptIdAndDistance;
-    unordered_map<size_t, Mappoint::Ptr> oldMptIdToMpt;
-    mapManager_->GetMappointsNearKeyframe(keyframePrev_, oldMptIdToMpt);
-    for(auto& [oldMptId, oldMpt]: oldMptIdToMpt) {
-        // Check if this mpt already match with new keyframe
-        if (keyframeCurr_->IsObservingMappoint(oldMptId)) {
+    unordered_map<size_t, Mappoint::Ptr> nearbyMpt;
+    mapManager_->GetMappointsNearKeyframe(keyframePrev_, nearbyMpt);
+    for(auto& [mptId, mpt]: nearbyMpt) {
+        // Check if this mpt already matches with new keyframe
+        if (keyframeCurr_->IsObservingMappoint(mptId)) {
             continue;
         }
 
@@ -102,29 +102,43 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
         size_t kptIdx;
         bool mayObserveMpt;
         // Cannot find match
-        if (!keyframeCurr_->SearchKeypointMatchCandidate(oldMpt, false, kptIdx, distance, mayObserveMpt) || distance > config_.reMatchDescriptorDistance) {
+        if (!keyframeCurr_->SearchKeypointMatchCandidate(mpt, false, kptIdx, distance, mayObserveMpt) || distance > config_.reMatchDescriptorDistance) {
             continue;
         }
 
-        // this kpt already has matched previous mappoint
-        // TODO: check if this mappoint is new created
-        if (keyframeCurr_->GetMatchedMappointIdForKeypoint(kptIdx).has_value()) {
+        // This kpt already matches with previous mappoint
+        const auto optMatchedMptId = keyframeCurr_->GetMatchedMappointIdForKeypoint(kptIdx);
+        if (optMatchedMptId.has_value() &&
+            !keyframeCurr_->GetMappointIdsOnlyObservedByThisFrame().count(optMatchedMptId.value())) {
             continue;
         }
 
-        // there is other old mpt matched with this new kpt
+        // There is other old mpt matched with this new kpt
         if (kptIdxToMptIdAndDistance.count(kptIdx) && kptIdxToMptIdAndDistance[kptIdx].second <= distance) {
             continue;
         }
 
-        kptIdxToMptIdAndDistance[kptIdx] = make_pair(oldMptId, distance);
+        kptIdxToMptIdAndDistance[kptIdx] = make_pair(mptId, distance);
     }
 
     // Add the new observations
-    for(auto& [kptIdx, oldMptIdAndDistance]: kptIdxToMptIdAndDistance) {
-        auto& [oldMptId, _] = oldMptIdAndDistance;
-        auto& oldMpt = oldMptIdToMpt[oldMptId];
-        keyframeCurr_->AddObservingMappointCreatedFromOtherFrame(kptIdx, oldMpt);
+    for(auto& [kptIdx, mptIdAndDistance]: kptIdxToMptIdAndDistance) {
+        auto& [mptId, _] = mptIdAndDistance;
+        auto& mpt = nearbyMpt[mptId];
+
+        // Remove the new created mappoint
+        const auto& optNewCreatedMptId = keyframeCurr_->GetMatchedMappointIdForKeypoint(kptIdx);
+        // There may not be new created mappoint for this keypoint if the depth value is missing
+        if (optNewCreatedMptId.has_value()) {
+            const auto& newMptId = optNewCreatedMptId.value();
+            const auto& newCreatedMpt = mapManager_->GetMappoint(newMptId);
+            assert(newCreatedMpt);
+            keyframeCurr_->RemoveObservingMappointCreatedFromThisFrame(newMptId);
+            newMptIdToRemove_.push_back(newMptId);
+        }
+
+        // Add the observation for old mappoint
+        keyframeCurr_->AddObservingMappointCreatedFromOtherFrame(kptIdx, mpt);
     }
 
     printf("[Backend] Projected %zu old mpts to new keyframe\n", kptIdxToMptIdAndDistance.size());
@@ -397,7 +411,7 @@ void Backend::UpdateFrontendTrackingMap() {
 
     // Also write update back at this step
     frontendMapUpdateHandler_([&](unordered_map<size_t, Mappoint::Ptr>& trackingMap){
-        
+
         for(const auto& [kf, mptId]: observingMptToRemove_) {
             kf->RemoveObservingMappointCreatedFromOtherFrame(mptId);
 
@@ -434,6 +448,10 @@ void Backend::UpdateFrontendTrackingMap() {
             mpt->UpdateNormViewDirection();
         }
 
+        for (const auto& mptId: newMptIdToRemove_) {
+            mapManager_->RemoveMappoint(mptId);
+        }
+
         trackingMap.clear();
         // get more mappoints from all covisible keyframes of current keyframe
         mapManager_->GetMappointsNearKeyframe(keyframeCurr_, trackingMap);
@@ -448,6 +466,8 @@ void Backend::CleanUp() {
     edges_.clear();
 
     observingMptToRemove_.clear();
+
+    newMptIdToRemove_.clear();
 
     // The algorithm, vertex and edges will be deallocated by g2o
     optimizer_.clear();

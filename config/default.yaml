@@ -56,4 +56,4 @@ frontend.max_frame_translation_allowed: 0.05
 
 # backend paras
 backend.ba_inlier_threshold: 5.991
-backend.re_match_descriptor_distance: 5
+backend.re_match_descriptor_distance: 10

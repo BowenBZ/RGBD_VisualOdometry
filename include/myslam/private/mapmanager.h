@@ -33,32 +33,33 @@ public:
     }
     
     void AddKeyframe(const Frame::Ptr& frame) {
-        unique_lock<mutex> lck(mutex_);
         keyframesDict_[frame->GetId()] = frame;
     }
 
     Frame::Ptr GetKeyframe(const size_t id) {
-        unique_lock<mutex> lck(mutex_);
         return (keyframesDict_.count(id)) ? keyframesDict_[id] : nullptr;
     }
 
     KeyframeIdToPtr GetAllKeyframes() {
-        unique_lock<mutex> lck(mutex_);
         return keyframesDict_;
     }
 
-    void AddMappoint(const Mappoint::Ptr& map_point) {
-        unique_lock<mutex> lck(mutex_);
-        mappointsDict_[map_point->GetId()] = map_point;
+    void AddMappoint(const Mappoint::Ptr& mpt) {
+        const auto& mptId = mpt->GetId();
+        assert(!mappointsDict_.count(mptId));
+        mappointsDict_[mptId] = mpt;
+    }
+
+    void RemoveMappoint(const size_t mptId) {
+        assert(mappointsDict_.count(mptId));
+        mappointsDict_.erase(mptId);
     }
 
     Mappoint::Ptr GetMappoint(const size_t id) {
-        unique_lock<mutex> lck(mutex_);
         return (mappointsDict_.count(id)) ? mappointsDict_[id] : nullptr;
     }
 
     MappointIdToPtr GetAllMappoints() {
-        unique_lock<mutex> lck(mutex_);
         return mappointsDict_;
     }
 
@@ -72,8 +73,6 @@ public:
     Mappoint::Ptr GetPotentialReplacedMappoint(const size_t oldMptId);
 
 private:
-    mutex               mutex_;
-
     KeyframeIdToPtr     keyframesDict_;       // all key-frames
     MappointIdToPtr     mappointsDict_;       // all mappoints
 

@@ -108,7 +108,7 @@ void Frame::ConstructKeypointGrids() {
 bool Frame::SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, double& distance, bool& mayObserveMpt) {
     mayObserveMpt = false;
 
-    Vector3d posInCam = camera_->World2Camera(mpt->GetPosition(), T_c_w_);
+    Vector3d posInCam = T_c_w_ * mpt->GetPosition();
     if (posInCam[2] < 0) {
         return false;
     } 
@@ -137,6 +137,7 @@ bool Frame::SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool do
     getNearbyGrids(mptGridIdx, nearbyGrids);
     vector<pair<size_t, double>> kptIdxToDistance;
     for (auto& gridIdx: nearbyGrids) {
+        // This grid doesn't contain any keypoint
         if (!gridToKptIdx_.count(gridIdx)) {
             continue;
         }
@@ -315,6 +316,23 @@ void Frame::RemoveObservingMappointCreatedFromOtherFrame(const size_t mptId) {
     }
 
     // TODO: if all the observations has been removed, consider this keyframe as outlier?
+}
+
+void Frame::RemoveObservingMappointCreatedFromThisFrame(const size_t mptId) {
+    // Remove the <kpt idx, mpt id> relationship
+    assert(observingMptIdToKptIdx_.count(mptId));
+    size_t kptIdx = observingMptIdToKptIdx_[mptId];
+
+    assert(keypointInfo_[kptIdx].optMatchedMptId.has_value());
+    keypointInfo_[kptIdx].optMatchedMptId = nullopt;
+
+    observingMptIdToKptIdx_.erase(mptId);
+
+    // Remove the only observation
+    assert(onlyThisObservedMptId_.count(mptId));
+    onlyThisObservedMptId_.erase(mptId);
+
+    // No need to operate on the mpt itself since it will be removed
 }
 
 #pragma mark - covisible keyframes

@@ -1,9 +1,5 @@
 /*
  * MapManager which maintains the mappoints and keyframes with <id, shared_ptr> pair. Other components should only maintain the index of respective resources
- * 
-
- * 
- * MapManager will use the dataMutex_ when modifying or returning the mappoints or keyframes.
  */
 
 #include "myslam/private/mapmanager.h"

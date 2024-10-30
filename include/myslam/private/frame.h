@@ -147,6 +147,9 @@ public:
     // Remove observed mappoint and also update the covisible keyframes
     void RemoveObservingMappointCreatedFromOtherFrame(const size_t mptId);
 
+    // Remove observed mappoint created from this frame
+    void RemoveObservingMappointCreatedFromThisFrame(const size_t mptId);
+
     const unordered_map<size_t, size_t>& GetAllObservingMptIdToKptIdx() {
         return observingMptIdToKptIdx_;
     }
