@@ -84,11 +84,7 @@ private:
 
     list<pair<Frame::Ptr, size_t>>                                          observingMptToRemove_;
     
-    /*
-    * Following mappoints will be removed after backend processing
-    * 1. New created mappoints for current keyframe that needs to be removed, since we found previous matched mappoint
-    * 2. Old mappoint to be replaced by new mappoint
-    */
+    // New created mappoints from current keyframe needs to be removed if we found previous matched mappoint
     list<size_t>                                                            mptIdToRemove_;
 
     function<void(function<void(unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler_;
@@ -101,12 +97,6 @@ private:
 
     // project more existing mappoint to new keyframe
     void ProjectMoreMappointsToNewKeyframe();
-
-    // add observing mappoints, including old and new, to new keyframe
-    void AddObservingMappointsToNewKeyframe();
-
-    // add the new observations for old keyframes
-    void ProjectNewMappointsToExistingKeyframe();
 
     // perform the optimization for local map
     void OptimizeLocalMap();

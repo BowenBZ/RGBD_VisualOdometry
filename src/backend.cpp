@@ -62,8 +62,6 @@ void Backend::BackendLoop()
             boost::timer::cpu_timer timer;
 
             ProjectMoreMappointsToNewKeyframe();
-            ProjectNewMappointsToExistingKeyframe();
-
             OptimizeLocalMap();
 
             boost::timer::cpu_times elapsed_times(timer.elapsed());
@@ -103,7 +101,8 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
         size_t kptIdx;
         bool mayObserveMpt;
         // Cannot find match
-        if (!keyframeCurr_->SearchKeypointMatchCandidate(mpt, false, kptIdx, distance, mayObserveMpt) || distance > config_.reMatchDescriptorDistance) {
+        if (!keyframeCurr_->SearchKeypointMatchCandidate(mpt, false, kptIdx, distance, mayObserveMpt) ||
+            distance > config_.reMatchDescriptorDistance) {
             continue;
         }
 
@@ -143,124 +142,6 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
     }
 
     printf("[Backend] Projected %zu old mpts to new keyframe\n", kptIdxToMptIdAndDistance.size());
-}
-
-typedef struct {
-    Frame::Ptr keyframe;
-    size_t kptIdx;
-    optional<size_t> optOldMptId;
-    Mappoint::Ptr newMappoint;
-    double distance;
-} NewObservation;
-
-void Backend::ProjectNewMappointsToExistingKeyframe() {
-    // Construct the 2nd order covisible keyframes
-    unordered_set<Frame::Ptr> covisibleKfs;
-    list<size_t> allCovisibleKfIds;
-    keyframeCurr_->GetAllCovisibleKfIds(allCovisibleKfIds);
-    for (auto& kfId: allCovisibleKfIds) {
-        const auto& kf = mapManager_->GetKeyframe(kfId);
-        covisibleKfs.insert(kf);
-        list<size_t> neighborAllCovisibleKfIds;
-        kf->GetAllCovisibleKfIds(neighborAllCovisibleKfIds);
-        for (auto& neighborKfId: neighborAllCovisibleKfIds) {
-            auto neighborKf = mapManager_->GetKeyframe(kfId);
-            covisibleKfs.insert(neighborKf);
-        }
-    }
-    if (covisibleKfs.count(keyframeCurr_)) {
-        covisibleKfs.erase(keyframeCurr_);
-    }
-
-    /*
-    Projecting a single mappoint A to several old keyframes. For each keyframe, it could have following conditions
-    1. The old keyframe doesn't have a matched keypoint - nothing to do
-    2. The old keyframe has a matched keypoint
-        2.1 The keypoint doesn't have a matched mappoint - add the observation
-        2.2 The keypoint has a matched mappoint B
-            2.2.1 The mappoint B is from current keyframe - nothing to do
-            2.2.2 The mappoint B is from other keyframes - replace the mappoint B with mappoint A
-
-    When projecting several mappoints to 1 single keyframe. If Mappoint A and Mappoint B matches with the same keypoint, we should take the mappoint with smaller distance, and ignore the other mappoint
-
-    When projecting several mappoints to several keyframes. An old mappoint may be needed to replace by different new mappoints, we should take the one with smaller distance.
-    */
-
-    // For each keyframe, the kpt idx to the mappoint to be replaced
-    unordered_map<size_t, NewObservation> kptIdxToNewObservation;
-
-    // Across different keyframes, all new observations to be added
-    list<NewObservation> observationsToAdd;
-
-    // Across different keyframes, old mappoints to be replaced by new mappoints
-    unordered_map<size_t, NewObservation> mptToReplace;
-
-    double distance;
-    size_t kptIdx;
-    bool mayObserveMpt;
-
-    for (auto& kf: covisibleKfs) {
-
-        kptIdxToNewObservation.clear();
-        
-        for (auto& newMptId: keyframeCurr_->GetMappointIdsOnlyObservedByThisFrame()) {
-            auto newMpt = mapManager_->GetMappoint(newMptId);
-
-            // Condition 1 - cannot find matched keypoint for this new mappoint
-            if (!kf->SearchKeypointMatchCandidate(newMpt, false, kptIdx, distance, mayObserveMpt) || 
-                distance > config_.reMatchDescriptorDistance) {
-                continue;
-            }
-
-            const auto& optMptId = kf->GetMatchedMappointIdForKeypoint(kptIdx);
-
-            if (optMptId.has_value()) {
-                const size_t& oldMptId = optMptId.value();
-
-                // Condition 2.2.1 - if this keypoint already matched with the mappoint of current keyframe
-                if (keyframeCurr_->IsObservingMappoint(oldMptId)) {
-                    continue;
-                }
-
-                // Check if this old mappoint already needs to be replaced by other new mappoint
-                if (mptToReplace.count(oldMptId) &&
-                    mptToReplace[oldMptId].newMappoint != newMpt &&
-                    mptToReplace[oldMptId].distance <= distance) {
-                        continue;
-                    }
-            } 
-
-            // Check if there are other new mappoint matches with this kpt
-            if (kptIdxToNewObservation.count(kptIdx) &&
-                kptIdxToNewObservation[kptIdx].distance <= distance) {
-                continue;
-            }
-
-            kptIdxToNewObservation[kptIdx] = {kf, kptIdx, optMptId, newMpt, distance};
-        }
-
-        for (const auto& [_, newObservation]: kptIdxToNewObservation) {
-            if (newObservation.optOldMptId.has_value()) {
-                mptToReplace[newObservation.optOldMptId.value()] = newObservation;
-            } else {
-                observationsToAdd.push_back(newObservation);
-            }
-        }
-    }
-
-    // Add new observations
-    for (const auto& newObservation: observationsToAdd) {
-        newObservation.keyframe->AddObservingMappointCreatedFromOtherFrame(newObservation.kptIdx, newObservation.newMappoint);
-    }
-
-    // Replace old mappoint with new mappoint
-    for (const auto& [oldMptId, newObservation]: mptToReplace) {
-        mapManager_->ReplaceMappoint(oldMptId, newObservation.newMappoint->GetId());
-        mptIdToRemove_.push_back(oldMptId);
-    }
-
-    printf("[Backend] Added new mappoint observations to old keyframes: %zu\n", observationsToAdd.size());
-    printf("[Backend] Replace old mappoints with new one: %zu\n", mptToReplace.size());
 }
 
 void Backend::OptimizeLocalMap()
