@@ -83,8 +83,13 @@ private:
     list<GraphEdgeInfo>                                                     edges_;
 
     list<pair<Frame::Ptr, size_t>>                                          observingMptToRemove_;
-    // New created mappoints for current keyframe that needs to be removed, since we found previous matched mappoint
-    list<size_t>                                                            newMptIdToRemove_;
+    
+    /*
+    * Following mappoints will be removed after backend processing
+    * 1. New created mappoints for current keyframe that needs to be removed, since we found previous matched mappoint
+    * 2. Old mappoint to be replaced by new mappoint
+    */
+    list<size_t>                                                            mptIdToRemove_;
 
     function<void(function<void(unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler_;
 

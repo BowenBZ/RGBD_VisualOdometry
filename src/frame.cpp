@@ -238,7 +238,6 @@ void Frame::AddObservingMappointCreatedFromOtherFrame(const size_t kptIdx, const
         }
 
         auto otherKF = MapManager::Instance().GetKeyframe(otherKfId);
-        assert(otherKF != nullptr);
         assert(otherKF->IsObservingMappoint(mptId));
 
         auto& covisibleWeight = allCovisibleKfIdToWeight_[otherKfId];
@@ -301,7 +300,6 @@ void Frame::RemoveObservingMappointCreatedFromOtherFrame(const size_t mptId) {
         }
 
         auto otherKF = MapManager::Instance().GetKeyframe(otherKFId);
-        assert(otherKF != nullptr);
         assert(otherKF->IsObservingMappoint(mptId));
 
         auto& covisibleWeight = allCovisibleKfIdToWeight_[otherKFId];

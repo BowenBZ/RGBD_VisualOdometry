@@ -6,6 +6,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 #include <algorithm>
+#include <optional>
 #include <unordered_map>
 #include <utility>
 
@@ -157,7 +158,7 @@ bool Frontend::TrackingHandler() {
     frameCurr_->SetTcw(framePrev_->GetTcw());
 
     // Compute pose based on last frame mappoints
-    printf("Frame tracking");
+    printf("Frame tracking\n");
     MatchKeyPointsWithMappoints(lastFrameMpts_, false, frontendConfig_.minMatchesToUseFlannFrameTracking);
     EstimateCurrentFramePose(lastFrameMpts_, false);
 

@@ -37,7 +37,8 @@ public:
     }
 
     Frame::Ptr GetKeyframe(const size_t id) {
-        return (keyframesDict_.count(id)) ? keyframesDict_[id] : nullptr;
+        assert(keyframesDict_.count(id));
+        return keyframesDict_[id];
     }
 
     KeyframeIdToPtr GetAllKeyframes() {
@@ -68,9 +69,6 @@ public:
 
     // Replace the old mappoint with new mappoint
     void ReplaceMappoint(size_t oldMptId, size_t newMptId);
-
-    // If the old mpt was replaced by new mpt, get the respective new mpt
-    Mappoint::Ptr GetPotentialReplacedMappoint(const size_t oldMptId);
 
 private:
     KeyframeIdToPtr     keyframesDict_;       // all key-frames

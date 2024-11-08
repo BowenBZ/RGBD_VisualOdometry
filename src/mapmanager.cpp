@@ -35,19 +35,17 @@ void MapManager::GetMappointsNearKeyframe(const Frame::Ptr& keyframe, MappointId
 }
 
 void MapManager::ReplaceMappoint(size_t oldMptId, size_t newMptId) {
-
-    oldMptIdNewMptIdMap_[oldMptId] = newMptId;
     
     assert(mappointsDict_.count(oldMptId));
     assert(mappointsDict_.count(newMptId));
     assert(oldMptId != newMptId);
 
-    auto& oldMpt = mappointsDict_[oldMptId];
-    auto& newMpt = mappointsDict_[newMptId];
+    const auto& oldMpt = mappointsDict_[oldMptId];
+    const auto& newMpt = mappointsDict_[newMptId];
 
-    for(auto& kfId: oldMpt->GetObservedByKeyframeIds()) {
+    for(const auto& kfId: oldMpt->GetObservedByKeyframeIds()) {
         assert(keyframesDict_.count(kfId));
-        auto& kf = keyframesDict_[kfId];
+        const auto& kf = keyframesDict_[kfId];
         const auto& optkptIdx = kf->GetMatchedKeypointIdxForMappoint(oldMptId);
         assert(optkptIdx.has_value());
  
@@ -57,20 +55,6 @@ void MapManager::ReplaceMappoint(size_t oldMptId, size_t newMptId) {
             kf->RemoveObservingMappointCreatedFromOtherFrame(newMptId);
         }
         kf->AddObservingMappointCreatedFromOtherFrame(optkptIdx.value(), newMpt);
-    }
-    mappointsDict_.erase(oldMptId);
-}
-
-Mappoint::Ptr MapManager::GetPotentialReplacedMappoint(const size_t oldMptId) {
-
-    if (oldMptIdNewMptIdMap_.count(oldMptId)) {
-        size_t newMptId = oldMptIdNewMptIdMap_[oldMptId];
-        while (oldMptIdNewMptIdMap_.count(newMptId)) {
-            newMptId = oldMptIdNewMptIdMap_[newMptId];
-        }
-        return mappointsDict_[newMptId];
-    } else {
-        return mappointsDict_[oldMptId];
     }
 }
 
