@@ -93,7 +93,6 @@ void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& 
     
     ConstructKeypointGrids();
 
-    // TODO: Since the keypoints are extracted, the color frame won't been needed unless the viewer
     // TODO: Extract more keypoints for keyframe
 }
 

@@ -18,12 +18,12 @@ void MapManager::GetMappointsNearKeyframe(const Frame::Ptr& keyframe, MappointId
     // find all mappoints observed by keyframes above
     for(const auto& kfId: allCovisibleKfIds) {
         assert(keyframesDict_.count(kfId));
-        auto& kf = keyframesDict_[kfId];
+        const auto& kf = keyframesDict_[kfId];
 
         for(auto& [mptId, _]: kf->GetAllObservingMptIdToKptIdx()) {
             assert(mappointsDict_.count(mptId));
 
-            auto& mpt = mappointsDict_[mptId];
+            const auto& mpt = mappointsDict_[mptId];
             // TODO: don't return outlier or non-optimized
             // if (mpt->outlier_ || !mpt->optimized_) {
             //     continue;

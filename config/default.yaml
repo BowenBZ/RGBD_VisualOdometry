@@ -38,8 +38,6 @@ max_descriptor_distance: 30
 min_best_secondary_distance_ratio: 0.5
 
 # flann feature matching paras
-frontend.min_matches_to_use_flann_frame_tracking: 200
-frontend.min_matches_to_use_flann_map_tracking: 250
 frontend.match_ratio: 2.0
 
 # covisible paras
@@ -47,7 +45,7 @@ active_covisible_keyframe_weight: 15
 
 # frontend paras
 frontend.ba_inlier_threshold: 5.991
-frontend.use_feature_active_search: 0
+# frontend.ba_inlier_threshold: 10
 frontend.max_num_lost: 10
 frontend.min_inliers_for_good_estimation: 10
 frontend.min_inliers_for_new_keyframe: 30

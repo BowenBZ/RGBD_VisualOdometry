@@ -24,9 +24,6 @@ Frontend::Frontend(const Camera::Ptr& camera) {
     camera_ = camera;
 
     // Setup frontend config
-    frontendConfig_.useActiveSearch = myslam::Config::get<int> ("frontend.use_feature_active_search");
-    frontendConfig_.minMatchesToUseFlannFrameTracking = (size_t)Config::get<double>("frontend.min_matches_to_use_flann_frame_tracking");
-    frontendConfig_.minMatchesToUseFlannMapTracking = (size_t)Config::get<double>("frontend.min_matches_to_use_flann_map_tracking");
     frontendConfig_.minDisRatio = Config::get<float>("frontend.match_ratio");
     frontendConfig_.baInlierThres = Config::get<double>("frontend.ba_inlier_threshold");
     frontendConfig_.minInliersForGood = (size_t)Config::get<int>("frontend.min_inliers_for_good_estimation");
@@ -159,12 +156,12 @@ bool Frontend::TrackingHandler() {
 
     // Compute pose based on last frame mappoints
     printf("Frame tracking\n");
-    MatchKeyPointsWithMappoints(lastFrameMpts_, false, frontendConfig_.minMatchesToUseFlannFrameTracking);
+    MatchKeyPointsWithMappoints(lastFrameMpts_);
     EstimateCurrentFramePose(lastFrameMpts_, false);
 
     // Compute pose based on tracking map
     printf("Map tracking");
-    MatchKeyPointsWithMappoints(trackingMap_, true, frontendConfig_.minMatchesToUseFlannMapTracking);
+    MatchKeyPointsWithMappoints(trackingMap_);
     EstimateCurrentFramePose(trackingMap_, true);
 
     // Create temp mappoints for next frame tracking
@@ -223,97 +220,22 @@ void Frontend::UpdateTrackingMap(function<void(TrackingMap&)> updater) {
     cout << "Tracking map is updated" << endl;
 }
 
-void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const bool doDirectionCheck, const size_t matchesToUseFlann)
+void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap)
 {
-    // Search for matched mappoints for keypoints in tracking map
     matchedKptIdxToMptId_.clear();
     unordered_map<size_t, double> matchedKptIdxToDistance;
     
-    // mpt candidates that pass observation check for flann matching
-    // Mat flannMptCandidateDes;
-    // unordered_map<int, size_t> flannMptIdxToId; 
+    Mat trackingMapDescriptors;
+    unordered_map<int, size_t> trackingMapDescriptorIdxToMptId; 
 
-    // Mpt candidates that not outlier, for flann matching
-    Mat moreFlannMptCandidatesDes;
-    unordered_map<int, size_t> moreFlannMptIdxToId; 
-
-    size_t kptIdx;
-    double distance;
-    bool mayObserveMpt;
-    bool hasMatchedKeypoint; 
     for (auto &[mptId, mpt] : trackingMap)
     {
-        // mpt in tracking map are guaranteed to be non-outlier and has been optimized by backend. But check in case
-        if (mpt->outlier_) {
-            continue;
-        }
-
-        // Construct candidate for flann
-        moreFlannMptIdxToId[moreFlannMptCandidatesDes.rows] = mptId;
-        moreFlannMptCandidatesDes.push_back(mpt->GetDescriptor());
-
-        // If not using active search, just continue here to avoid extra search
-        if (!frontendConfig_.useActiveSearch) {
-            continue;
-        }
-
-        hasMatchedKeypoint = frameCurr_->SearchKeypointMatchCandidate(mpt, doDirectionCheck, kptIdx, distance, mayObserveMpt);
-
-        // if (mayObserveMpt) {
-        //     flannMptIdxToId[flannMptCandidateDes.rows] = mptId;
-        //     flannMptCandidateDes.push_back(mpt->GetDescriptor());
-        // }
-
-        if (!hasMatchedKeypoint) {
-            continue;
-        }
-
-        // Check whether this keypoint already has a better matched mappoint
-        if (matchedKptIdxToDistance.count(kptIdx) && distance >= matchedKptIdxToDistance[kptIdx]) {
-            continue;
-        }
-
-        // add as a match
-        matchedKptIdxToMptId_[kptIdx] = mptId;
-        matchedKptIdxToDistance[kptIdx] = distance;
-    }
-
-    assert(matchedKptIdxToMptId_.size() == matchedKptIdxToDistance.size());
-
-    // If not found enough matches, fallback to use flann
-    // if (matchedMptIdKptIdxMap_.size() < matchesToUseFlann) {
-    //     cout << "  Fallback to use Flann matching" << endl;
-    //     MatchKeyPointsFlann(flannMptCandidateDes, flannMptIdxToId);
-    // }
-    assert(matchedKptIdxToMptId_.size() == matchedKptIdxToDistance.size());
-
-    if (!frontendConfig_.useActiveSearch || matchedKptIdxToMptId_.size() < matchesToUseFlann) {
-        MatchKeyPointsFlann(moreFlannMptCandidatesDes, moreFlannMptIdxToId);
-
-        if (flannMatchedKptIdxMptIdMap_.size() > matchedKptIdxToMptId_.size()) {
-            if (frontendConfig_.useActiveSearch) {
-                printf("  Active searched matched size: %zu is too mall, fallback to use Flann matching\n", matchedKptIdxToMptId_.size());
-            }
-        
-            matchedKptIdxToMptId_.clear();
-            matchedKptIdxToMptId_.insert(flannMatchedKptIdxMptIdMap_.begin(), flannMatchedKptIdxMptIdMap_.end());
-        }
-    }
-
-    cout << "  Size of tracking map: " << trackingMap.size() << endl;
-    cout << "  Size of matched <keypoint, mappoint> pairs: " << matchedKptIdxToMptId_.size() << endl;
-}
-
-void Frontend::MatchKeyPointsFlann(const Mat& flannMptCandidateDes, unordered_map<int, size_t>& flannMptIdxToId) {
-    flannMatchedKptIdxMptIdMap_.clear();
-    unordered_map<size_t, double> flannMatchedKptIdxDistanceMap;
-
-    if (flannMptCandidateDes.rows == 0) {
-        return;
+        trackingMapDescriptorIdxToMptId[trackingMapDescriptors.rows] = mptId;
+        trackingMapDescriptors.push_back(mpt->GetDescriptor());
     }
 
     vector<cv::DMatch> matches;
-    flannMatcher_.match(flannMptCandidateDes, frameCurr_->GetDescriptors(), matches);
+    flannMatcher_.match(trackingMapDescriptors, frameCurr_->GetDescriptors(), matches);
 
     // compute the min distance of the best match
     float min_dis = std::min_element(
@@ -329,20 +251,23 @@ void Frontend::MatchKeyPointsFlann(const Mat& flannMptCandidateDes, unordered_ma
         // filter out the matches whose distance is large
         if (m.distance <= maxDis)
         {
-            auto& mptId = flannMptIdxToId[m.queryIdx];
+            auto& mptId = trackingMapDescriptorIdxToMptId[m.queryIdx];
             auto& kptIdx = m.trainIdx;
 
             // Check whether this keypoint already has a better matched mappoint
-            if (flannMatchedKptIdxDistanceMap.count(kptIdx) && m.distance >= flannMatchedKptIdxDistanceMap[kptIdx]) {
+            if (matchedKptIdxToDistance.count(kptIdx) && 
+                m.distance >= matchedKptIdxToDistance[kptIdx]) {
                 continue;
             }
 
-            flannMatchedKptIdxMptIdMap_[kptIdx] = mptId;
-            flannMatchedKptIdxDistanceMap[kptIdx] = m.distance;
+            matchedKptIdxToMptId_[kptIdx] = mptId;
+            matchedKptIdxToDistance[kptIdx] = m.distance;
         }
     }
-}
 
+    cout << "  Size of tracking map: " << trackingMap.size() << endl;
+    cout << "  Size of matched <keypoint, mappoint> pairs: " << matchedKptIdxToMptId_.size() << endl;
+}
 
 void Frontend::EstimateCurrentFramePose(TrackingMap& trackingMap, const bool doMotionBA)
 {
@@ -462,15 +387,13 @@ void Frontend::EstimateCurrentFramePose(TrackingMap& trackingMap, const bool doM
     // Clear allocated vertex and edge,
     // also deallocates the memory associated with them.
     optimizer_.clear();
-
-    // TODO: remove the outliers from active map?
 }
 
 bool Frontend::IsGoodEstimation()
 {
     // check if inliers number meet the threshold
     if (matchedKptIdxToMptId_.size() < frontendConfig_.minInliersForGood) {
-        printf("Current tracking is rejected because inlier is too small: %zu", matchedKptIdxToMptId_.size());
+        printf("Current tracking is rejected because inlier is too small: %zu\n", matchedKptIdxToMptId_.size());
         return false;
     }
 
@@ -478,7 +401,7 @@ bool Frontend::IsGoodEstimation()
     SE3 T_r_c = framePrev_->GetTcw() * frameCurr_->GetTcw().inverse();
     float d = T_r_c.log().norm();
     if (d > 5.0) {
-        printf("Current tracking is rejected because motion is too large: %f", d);
+        printf("Current tracking is rejected because motion is too large: %f\n", d);
         return false;
     }
     return true;

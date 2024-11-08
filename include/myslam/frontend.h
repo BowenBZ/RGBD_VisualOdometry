@@ -32,10 +32,6 @@ typedef struct {
 } Measurement;
 
 typedef struct {
-    bool                    useActiveSearch;   // If trying to use active search
-
-    size_t                  minMatchesToUseFlannFrameTracking; // Threshold to use flann for frame-to-frame data association
-    size_t                  minMatchesToUseFlannMapTracking;   // Threshold to use flann for local map-to-frame data association
     float                   minDisRatio;       // Ratio for selecting flann good matches
 
     double                  baInlierThres;     // Threshold to be consider as an inlier after BA
@@ -113,8 +109,6 @@ private:
 
     // Matched (keypoint idx of current frame -> mappoint id)
     unordered_map<size_t, size_t>   matchedKptIdxToMptId_;
-    // Matched (keypoint idx of current frame -> mappoint id) using FLANN
-    unordered_map<size_t, size_t>   flannMatchedKptIdxMptIdMap_;    
     
     g2o::SparseOptimizer    optimizer_;
 
@@ -129,9 +123,7 @@ private:
     void UpdateTrackingMap(function<void(TrackingMap&)> updater);
 
     // Find matched mappoints in tracking map for keypoints extracted from current frame
-    void MatchKeyPointsWithMappoints(const TrackingMap& trackingMap, const bool doDirectionCheck, const size_t matchesToUseFlann);
-    // match keypoints by flann
-    void MatchKeyPointsFlann(const Mat& flannMptCandidateDes, unordered_map<int, size_t>& flannMptIdxToId);
+    void MatchKeyPointsWithMappoints(const TrackingMap& trackingMap);
 
     // Estimate the pose with 3D-2D methods (mappoint, keypoint)
     void EstimateCurrentFramePose(TrackingMap& trackingMap, const bool doMotionBA); 
