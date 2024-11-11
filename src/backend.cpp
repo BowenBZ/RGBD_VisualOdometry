@@ -88,6 +88,8 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
         return;
     }
 
+    // TODO: some matched mappoints may already get removed
+
     unordered_map<size_t, pair<size_t, double>> kptIdxToMptIdAndDistance;
     unordered_map<size_t, Mappoint::Ptr> nearbyMpt;
     mapManager_->GetMappointsNearKeyframe(keyframePrev_, nearbyMpt);

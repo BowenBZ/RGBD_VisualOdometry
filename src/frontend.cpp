@@ -117,7 +117,7 @@ bool Frontend::AddFrame(const Measurement& measurement)
     if (viewer_)
     {
         unordered_set<size_t> matchedKptsIdx;
-        for (const auto& match: matchedKptIdxToMptId_) {
+        for (const auto& match: matchedKptIdxToInfo_) {
             matchedKptsIdx.insert(match.first);
         }
 
@@ -155,14 +155,15 @@ bool Frontend::TrackingHandler() {
     frameCurr_->SetTcw(framePrev_->GetTcw());
 
     // Compute pose based on last frame mappoints
+    matchedKptIdxToInfo_.clear();
     printf("Frame tracking\n");
     MatchKeyPointsWithMappoints(lastFrameMpts_);
-    EstimateCurrentFramePose(lastFrameMpts_, false);
+    EstimateCurrentFramePose(true);
 
     // Compute pose based on tracking map
     printf("Map tracking");
     MatchKeyPointsWithMappoints(trackingMap_);
-    EstimateCurrentFramePose(trackingMap_, true);
+    EstimateCurrentFramePose(true);
 
     // Create temp mappoints for next frame tracking
     CreateTempMappoints();
@@ -220,11 +221,8 @@ void Frontend::UpdateTrackingMap(function<void(TrackingMap&)> updater) {
     cout << "Tracking map is updated" << endl;
 }
 
-void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap)
+void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
 {
-    matchedKptIdxToMptId_.clear();
-    unordered_map<size_t, double> matchedKptIdxToDistance;
-    
     Mat trackingMapDescriptors;
     unordered_map<int, size_t> trackingMapDescriptorIdxToMptId; 
 
@@ -255,30 +253,29 @@ void Frontend::MatchKeyPointsWithMappoints(const TrackingMap& trackingMap)
             auto& kptIdx = m.trainIdx;
 
             // Check whether this keypoint already has a better matched mappoint
-            if (matchedKptIdxToDistance.count(kptIdx) && 
-                m.distance >= matchedKptIdxToDistance[kptIdx]) {
+            if (matchedKptIdxToInfo_.count(kptIdx) && 
+                m.distance >= matchedKptIdxToInfo_[kptIdx].distance) {
                 continue;
             }
 
-            matchedKptIdxToMptId_[kptIdx] = mptId;
-            matchedKptIdxToDistance[kptIdx] = m.distance;
+            matchedKptIdxToInfo_[kptIdx] = {trackingMap[mptId], m.distance};
         }
     }
 
     cout << "  Size of tracking map: " << trackingMap.size() << endl;
-    cout << "  Size of matched <keypoint, mappoint> pairs: " << matchedKptIdxToMptId_.size() << endl;
+    cout << "  Size of matched <keypoint, mappoint> pairs: " << matchedKptIdxToInfo_.size() << endl;
 }
 
-void Frontend::EstimateCurrentFramePose(TrackingMap& trackingMap, const bool doMotionBA)
+void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
 {
     // Construct the 3d-2d observations
     vector<size_t> kptIndices;
     vector<Point3f> pts3d;
     vector<Point2f> pts2d;
 
-    for (auto& [kptIdx, mptId] : matchedKptIdxToMptId_) {
+    for (auto& [kptIdx, info] : matchedKptIdxToInfo_) {
         kptIndices.push_back(kptIdx);
-        pts3d.push_back(toPoint3f(trackingMap[mptId]->GetPosition()));
+        pts3d.push_back(toPoint3f(info.mpt->GetPosition()));
         pts2d.push_back(frameCurr_->GetKeypoint(kptIdx).pt);
     }
 
@@ -367,7 +364,7 @@ void Frontend::EstimateCurrentFramePose(TrackingMap& trackingMap, const bool doM
     }
 
     // Update the inlier matched kpt -> mpt
-    std::unordered_map<size_t, size_t> baInlierKptIdxToMptId;
+    std::unordered_map<size_t, MatchInfo> baInlierKptIdxToInfo;
     for (size_t edgeIdx = 0; edgeIdx < edges.size(); ++edgeIdx)
     {
         if (edges[edgeIdx].second) {
@@ -376,10 +373,10 @@ void Frontend::EstimateCurrentFramePose(TrackingMap& trackingMap, const bool doM
 
         auto pointIdx = inliers.at<int>(edgeIdx);
         auto& kptIdx = kptIndices[pointIdx];
-        baInlierKptIdxToMptId[kptIdx] = matchedKptIdxToMptId_[kptIdx];
+        baInlierKptIdxToInfo[kptIdx] = matchedKptIdxToInfo_[kptIdx];
     }
-    printf("  Size of inlier after BA: %zu\n", baInlierKptIdxToMptId.size());
-    matchedKptIdxToMptId_ = std::move(baInlierKptIdxToMptId);
+    printf("  Size of inlier after BA: %zu\n", baInlierKptIdxToInfo.size());
+    matchedKptIdxToInfo_ = std::move(baInlierKptIdxToInfo);
 
     // Set computed pose
     frameCurr_->SetTcw(poseVertex->estimate());
@@ -392,8 +389,8 @@ void Frontend::EstimateCurrentFramePose(TrackingMap& trackingMap, const bool doM
 bool Frontend::IsGoodEstimation()
 {
     // check if inliers number meet the threshold
-    if (matchedKptIdxToMptId_.size() < frontendConfig_.minInliersForGood) {
-        printf("Current tracking is rejected because inlier is too small: %zu\n", matchedKptIdxToMptId_.size());
+    if (matchedKptIdxToInfo_.size() < frontendConfig_.minInliersForGood) {
+        printf("Current tracking is rejected because inlier is too small: %zu\n", matchedKptIdxToInfo_.size());
         return false;
     }
 
@@ -413,7 +410,12 @@ bool Frontend::IsKeyframe()
         return false;
     }
 
-    if (matchedKptIdxToMptId_.size() < frontendConfig_.minInliersForKeyframe) {
+    size_t matchedTrackingMptCount = 0;
+    for (const auto& [kpt, matchInfo]: matchedKptIdxToInfo_) {
+        matchedTrackingMptCount += trackingMap_.count(matchInfo.mpt->GetId());
+    }
+    
+    if (matchedTrackingMptCount < frontendConfig_.minInliersForKeyframe) {
         return true;
     }
 
@@ -433,11 +435,13 @@ void Frontend::CreateTempMappoints() {
     kptIdxToNewMpt_.clear();
     for (size_t kptIdx = 0; kptIdx < frameCurr_->GetKeypointsSize(); ++kptIdx)
     {
-        // No need to create new mappoint if the keypoint matches mappoint from local map
-        if (matchedKptIdxToMptId_.count(kptIdx)) {
-            auto& mpt = trackingMap_[matchedKptIdxToMptId_[kptIdx]];
-            lastFrameMpts_[mpt->GetId()] = mpt;
-            continue;
+        // If the keypoint matches with mappoint from local map, just put that mappoint into last frame mappoint
+        if (matchedKptIdxToInfo_.count(kptIdx)) {
+            const auto& mpt = matchedKptIdxToInfo_[kptIdx].mpt;
+            if (trackingMap_.count(mpt->GetId())) {
+                lastFrameMpts_[mpt->GetId()] = mpt;
+                continue;
+            }
         }
 
         // Check if the keypoint has depth value
@@ -470,10 +474,12 @@ void Frontend::SendKeyframeToBackend() {
     mapManager_->AddKeyframe(frameCurr_);
     keyframeCurr_ = frameCurr_;
 
-    // Then add new keyframe's observation relationships for previous mappoints
-    for (const auto& [kptIdx, mptId] : matchedKptIdxToMptId_) {
-        auto& mpt = trackingMap_[mptId];
-        frameCurr_->AddObservingMappointCreatedFromOtherFrame(kptIdx, mpt);
+    // Then add new keyframe's observation relationships for previous mappoints from local map
+    for (const auto& [kptIdx, matchInfo] : matchedKptIdxToInfo_) {
+        const auto& mpt = matchInfo.mpt;
+        if (trackingMap_.count(mpt->GetId())) {
+            frameCurr_->AddObservingMappointCreatedFromOtherFrame(kptIdx, mpt);
+        }
     }
 
     // Then add the new mappoints to map manager, and new keyframe's observation relationship

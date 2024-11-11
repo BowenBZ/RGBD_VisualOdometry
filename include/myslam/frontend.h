@@ -107,8 +107,12 @@ private:
     // Mappoints observed by last frame, including matched mappoints from trackingMap_ and new mappoints created from last frame 
     TrackingMap             lastFrameMpts_;
 
-    // Matched (keypoint idx of current frame -> mappoint id)
-    unordered_map<size_t, size_t>   matchedKptIdxToMptId_;
+    typedef struct {
+        Mappoint::Ptr mpt;
+        float distance;
+    } MatchInfo;
+    // Matched (keypoint idx of current frame -> (mappoint id, distance))
+    unordered_map<size_t, MatchInfo>   matchedKptIdxToInfo_;
     
     g2o::SparseOptimizer    optimizer_;
 
@@ -123,10 +127,10 @@ private:
     void UpdateTrackingMap(function<void(TrackingMap&)> updater);
 
     // Find matched mappoints in tracking map for keypoints extracted from current frame
-    void MatchKeyPointsWithMappoints(const TrackingMap& trackingMap);
+    void MatchKeyPointsWithMappoints(TrackingMap& trackingMap);
 
     // Estimate the pose with 3D-2D methods (mappoint, keypoint)
-    void EstimateCurrentFramePose(TrackingMap& trackingMap, const bool doMotionBA); 
+    void EstimateCurrentFramePose(const bool doMotionBA); 
 
     // measure the estimation quality
     bool IsGoodEstimation(); 
