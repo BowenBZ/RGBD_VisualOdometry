@@ -88,7 +88,16 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
         return;
     }
 
-    // TODO: some matched mappoints may already get removed
+    // Some matched mappoints may already get removed in last backend optimization
+    list<size_t> observedMptToRemove;
+    for (const auto& [mptId, _]: keyframeCurr_->GetAllObservingMptIdToKptIdx()) {
+        if (mapManager_->GetMappoint(mptId) == nullptr) {
+            observedMptToRemove.push_back(mptId);
+        }
+    }
+    for (const auto& mptId: observedMptToRemove) {
+        keyframeCurr_->RemoveObservingMappointCreatedFromOtherFrame(mptId);
+    }
 
     unordered_map<size_t, pair<size_t, double>> kptIdxToMptIdAndDistance;
     unordered_map<size_t, Mappoint::Ptr> nearbyMpt;

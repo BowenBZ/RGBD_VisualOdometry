@@ -34,28 +34,4 @@ void MapManager::GetMappointsNearKeyframe(const Frame::Ptr& keyframe, MappointId
     }
 }
 
-void MapManager::ReplaceMappoint(size_t oldMptId, size_t newMptId) {
-    
-    assert(mappointsDict_.count(oldMptId));
-    assert(mappointsDict_.count(newMptId));
-    assert(oldMptId != newMptId);
-
-    const auto& oldMpt = mappointsDict_[oldMptId];
-    const auto& newMpt = mappointsDict_[newMptId];
-
-    for(const auto& kfId: oldMpt->GetObservedByKeyframeIds()) {
-        assert(keyframesDict_.count(kfId));
-        const auto& kf = keyframesDict_[kfId];
-        const auto& optkptIdx = kf->GetMatchedKeypointIdxForMappoint(oldMptId);
-        assert(optkptIdx.has_value());
- 
-        kf->RemoveObservingMappointCreatedFromOtherFrame(oldMptId);
-        // If the kf already observes the newMpt, which could happen when several old mpts need to be replaced by the same new mpt. This means those points should be merged together, so just remove one observation
-        if (kf->IsObservingMappoint(newMptId)) {
-            kf->RemoveObservingMappointCreatedFromOtherFrame(newMptId);
-        }
-        kf->AddObservingMappointCreatedFromOtherFrame(optkptIdx.value(), newMpt);
-    }
-}
-
 } //namespace

@@ -224,12 +224,17 @@ void Frontend::UpdateTrackingMap(function<void(TrackingMap&)> updater) {
 void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
 {
     Mat trackingMapDescriptors;
-    unordered_map<int, size_t> trackingMapDescriptorIdxToMptId; 
+    unordered_map<int, size_t> trackingMapDescriptorIdxToMptId;
+    unordered_map<size_t, size_t> matchedMptIdToKptIdx;
 
     for (auto &[mptId, mpt] : trackingMap)
     {
         trackingMapDescriptorIdxToMptId[trackingMapDescriptors.rows] = mptId;
         trackingMapDescriptors.push_back(mpt->GetDescriptor());
+    }
+
+    for (const auto& [kptIdx, matchInfo]: matchedKptIdxToInfo_) {
+        matchedMptIdToKptIdx[matchInfo.mpt->GetId()] = kptIdx;
     }
 
     vector<cv::DMatch> matches;
@@ -256,6 +261,15 @@ void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
             if (matchedKptIdxToInfo_.count(kptIdx) && 
                 m.distance >= matchedKptIdxToInfo_[kptIdx].distance) {
                 continue;
+            }
+
+            // Check if this mappoint already matches with other keypoint
+            if (matchedMptIdToKptIdx.count(mptId)) {
+                const size_t previousMatchedKpt = matchedMptIdToKptIdx[mptId];
+                if (m.distance >= matchedKptIdxToInfo_[previousMatchedKpt].distance) {
+                    continue;
+                }
+                matchedMptIdToKptIdx[mptId] = kptIdx;
             }
 
             matchedKptIdxToInfo_[kptIdx] = {trackingMap[mptId], m.distance};
@@ -414,7 +428,6 @@ bool Frontend::IsKeyframe()
     for (const auto& [kpt, matchInfo]: matchedKptIdxToInfo_) {
         matchedTrackingMptCount += trackingMap_.count(matchInfo.mpt->GetId());
     }
-    
     if (matchedTrackingMptCount < frontendConfig_.minInliersForKeyframe) {
         return true;
     }

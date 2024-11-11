@@ -282,6 +282,12 @@ void Frame::RemoveObservingMappointCreatedFromOtherFrame(const size_t mptId) {
     // Remove the observedBy relationship from the mappoint
     // Note the observation from anchor keyframe cannot be removed
     auto mpt = MapManager::Instance().GetMappoint(mptId);
+    
+    // This mappoint may already get removed
+    if (mpt == nullptr) {
+        return;
+    }
+
     assert(mpt != nullptr);
     const size_t anchorKfId = mpt->GetAnchoringKeyframeId();
     assert(anchorKfId != id_);

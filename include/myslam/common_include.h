@@ -20,11 +20,11 @@ typedef Eigen::Matrix<double, 3, 4> Mat34;
 typedef Eigen::Matrix<double, 6, 1> Vector6d;
 
 // for Sophus
-// #include <sophus/se3.hpp>
-// typedef Sophus::SE3d SE3;
+#include <sophus/se3.hpp>
+typedef Sophus::SE3d SE3;
 
-#include "myslam/math/se3.hpp"
-typedef myslam::math::SE3<double> SE3;
+// #include "myslam/math/se3.hpp"
+// typedef myslam::math::SE3<double> SE3;
 
 // for cv
 #include <opencv2/core/core.hpp>

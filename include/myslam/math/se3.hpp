@@ -28,6 +28,14 @@ public:
     }
 
     SE3(const Matrix4& transform) {
+        bool isValid = SE3::isValidTransform(transform);
+        if (!isValid) {
+        printf("%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n", 
+                transform.data()[0], transform.data()[1], transform.data()[2], transform.data()[3],
+                transform.data()[4], transform.data()[5], transform.data()[6], transform.data()[7],
+                transform.data()[8], transform.data()[9], transform.data()[10], transform.data()[11],
+                transform.data()[12], transform.data()[13], transform.data()[14], transform.data()[15]);
+        }
         assert(SE3::isValidTransform(transform));
         rotation_ = transform.template block<3, 3>(0, 0);
         position_ = transform.template block<3, 1>(0, 3);

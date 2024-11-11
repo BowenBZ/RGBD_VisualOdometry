@@ -21,7 +21,7 @@ set( LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib )
 include_directories( "/usr/local/include/eigen3" )
 
 # Sophus
-# include_directories( "/Users/bowen/Source/3rd_party/Sophus" )
+include_directories( "/Users/bowen/Source/3rd_party/Sophus" )
 
 # OpenCV
 find_package( OpenCV 3.1 REQUIRED PATHS "/Users/bowen/Source/3rd_party/build_opencv")
