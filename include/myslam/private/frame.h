@@ -223,6 +223,7 @@ private:
     
     // detected feature points info
     vector<KeypointInfo>    keypointInfo_;
+    // Each row is a descriptor
     Mat                     descriptors_;
 
     unordered_map<size_t, list<size_t>> gridToKptIdx_;       // idx of keypoints for a grid

@@ -1,6 +1,7 @@
 #include "myslam/private/frame.h"
 
 #include <algorithm>
+#include <opencv2/core.hpp>
 
 #include "myslam/private/util.h"
 #include "myslam/private/mapmanager.h"
@@ -99,10 +100,16 @@ void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& 
 void Frame::ExtractKeypointsAndDescriptorsWithSuperPointModel(const SuperPointModel::Ptr model) {
 
     std::vector<CornerPoint> points;
-    cv::Mat desc;
-    model->Process(color_, points, desc);
+    model->Process(color_, points, descriptors_);
+    assert(points.size() == descriptors_.cols);
 
-    printf("Points number: %zu, desc rows: %d, cols: %d\n", points.size(), desc.rows, desc.cols);
+    // Each point's descriptor is in col of the output descriptors from model, we need to transpose it
+    cv::transpose(descriptors_, descriptors_);
+
+    for (size_t idx = 0; idx < points.size(); idx++) {
+        cv::KeyPoint kpt(points[idx].x, points[idx].y, 1.f);
+        keypointInfo_.push_back({kpt, descriptors_.row(idx).clone(), nullopt});
+    }
 }
 
 void Frame::ConstructKeypointGrids() {

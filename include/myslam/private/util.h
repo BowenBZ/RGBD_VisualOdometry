@@ -30,6 +30,100 @@ inline bool Triangulation(const vector<SE3>&        poses,
     return false;
 }
 
+/*
+Input:
+- prev_desc (N1, 256)
+- curr_desc (N2, 256)
+
+Output:
+- matched index of curr_desc
+- respective index of prev_desc
+*/
+inline void find_matched_points(const cv::Mat& prev_desc,
+                                const cv::Mat& curr_desc,
+                                const float nn_thresh,
+                                std::vector<int>& matchedCurrentIndices,
+                                std::vector<int>& matchedPrevIndices) {
+    matchedCurrentIndices.clear();
+    matchedPrevIndices.clear();
+
+    // If no previous descriptors, return empty matched points and all current points as unmatched.
+    if (prev_desc.empty()) {
+        return;
+    }
+
+    // Dimensions:
+    int N1 = prev_desc.rows;
+    int N2 = curr_desc.rows;
+
+    cv::Mat curr_desc_T;
+    cv::transpose(curr_desc, curr_desc_T);
+    // (N1, N2)
+    cv::Mat dot_product = prev_desc * curr_desc_T;
+
+    // Compute L2 distance = sqrt(2 - 2 * dot_product) element-wise.
+    // Use element-wise operations.
+    cv::Mat distance = 2 - 2 * dot_product;
+    cv::sqrt(distance, distance);
+
+    // For each previous descriptor (row of 'distance'), find the current descriptor index with the minimum distance.
+    std::vector<int> matched_curr_indices(N1, -1);
+    for (int i = 0; i < N1; i++) {
+        float min_val = std::numeric_limits<float>::max();
+        int min_idx = -1;
+        for (int j = 0; j < N2; j++) {
+            float val = distance.at<float>(i, j);
+            if (val < min_val) {
+                min_val = val;
+                min_idx = j;
+            }
+        }
+        matched_curr_indices[i] = min_idx;
+    }
+
+    // For each current descriptor (column of 'distance'), find the previous descriptor index with the minimum distance.
+    std::vector<int> matched_prev_indices(N2, -1);
+    for (int j = 0; j < N2; j++) {
+        float min_val = std::numeric_limits<float>::max();
+        int min_idx = -1;
+        for (int i = 0; i < N1; i++) {
+            float val = distance.at<float>(i, j);
+            if (val < min_val) {
+                min_val = val;
+                min_idx = i;
+            }
+        }
+        matched_prev_indices[j] = min_idx;
+    }
+
+    // Create a vector of current point indices: 0, 1, ..., N2-1.
+    // Compute bidirectional matches: for each current descriptor j, check if:
+    //   j == matched_curr_indices[ matched_prev_indices[j] ]
+    std::vector<bool> bidirectional_match(N2, false);
+    for (int j = 0; j < N2; j++) {
+        int prev_idx = matched_prev_indices[j];
+        if (prev_idx >= 0 && prev_idx < N1) {
+            bidirectional_match[j] = (j == matched_curr_indices[prev_idx]);
+        }
+    }
+
+    // For each current descriptor j, check if its matching score is below the threshold.
+    std::vector<bool> pass_thresh_match(N2, false);
+    for (int j = 0; j < N2; j++) {
+        int prev_idx = matched_prev_indices[j];
+        float score = distance.at<float>(prev_idx, j);
+        pass_thresh_match[j] = (score < nn_thresh);
+    }
+
+    // Final match: for each current point j, it is a valid match if both conditions are true.
+    for (int j = 0; j < N2; j++) {
+        if (bidirectional_match[j] && pass_thresh_match[j]) {
+            matchedCurrentIndices.push_back(j);
+            matchedPrevIndices.push_back(matched_prev_indices[j]);
+        }
+    }
+}
+
 inline Vector2d toVector2d(const Point2f& pt) {
     return Vector2d ( pt.x, pt.y );
 }

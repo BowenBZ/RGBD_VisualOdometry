@@ -91,6 +91,7 @@ private:
     Backend::Ptr            backend_;
     MapManager::Ptr         mapManager_;
     SuperPointModel::Ptr    superpointModel_;
+    bool                    enableSuperpoint_;
 
     VOState                 state_;             // current VO status
     size_t                  accuLostFrameNums_; // number of lost times
@@ -101,6 +102,7 @@ private:
 
     cv::Ptr<cv::ORB>        orb_;               // Orb detector and computer 
     cv::FlannBasedMatcher   flannMatcher_;      // flann matcher used if active search fails
+    float                   nnThresh_;          // Threshold for NN matcher
 
     // mutex for update tracking map
     mutex                   trackingMapMutex_;
@@ -130,6 +132,9 @@ private:
 
     // Find matched mappoints in tracking map for keypoints extracted from current frame
     void MatchKeyPointsWithMappoints(TrackingMap& trackingMap);
+
+    // Find matched mappints in tracking map for keypoints extracted from current frame using NN match
+    void MatchKeyPointsWithMappointsNN(TrackingMap& trackingMap);
 
     // Estimate the pose with 3D-2D methods (mappoint, keypoint)
     void EstimateCurrentFramePose(const bool doMotionBA); 

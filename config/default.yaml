@@ -6,7 +6,7 @@ dataset_dir: /Users/bowen/Source/dataset/rgbd_dataset_freiburg1_xyz
 output_file: ./output/output.txt
 
 # single step mode
-single_step: 1
+single_step: 0
 
 # viewer paras
 enable_viewer: 0
@@ -25,9 +25,11 @@ frame.width: 640
 frame.height: 480
 
 # SuperPoint model path
+superpoint.enable: 1
 superpoint.path: ./model/superpoint_converted.pt
 superpoint.confidenceThresh: 0.015
 superpoint.distThresh: 4
+superpoint.nnThresh: 0.7
 
 # keypoints extraction paras
 frontend.number_of_features: 500

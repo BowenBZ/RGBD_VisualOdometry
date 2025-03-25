@@ -1,20 +1,18 @@
 #include "myslam/frontend.h"
 
-#include <cstddef>
-#include <opencv2/core/eigen.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/calib3d/calib3d.hpp>
-#include <algorithm>
-#include <optional>
-#include <unordered_map>
-#include <utility>
-
-#include "g2o/core/robust_kernel_impl.h"
 #include "myslam/config.h"
 #include "myslam/private/frame.h"
 #include "myslam/private/g2o_types.h"
 #include "myslam/private/mapmanager.h"
+
+#include <opencv2/opencv.hpp>
+#include <opencv2/core/eigen.hpp>
+
+#include <cstddef>
+#include <algorithm>
+#include <optional>
+#include <unordered_map>
+#include <utility>
 
 namespace myslam
 {
@@ -27,6 +25,8 @@ Frontend::Frontend(const Camera::Ptr& camera) {
     superpointModel_ = SuperPointModel::Ptr(new SuperPointModel(Config::get<std::string>("superpoint.path"), 
                                                                 Config::get<double>("superpoint.confidenceThresh"),
                                                                 Config::get<double>("superpoint.distThresh")));
+    enableSuperpoint_ = Config::get<int>("superpoint.enable");
+    nnThresh_ = Config::get<float>("superpoint.nnThresh");
     printf("SuperModel is initialized: %d\n", superpointModel_->Initialized());
 
     // Setup frontend config
@@ -97,8 +97,11 @@ bool Frontend::AddFrame(const Measurement& measurement)
             measurement.depth);
     frameCurr_ = frame;
 
-    frameCurr_->ExtractKeyPointsAndComputeDescriptors(orb_);
-    frameCurr_->ExtractKeypointsAndDescriptorsWithSuperPointModel(superpointModel_);
+    if (enableSuperpoint_) {
+        frameCurr_->ExtractKeypointsAndDescriptorsWithSuperPointModel(superpointModel_);
+    } else {
+        frameCurr_->ExtractKeyPointsAndComputeDescriptors(orb_);
+    }
     switch (state_)
     {
         case INITIALIZING:
@@ -163,14 +166,22 @@ bool Frontend::TrackingHandler() {
 
     // Compute pose based on last frame mappoints
     matchedKptIdxToInfo_.clear();
-    printf("Frame tracking\n");
-    MatchKeyPointsWithMappoints(lastFrameMpts_);
-    EstimateCurrentFramePose(true);
+    if (enableSuperpoint_) {
+        printf("Feature matching\n");
+        MatchKeyPointsWithMappointsNN(trackingMap_);
 
-    // Compute pose based on tracking map
-    printf("Map tracking");
-    MatchKeyPointsWithMappoints(trackingMap_);
-    EstimateCurrentFramePose(true);
+        printf("Estimate pose\n");
+        EstimateCurrentFramePose(true);
+    } else {
+        printf("Frame tracking\n");
+        MatchKeyPointsWithMappoints(lastFrameMpts_);
+        EstimateCurrentFramePose(true);
+    
+        // Compute pose based on tracking map
+        printf("Map tracking");
+        MatchKeyPointsWithMappoints(trackingMap_);
+        EstimateCurrentFramePose(true);
+    }
 
     // Create temp mappoints for next frame tracking
     CreateTempMappoints();
@@ -227,6 +238,8 @@ void Frontend::UpdateTrackingMap(function<void(TrackingMap&)> updater) {
 
     cout << "Tracking map is updated" << endl;
 }
+
+#pragma mark - Feature matching
 
 void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
 {
@@ -286,6 +299,36 @@ void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
     cout << "  Size of tracking map: " << trackingMap.size() << endl;
     cout << "  Size of matched <keypoint, mappoint> pairs: " << matchedKptIdxToInfo_.size() << endl;
 }
+
+void Frontend::MatchKeyPointsWithMappointsNN(TrackingMap& trackingMap) {
+    Mat trackingMapDescriptors;
+    unordered_map<int, size_t> trackingMapDescriptorIdxToMptId;
+    unordered_map<size_t, size_t> matchedMptIdToKptIdx;
+
+    for (auto &[mptId, mpt] : trackingMap)
+    {
+        trackingMapDescriptorIdxToMptId[trackingMapDescriptors.rows] = mptId;
+        trackingMapDescriptors.push_back(mpt->GetDescriptor());
+    }
+
+    vector<int> matchedCurrentIndices;
+    vector<int> matchedPrevIndices;
+    find_matched_points(trackingMapDescriptors, frameCurr_->GetDescriptors(), nnThresh_, matchedCurrentIndices, matchedPrevIndices);
+    assert(matchedCurrentIndices.size() == matchedPrevIndices.size());
+
+    for (int i = 0; i < matchedCurrentIndices.size(); i++) {
+        const int currentIdx = matchedCurrentIndices[i];
+        const int pervIdx = matchedPrevIndices[i];
+        const int matchedMptId = trackingMapDescriptorIdxToMptId[pervIdx];
+        // Provide a dummy distance
+        matchedKptIdxToInfo_[currentIdx] = {trackingMap[matchedMptId], 0};
+    }
+
+    cout << "  Size of tracking map: " << trackingMap.size() << endl;
+    cout << "  Size of matched <keypoint, mappoint> pairs: " << matchedKptIdxToInfo_.size() << endl;
+}
+
+#pragma mark - Motion-only BA
 
 void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
 {
