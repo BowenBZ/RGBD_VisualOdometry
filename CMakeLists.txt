@@ -35,8 +35,14 @@ find_library(G2O_CSPARSE_EXTENSION_LIBRARY g2o_csparse_extension PATHS ${G2O_LIB
 include_directories("/Users/bowen/Source/3rd_party/g2o")
 include_directories("/Users/bowen/Source/3rd_party/build_g2o")
 
-# Still needs following
+# TODO: link g2o to custom path at runtime
+# Still needs following in runtime
 # export DYLD_LIBRARY_PATH=/Users/bowen/Source/3rd_party/g2o/lib:$DYLD_LIBRARY_PATH
+# or 
+# use following to create a link in standard path for g2o
+# ln -s /Users/bowen/Source/3rd_party/g2o/lib/libg2o_core.dylib /usr/local/lib/libg2o_core.dylib
+# ln -s /Users/bowen/Source/3rd_party/g2o/lib/libg2o_stuff.dylib /usr/local/lib/libg2o_stuff.dylib
+# ln -s /Users/bowen/Source/3rd_party/g2o/lib/libg2o_csparse_extension.dylib /usr/local/lib/libg2o_csparse_extension.dylib
 
 # csparse
 set(CSPARSE_INCLUDE_DIR "/usr/local/include/suitesparse")
@@ -49,12 +55,16 @@ find_package( Pangolin REQUIRED PATHS "/Users/bowen/Source/3rd_party/build_Pango
 # Boost
 find_package(Boost REQUIRED COMPONENTS timer)
 
+# libtorch
+find_package(Torch REQUIRED PATHS "/Users/bowen/Source/3rd_party/libtorch")
+
 set( THIRD_PARTY_LIBS 
     ${OpenCV_LIBS}
     ${G2O_CORE_LIBRARY} ${G2O_STUFF_LIBRARY} ${G2O_CSPARSE_EXTENSION_LIBRARY}
     ${CSPARSE_LIBRARY}
     ${Pangolin_LIBRARIES} 
     ${Boost_LIBRARIES}
+    ${TORCH_LIBRARIES}
 )
 ############### source and test ######################
 add_subdirectory( src )

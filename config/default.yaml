@@ -1,12 +1,12 @@
 %YAML:1.0
 # The tum dataset directory with the associate.txt, change it to yours! 
-dataset_dir: /Users/bowen/Source/dataset/rgbd_dataset_freiburg1_room
+dataset_dir: /Users/bowen/Source/dataset/rgbd_dataset_freiburg1_xyz
 
 # The output trajectory file directory
 output_file: ./output/output.txt
 
 # single step mode
-single_step: 0
+single_step: 1
 
 # viewer paras
 enable_viewer: 0
@@ -23,6 +23,11 @@ camera.depth_scale: 5000
 # Frame configs
 frame.width: 640
 frame.height: 480
+
+# SuperPoint model path
+superpoint.path: ./model/superpoint_converted.pt
+superpoint.confidenceThresh: 0.015
+superpoint.distThresh: 4
 
 # keypoints extraction paras
 frontend.number_of_features: 500

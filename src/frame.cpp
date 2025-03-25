@@ -61,7 +61,7 @@ double Frame::GetDepth(const KeyPoint& kp)
     return -1.0;
 }
 
-#pragma mark - Feature matching
+#pragma mark - Feature extraction
 
 void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& detector) {
     
@@ -96,6 +96,15 @@ void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& 
     // TODO: Extract more keypoints for keyframe
 }
 
+void Frame::ExtractKeypointsAndDescriptorsWithSuperPointModel(const SuperPointModel::Ptr model) {
+
+    std::vector<CornerPoint> points;
+    cv::Mat desc;
+    model->Process(color_, points, desc);
+
+    printf("Points number: %zu, desc rows: %d, cols: %d\n", points.size(), desc.rows, desc.cols);
+}
+
 void Frame::ConstructKeypointGrids() {
     for (size_t i = 0; i < keypointInfo_.size(); ++i) {
         auto& kptPos = keypointInfo_[i].keypoint.pt;
@@ -103,6 +112,8 @@ void Frame::ConstructKeypointGrids() {
         gridToKptIdx_[gridIdx].push_back(i);
     }
 }
+
+#pragma mark - Feature matching
 
 bool Frame::SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, double& distance, bool& mayObserveMpt) {
     mayObserveMpt = false;

@@ -23,6 +23,12 @@ Frontend::Frontend(const Camera::Ptr& camera) {
 
     camera_ = camera;
 
+    // Setup superpoint model
+    superpointModel_ = SuperPointModel::Ptr(new SuperPointModel(Config::get<std::string>("superpoint.path"), 
+                                                                Config::get<double>("superpoint.confidenceThresh"),
+                                                                Config::get<double>("superpoint.distThresh")));
+    printf("SuperModel is initialized: %d\n", superpointModel_->Initialized());
+
     // Setup frontend config
     frontendConfig_.minDisRatio = Config::get<float>("frontend.match_ratio");
     frontendConfig_.baInlierThres = Config::get<double>("frontend.ba_inlier_threshold");
@@ -92,6 +98,7 @@ bool Frontend::AddFrame(const Measurement& measurement)
     frameCurr_ = frame;
 
     frameCurr_->ExtractKeyPointsAndComputeDescriptors(orb_);
+    frameCurr_->ExtractKeypointsAndDescriptorsWithSuperPointModel(superpointModel_);
     switch (state_)
     {
         case INITIALIZING:

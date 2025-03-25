@@ -16,3 +16,7 @@ bin/
 lib/
 
 output/
+
+.DS_Store
+.cache/
+tools/__pycache__/

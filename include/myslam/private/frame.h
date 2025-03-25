@@ -17,6 +17,7 @@
 #include "myslam/common_include.h"
 #include "myslam/camera.h"
 #include "myslam/private/mappoint.h"
+#include "myslam/private/superpoint_model.hpp"
 
 namespace myslam 
 {
@@ -97,9 +98,11 @@ public:
         return T_c_w_.inverse().translation();
     }
 
-#pragma mark - Feature matching
+#pragma mark - Feature extraction
 
     void ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& detector);
+
+    void ExtractKeypointsAndDescriptorsWithSuperPointModel(const SuperPointModel::Ptr model);
 
     const size_t GetKeypointsSize() const {
         return keypointInfo_.size();
@@ -121,6 +124,8 @@ public:
     const Mat& GetDescriptors() const {
         return descriptors_;
     }
+
+#pragma mark - Feature matching
 
     // Get matched keypoint idx for the mappoint
     bool SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, double& distance, bool& mayObserveMpt);

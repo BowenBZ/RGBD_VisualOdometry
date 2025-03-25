@@ -7,6 +7,7 @@ add_library( myslam SHARED
     backend.cpp
     mapmanager.cpp
     viewer.cpp
+    superpoint_model.cpp
 )
 
 target_link_libraries( myslam

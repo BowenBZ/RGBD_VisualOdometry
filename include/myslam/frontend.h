@@ -19,6 +19,7 @@
 #include "myslam/common_include.h"
 #include "myslam/private/frame.h"
 #include "myslam/private/mappoint.h"
+#include "myslam/private/superpoint_model.hpp"
 #include "myslam/viewer.h"
 #include "myslam/private/backend.h"
 
@@ -89,6 +90,7 @@ private:
     Viewer::Ptr             viewer_;
     Backend::Ptr            backend_;
     MapManager::Ptr         mapManager_;
+    SuperPointModel::Ptr    superpointModel_;
 
     VOState                 state_;             // current VO status
     size_t                  accuLostFrameNums_; // number of lost times
