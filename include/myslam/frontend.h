@@ -14,8 +14,6 @@
 #ifndef FrontEnd_H
 #define FrontEnd_H
 
-#include <opencv2/features2d/features2d.hpp>
-
 #include "myslam/common_include.h"
 #include "myslam/private/frame.h"
 #include "myslam/private/mappoint.h"

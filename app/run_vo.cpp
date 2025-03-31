@@ -5,7 +5,7 @@
 #include <iostream>
 #include <boost/timer/timer.hpp>
 
-#include <opencv2/core.hpp>
+#include <opencv2/opencv.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <Eigen/Core>
 

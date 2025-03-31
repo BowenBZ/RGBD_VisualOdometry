@@ -27,7 +27,7 @@ typedef Sophus::SE3d SE3;
 // typedef myslam::math::SE3<double> SE3;
 
 // for cv
-#include <opencv2/core/core.hpp>
+#include <opencv2/opencv.hpp>
 using cv::Mat;
 using cv::KeyPoint;
 using cv::Point3f;

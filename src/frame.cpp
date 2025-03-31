@@ -1,7 +1,7 @@
 #include "myslam/private/frame.h"
 
 #include <algorithm>
-#include <opencv2/core.hpp>
+#include <opencv2/opencv.hpp>
 
 #include "myslam/private/util.h"
 #include "myslam/private/mapmanager.h"

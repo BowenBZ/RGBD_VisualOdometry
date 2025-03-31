@@ -1,74 +1,65 @@
 cmake_minimum_required( VERSION 3.14 )
-project ( myslam )
+project (myslam)
 
-set( CMAKE_CXX_COMPILER "g++" )
-set( CMAKE_CXX_STANDARD 17 )
-
-if(CMAKE_BUILD_TYPE MATCHES Debug)
-    set( CMAKE_BUILD_TYPE "Debug" )
-    set( CMAKE_CXX_FLAGS "-std=c++17")
-else()
-    set( CMAKE_BUILD_TYPE "Release" )
-    set( CMAKE_CXX_FLAGS "-std=c++17 -march=native -O3" )
+# cpp
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
 endif()
 
-list( APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules )
-set( EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin )
-set( LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib )
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_FLAGS "-std=c++17")
+if(CMAKE_BUILD_TYPE MATCHES Release)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -O3")
+endif()
+
+# Paths
+set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
+set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
 
 ############### dependencies ######################
-# Eigen
-include_directories( "/usr/local/include/eigen3" )
+# Eigen (header-only)
+find_package(Eigen3 REQUIRED)
+include_directories(${EIGEN3_INCLUDE_DIR})
 
-# Sophus
-include_directories( "/Users/bowen/Source/3rd_party/Sophus" )
+# Sophus (header-only)
+find_package(Sophus REQUIRED)
+include_directories(${SOPHUS_INCLUDE_DIR})
 
 # OpenCV
-find_package( OpenCV 3.1 REQUIRED PATHS "/Users/bowen/Source/3rd_party/build_opencv")
-include_directories( ${OpenCV_INCLUDE_DIRS} )
+find_package(OpenCV 3.1 REQUIRED PATHS "/Users/bowen/Source/3rd_party/build_opencv")
+include_directories(${OpenCV_INCLUDE_DIRS})
 
 # G2O
-set(G2O_LIBRARY_DIR "/Users/bowen/Source/3rd_party/g2o/lib")
-find_library(G2O_CORE_LIBRARY g2o_core PATHS ${G2O_LIBRARY_DIR})
-find_library(G2O_STUFF_LIBRARY g2o_stuff PATHS ${G2O_LIBRARY_DIR})
-find_library(G2O_CSPARSE_EXTENSION_LIBRARY g2o_csparse_extension PATHS ${G2O_LIBRARY_DIR})
-include_directories("/Users/bowen/Source/3rd_party/g2o")
-include_directories("/Users/bowen/Source/3rd_party/build_g2o")
-
-# TODO: link g2o to custom path at runtime
-# Still needs following in runtime
-# export DYLD_LIBRARY_PATH=/Users/bowen/Source/3rd_party/g2o/lib:$DYLD_LIBRARY_PATH
-# or 
-# use following to create a link in standard path for g2o
-# ln -s /Users/bowen/Source/3rd_party/g2o/lib/libg2o_core.dylib /usr/local/lib/libg2o_core.dylib
-# ln -s /Users/bowen/Source/3rd_party/g2o/lib/libg2o_stuff.dylib /usr/local/lib/libg2o_stuff.dylib
-# ln -s /Users/bowen/Source/3rd_party/g2o/lib/libg2o_csparse_extension.dylib /usr/local/lib/libg2o_csparse_extension.dylib
+find_package(g2o REQUIRED)
+include_directories(${G2O_INCLUDE_DIR})
 
 # csparse
-set(CSPARSE_INCLUDE_DIR "/usr/local/include/suitesparse")
-find_package( CSPARSE REQUIRED )
+find_package(CSPARSE REQUIRED)
 include_directories(${CSPARSE_INCLUDE_DIR})
 
 # pangolin
-find_package( Pangolin REQUIRED PATHS "/Users/bowen/Source/3rd_party/build_Pangolin" )
+find_package(Pangolin REQUIRED)
 
 # Boost
 find_package(Boost REQUIRED COMPONENTS timer)
 
 # libtorch
-find_package(Torch REQUIRED PATHS "/Users/bowen/Source/3rd_party/libtorch")
+find_package(Torch REQUIRED)
+include_directories(${TORCH_INCLUDE_DIR})
 
-set( THIRD_PARTY_LIBS 
+set(THIRD_PARTY_LIBS 
     ${OpenCV_LIBS}
-    ${G2O_CORE_LIBRARY} ${G2O_STUFF_LIBRARY} ${G2O_CSPARSE_EXTENSION_LIBRARY}
+    ${G2O_LIBS}
     ${CSPARSE_LIBRARY}
     ${Pangolin_LIBRARIES} 
     ${Boost_LIBRARIES}
     ${TORCH_LIBRARIES}
 )
+
 ############### source and test ######################
-add_subdirectory( src )
-target_include_directories( myslam 
+add_subdirectory(src)
+target_include_directories(myslam 
     PUBLIC ${PROJECT_SOURCE_DIR}/include
     PRIVATE ${PROJECT_SOURCE_DIR}/include/myslam/private
 )

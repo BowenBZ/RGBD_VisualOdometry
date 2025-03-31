@@ -11,7 +11,6 @@
 #ifndef FRAME_H
 #define FRAME_H
 
-#include <opencv2/features2d/features2d.hpp>
 #include <optional>
 
 #include "myslam/common_include.h"

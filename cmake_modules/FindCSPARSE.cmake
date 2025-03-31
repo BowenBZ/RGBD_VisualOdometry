@@ -1,6 +1,7 @@
 # Look for csparse; note the difference in the directory specifications!
 FIND_PATH(CSPARSE_INCLUDE_DIR NAMES cs.h
   PATHS
+  /usr/local/include/suitesparse
   /usr/include/suitesparse
   /usr/include
   /opt/local/include
@@ -23,3 +24,9 @@ FIND_LIBRARY(CSPARSE_LIBRARY NAMES cxsparse
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(CSPARSE DEFAULT_MSG
   CSPARSE_INCLUDE_DIR CSPARSE_LIBRARY)
+
+if(CSPARSE_INCLUDE_DIR AND CSPARSE_LIBRARY)
+  message(STATUS "Found csparse in: ${CSPARSE_INCLUDE_DIR}, ${CSPARSE_LIBRARY}")
+else()
+  message(WARNING "g2o not found.")
+endif()

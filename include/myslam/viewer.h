@@ -9,7 +9,6 @@
 #include "myslam/private/frame.h"
 #include "myslam/private/util.h"
 #include "myslam/private/mapmanager.h"
-#include <opencv2/features2d/features2d.hpp>
 
 namespace myslam {
 

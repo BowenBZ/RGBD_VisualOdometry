@@ -5,7 +5,6 @@
 #include "myslam/private/g2o_types.h"
 #include "myslam/private/mapmanager.h"
 
-#include <opencv2/opencv.hpp>
 #include <opencv2/core/eigen.hpp>
 
 #include <cstddef>
