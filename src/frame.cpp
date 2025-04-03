@@ -110,6 +110,8 @@ void Frame::ExtractKeypointsAndDescriptorsWithSuperPointModel(const SuperPointMo
         cv::KeyPoint kpt(points[idx].x, points[idx].y, 1.f);
         keypointInfo_.push_back({kpt, descriptors_.row(idx).clone(), nullopt});
     }
+
+    ConstructKeypointGrids();
 }
 
 void Frame::ConstructKeypointGrids() {

@@ -3,7 +3,7 @@
 #include <list>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
-#include <opencv2/core/core.hpp>
+#include <opencv2/opencv.hpp>
 #include <sophus/se3.hpp>
 
 // Demonstrate deep copy of Vector3d
