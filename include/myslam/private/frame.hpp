@@ -66,7 +66,7 @@ public:
 
     // factory function
     static Frame::Ptr CreateFrame(
-        const struct FrameConfig& config,
+        const std::shared_ptr<struct FrameConfig> config,
         const double timestamp, 
         const Camera::Ptr& camera, 
         const cv::Mat& color, 
@@ -217,7 +217,7 @@ private:
     size_t                  id_;            // id of this frame
     double                  timestamp_;     // timestamp of RGB image
 
-    struct FrameConfig      config_;
+    std::shared_ptr<struct FrameConfig>  config_;
 
     cv::Mat                     color_;         // color image, become null after temporary mappoint creation
     cv::Mat                     depth_;         // depth image, become null after temporary mappoint creation
@@ -244,7 +244,7 @@ private:
     // Active covisible keyframes ids (has same observed mappoints >= activeCovisibleWeight_)
     std::unordered_set<size_t>           activeCovisibleKfIds_;
 
-    Frame(const struct FrameConfig config,
+    Frame(const std::shared_ptr<struct FrameConfig> config,
           const size_t id, 
           const double timestamp, 
           const Camera::Ptr& camera, 

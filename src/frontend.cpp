@@ -54,26 +54,24 @@ Frontend::Frontend(const Camera::Ptr& camera): camera_(camera), mapManager_(&Map
             });
 
     // Setup frame configs
-    struct FrameConfig frameConfig;
-    frameConfig.maxFeaturesCnt = (size_t)Config::get<int>("frontend.number_of_features");
-    frameConfig.rowSectionCnt = (size_t)Config::get<int>("frontend.row_section_cnt");
-    frameConfig.colSectionCnt = (size_t)Config::get<int>("frontend.col_section_cnt");
+    frameConfig_ = std::shared_ptr<struct FrameConfig>(new struct FrameConfig);
+    frameConfig_->maxFeaturesCnt = (size_t)Config::get<int>("frontend.number_of_features");
+    frameConfig_->rowSectionCnt = (size_t)Config::get<int>("frontend.row_section_cnt");
+    frameConfig_->colSectionCnt = (size_t)Config::get<int>("frontend.col_section_cnt");
 
-    frameConfig.imgCols = (size_t)Config::get<int>("frame.width");
-    frameConfig.imgRows = (size_t)Config::get<int>("frame.height");
+    frameConfig_->imgCols = (size_t)Config::get<int>("frame.width");
+    frameConfig_->imgRows = (size_t)Config::get<int>("frame.height");
 
-    frameConfig.gridSize = (size_t)Config::get<double>("pixel_grid_size");
-    frameConfig.gridColCnt = (size_t)ceil((double)frameConfig.imgCols / frameConfig.gridSize);
-    frameConfig.gridRowCnt = (size_t)ceil((double)frameConfig.imgCols / frameConfig.gridSize);
+    frameConfig_->gridSize = (size_t)Config::get<double>("pixel_grid_size");
+    frameConfig_->gridColCnt = (size_t)ceil((double)frameConfig_->imgCols / frameConfig_->gridSize);
+    frameConfig_->gridRowCnt = (size_t)ceil((double)frameConfig_->imgCols / frameConfig_->gridSize);
 
-    frameConfig.searchGridRadius = Config::get<int>("search_grid_radius");
+    frameConfig_->searchGridRadius = Config::get<int>("search_grid_radius");
 
-    frameConfig.descriptorDistanceThres = Config::get<double>("max_descriptor_distance");
-    frameConfig.bestSecondaryDistanceRatio = Config::get<double>("min_best_secondary_distance_ratio");
+    frameConfig_->descriptorDistanceThres = Config::get<double>("max_descriptor_distance");
+    frameConfig_->bestSecondaryDistanceRatio = Config::get<double>("min_best_secondary_distance_ratio");
 
-    frameConfig.activeCovisibleWeight = (size_t)Config::get<double>("active_covisible_keyframe_weight");
-
-    frameConfig_ = std::shared_ptr<struct FrameConfig>(&frameConfig);
+    frameConfig_->activeCovisibleWeight = (size_t)Config::get<double>("active_covisible_keyframe_weight");
 
     state_ = INITIALIZING;
 }
@@ -87,7 +85,7 @@ bool Frontend::AddFrame(const Measurement& measurement)
     framePrev_ = frameCurr_;
 
     Frame::Ptr frame = Frame::CreateFrame(
-            *frameConfig_,
+            frameConfig_,
             measurement.timestamp,
             camera_,
             measurement.color,
