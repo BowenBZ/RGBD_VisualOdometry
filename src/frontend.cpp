@@ -16,10 +16,7 @@
 namespace myslam
 {
 
-Frontend::Frontend(const Camera::Ptr& camera) {
-
-    camera_ = camera;
-
+Frontend::Frontend(const Camera::Ptr& camera): camera_(camera), mapManager_(&MapManager::Instance()) {
     // Setup superpoint model
     superpointModel_ = SuperPointModel::Ptr(new SuperPointModel(Config::get<std::string>("superpoint.path"), 
                                                                 Config::get<double>("superpoint.confidenceThresh"),
@@ -54,9 +51,6 @@ Frontend::Frontend(const Camera::Ptr& camera) {
             [&](function<void(TrackingMap&)> updater) {
                 UpdateTrackingMap(updater);
             });
-
-    // Setup map manager
-    mapManager_ = MapManager::Ptr(&MapManager::Instance());
 
     // Setup frame configs
     frameConfig_.maxFeaturesCnt = (size_t)Config::get<int>("frontend.number_of_features");
@@ -242,7 +236,7 @@ void Frontend::UpdateTrackingMap(function<void(TrackingMap&)> updater) {
 
 void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
 {
-    Mat trackingMapDescriptors;
+    cv::Mat trackingMapDescriptors;
     unordered_map<int, size_t> trackingMapDescriptorIdxToMptId;
     unordered_map<size_t, size_t> matchedMptIdToKptIdx;
 
@@ -300,7 +294,7 @@ void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
 }
 
 void Frontend::MatchKeyPointsWithMappointsNN(TrackingMap& trackingMap) {
-    Mat trackingMapDescriptors;
+    cv::Mat trackingMapDescriptors;
     unordered_map<int, size_t> trackingMapDescriptorIdxToMptId;
     unordered_map<size_t, size_t> matchedMptIdToKptIdx;
 
@@ -333,8 +327,8 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
 {
     // Construct the 3d-2d observations
     vector<size_t> kptIndices;
-    vector<Point3f> pts3d;
-    vector<Point2f> pts2d;
+    vector<cv::Point3f> pts3d;
+    vector<cv::Point2f> pts2d;
 
     for (auto& [kptIdx, info] : matchedKptIdxToInfo_) {
         kptIndices.push_back(kptIdx);
@@ -343,13 +337,13 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
     }
 
     // Use P3P with RANSAC to compute the initial pose
-    Mat initRotMat, rotVec, tranVec, inliers;
+    cv::Mat initRotMat, rotVec, tranVec, inliers;
     cv::eigen2cv(frameCurr_->GetTcw().rotationMatrix(), initRotMat);
     cv::Rodrigues(initRotMat, rotVec);
     cv::eigen2cv(frameCurr_->GetTcw().translation(), tranVec);
 
     cv::solvePnPRansac(pts3d, pts2d, 
-            camera_->GetCameraMatrix(), Mat(),
+            camera_->GetCameraMatrix(), cv::Mat(),
                     rotVec, tranVec, true,
                     100, 4.0, 0.99,
                         inliers, cv::SOLVEPNP_P3P);
@@ -357,7 +351,7 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
     printf("  Size of inlier after P3P ransac: %d\n", inliers.rows);
 
     // Covert rotation vector to matrix and to eigen types
-    Mat rotMat;
+    cv::Mat rotMat;
     cv::Rodrigues(rotVec, rotMat);
     Eigen::Matrix3d rotMatEigen;
     Vector3d tranVecEigen;
@@ -482,7 +476,7 @@ bool Frontend::IsKeyframe()
     }
 
     SE3 T_r_c = framePrev_->GetTcw() * frameCurr_->GetTcw().inverse();
-    const Vector6d d = T_r_c.log();
+    const Eigen::Matrix<double, 6, 1> d = T_r_c.log();
     const Vector3d trans = d.head<3>();
     const Vector3d rot = d.tail<3>();
     const bool isLargeMotion = rot.norm() > frontendConfig_.maxFrameRotAllowed || trans.norm() > frontendConfig_.maxFrameTransAllowed;

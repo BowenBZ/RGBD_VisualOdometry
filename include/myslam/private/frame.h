@@ -42,9 +42,9 @@ typedef struct {
 
 typedef struct {
     // detected keypoints
-    KeyPoint keypoint;
+    cv::KeyPoint keypoint;
     // extracted descriptors     
-    Mat descriptor;
+    cv::Mat descriptor;
 
     // Matched mappoint id. Only get populated if it's a keyframe
     // A feature point may not have matched mappoint if no matching found & no depth value found.
@@ -65,8 +65,8 @@ public:
         const FrameConfig& config,
         const double timestamp, 
         const Camera::Ptr& camera, 
-        const Mat& color, 
-        const Mat& depth
+        const cv::Mat& color, 
+        const cv::Mat& depth
     ); 
 
     size_t GetId() const { 
@@ -83,11 +83,11 @@ public:
     }
 
     // find the depth in depth map
-    double GetDepth(const KeyPoint& kp);
+    double GetDepth(const cv::KeyPoint& kp);
     
     // Release the RGB and depth image after temporary mappoint creation
     void ReleaseRawFrameData() {
-        // OpenCV Mat will automatically decrease the reference count
+        // OpenCV cv::Mat will automatically decrease the reference count
         color_ = cv::Mat();
         depth_ = cv::Mat();
     }
@@ -108,19 +108,19 @@ public:
     }
 
     // Return the reference to keypoint
-    const KeyPoint& GetKeypoint(size_t idx) const {
+    const cv::KeyPoint& GetKeypoint(size_t idx) const {
         assert(idx < keypointInfo_.size());
         return keypointInfo_[idx].keypoint;
     }
 
-    // Return the descriptor as a referene to the single row Mat
-    Mat GetDescriptor(size_t idx) const {
+    // Return the descriptor as a referene to the single row cv::Mat
+    cv::Mat GetDescriptor(size_t idx) const {
         assert(idx < keypointInfo_.size());
         return keypointInfo_[idx].descriptor;
     }
 
     // Return all descriptors
-    const Mat& GetDescriptors() const {
+    const cv::Mat& GetDescriptors() const {
         return descriptors_;
     }
 
@@ -215,15 +215,15 @@ private:
 
     FrameConfig             config_;
 
-    Mat                     color_;         // color image, become null after temporary mappoint creation
-    Mat                     depth_;         // depth image, become null after temporary mappoint creation
+    cv::Mat                     color_;         // color image, become null after temporary mappoint creation
+    cv::Mat                     depth_;         // depth image, become null after temporary mappoint creation
 
     SE3                     T_c_w_;         // transform from world to camera
     
     // detected feature points info
     vector<KeypointInfo>    keypointInfo_;
     // Each row is a descriptor
-    Mat                     descriptors_;
+    cv::Mat                     descriptors_;
 
     unordered_map<size_t, list<size_t>> gridToKptIdx_;       // idx of keypoints for a grid
 
@@ -245,8 +245,8 @@ private:
           const size_t id, 
           const double timestamp, 
           const Camera::Ptr& camera, 
-          const Mat& color, 
-          const Mat& depth);
+          const cv::Mat& color, 
+          const cv::Mat& depth);
 
     // Construct the keypoint grids for active search and match
     void ConstructKeypointGrids();

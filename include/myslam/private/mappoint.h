@@ -39,7 +39,7 @@ public:
     
     // factory function to create mappoint
     // there will be only 1 time copy of parameters happening in the private constructor
-    static Mappoint::Ptr CreateMappoint(const Vector3d& pos, const Mat& descriptor);
+    static Mappoint::Ptr CreateMappoint(const Vector3d& pos, const cv::Mat& descriptor);
 
     const Vector3d& GetPosition() const {
         return pos_;
@@ -59,7 +59,7 @@ public:
     // Recalculate descriptor when it's observed by several keyframes
     void UpdateDescriptor();
 
-    const Mat& GetDescriptor() {
+    const cv::Mat& GetDescriptor() {
         return descriptor_;
     }
 
@@ -92,7 +92,7 @@ private:
     size_t                      id_;
 
     // Descriptor for keypoint matching, coming from the best keypoint descriptor 
-    Mat                         descriptor_;
+    cv::Mat                         descriptor_;
     // Normal of viewing direction, from mappoint to camera
     Vector3d                    norm_;
 
@@ -106,7 +106,7 @@ private:
     size_t                      anchorKfId_;
 
     // mappoint can only be created by factory
-    Mappoint(const size_t id, const Vector3d& pos, const Mat& descriptor);
+    Mappoint(const size_t id, const Vector3d& pos, const cv::Mat& descriptor);
 
 };
 

@@ -31,7 +31,7 @@ void SuperPointModel::Process(const cv::Mat& image, std::vector<CornerPoint>& co
     assert(resizedImage.type() == CV_32F);
     int imageHeight = resizedImage.rows;
     int imageWidth = resizedImage.cols;
-    // Create a tensor from the cv::Mat. OpenCV Mat dimensions are [height, width, channels]
+    // Create a tensor from the cv::Mat. OpenCV cv::Mat dimensions are [height, width, channels]
     torch::Tensor tensor_image = torch::from_blob(
         resizedImage.data,
         { imageHeight, imageWidth, resizedImage.channels() },

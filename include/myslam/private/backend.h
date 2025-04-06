@@ -64,7 +64,7 @@ private:
     condition_variable  backendUpdateTrigger_;
 
     Camera::Ptr         camera_;
-    MapManager::Ptr     mapManager_;
+    MapManager*         mapManager_;
 
     bool                isIdle_;
 

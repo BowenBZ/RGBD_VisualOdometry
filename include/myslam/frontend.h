@@ -20,14 +20,15 @@
 #include "myslam/private/superpoint_model.hpp"
 #include "myslam/viewer.h"
 #include "myslam/private/backend.h"
+#include <functional>
 
 namespace myslam 
 {
 
 typedef struct {
     double timestamp;
-    Mat color;
-    Mat depth;
+    cv::Mat color;
+    cv::Mat depth;
 } Measurement;
 
 typedef struct {
@@ -87,7 +88,7 @@ private:
     Camera::Ptr             camera_;
     Viewer::Ptr             viewer_;
     Backend::Ptr            backend_;
-    MapManager::Ptr         mapManager_;
+    MapManager*             mapManager_;
     SuperPointModel::Ptr    superpointModel_;
     bool                    enableSuperpoint_;
 

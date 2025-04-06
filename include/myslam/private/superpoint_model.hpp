@@ -22,7 +22,7 @@ public:
 
     /*
     Input
-      img - OpenCV Mat grayscale float32 input image in range [0,1].
+      img - OpenCV cv::Mat grayscale float32 input image in range [0,1].
     Output
       corners - vector of corners
       desc - vector of unit unit normalized descriptors. (256, N)

@@ -10,16 +10,16 @@ namespace myslam
 
 size_t Mappoint::factoryId_ = 0;
 
-Mappoint::Ptr Mappoint::CreateMappoint(const Vector3d& pos, const Mat& descriptor)
+Mappoint::Ptr Mappoint::CreateMappoint(const Vector3d& pos, const cv::Mat& descriptor)
 {
-    // Vector3d is deep copy, while Mat is shadow copy
+    // Vector3d is deep copy, while cv::Mat is shadow copy
     return Mappoint::Ptr( 
         new Mappoint(++factoryId_, pos, descriptor)
     );
 }
 
 
-Mappoint::Mappoint(const size_t id, const Vector3d& pos, const Mat& descriptor)
+Mappoint::Mappoint(const size_t id, const Vector3d& pos, const cv::Mat& descriptor)
 : id_(id), pos_(pos), descriptor_(descriptor.clone()), norm_(Vector3d::Zero()),
   triangulated_(false), optimized_(false), outlier_(false) { }
 
@@ -60,7 +60,7 @@ void Mappoint::UpdateDescriptor() {
     }
 
     // Get all matched keypoint descriptors for this mappoint
-    vector<Mat> descriptors;
+    vector<cv::Mat> descriptors;
     size_t desCnt = descriptors.size();
     descriptors.reserve(desCnt);
     for(auto& kfId: observedByKfId_) {

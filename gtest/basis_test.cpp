@@ -17,7 +17,7 @@ TEST(BASISTEST, CopyOfVector3d) {
   EXPECT_NE(a, b);
 }
 
-// Demonstrate deep copy of Point2f
+// Demonstrate deep copy of cv::Point2f
 TEST(BASISTEST, CopyOfPoint2f) {
   cv::Point2f a (1, 2);
   cv::Point2f b = a;
@@ -28,7 +28,7 @@ TEST(BASISTEST, CopyOfPoint2f) {
   EXPECT_NE(a, b);
 }
 
-// Demonstrate deep copy of Point2f
+// Demonstrate deep copy of cv::Point2f
 TEST(BASISTEST, MakeCopyOfPoint2f) {
   cv::Point2f a (1, 2);
   std::list<std::pair<size_t, cv::Point2f>> b;
@@ -41,7 +41,7 @@ TEST(BASISTEST, MakeCopyOfPoint2f) {
   EXPECT_NE(a, b.front().second);
 }
 
-// Demonstrate shadow copy of Mat
+// Demonstrate shadow copy of cv::Mat
 TEST(BASISTEST, CopyOfMat_changeOrigin) {
   cv::Mat a = (cv::Mat_<double>(2, 2) << 1, 2, 3, 4);
   cv::Mat b = a;
@@ -52,7 +52,7 @@ TEST(BASISTEST, CopyOfMat_changeOrigin) {
   EXPECT_EQ(a.at<double>(0, 0), b.at<double>(0, 0));
 }
 
-// Demonstrate shadow copy of Mat 2
+// Demonstrate shadow copy of cv::Mat 2
 TEST(BASISTEST, CopyOfMat_originReset) {
   cv::Mat a = (cv::Mat_<double>(2, 2) << 1, 2, 3, 4);
   cv::Mat b = a;
@@ -71,7 +71,7 @@ class MatTestClass {
     }
 };
 
-// Demonstrate shadow copy of Mat 3
+// Demonstrate shadow copy of cv::Mat 3
 TEST(BASISTEST, PassOfMat_originReset) {
   cv::Mat a = (cv::Mat_<double>(2, 2) << 1, 2, 3, 4);
   MatTestClass b(a);

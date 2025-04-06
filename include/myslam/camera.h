@@ -30,7 +30,7 @@ public:
         return depthScale_;
     }
 
-    Mat GetCameraMatrix() const {
+    cv::Mat GetCameraMatrix() const {
         return cameraMatrix_;
     }
 
@@ -43,12 +43,12 @@ public:
     Vector2d World2Pixel ( const Vector3d& p_w, const SE3& T_c_w );
 
     // overload functions
-    Vector3d Pixel2World ( const KeyPoint& p_p, const SE3& T_c_w, double depth=1 );
-    Vector3d Pixel2Camera( const Point2f& p_p, double depth=1 ); 
+    Vector3d Pixel2World ( const cv::KeyPoint& p_p, const SE3& T_c_w, double depth=1 );
+    Vector3d Pixel2Camera( const cv::Point2f& p_p, double depth=1 ); 
 
 private:
     float   fx_, fy_, cx_, cy_, depthScale_;  // Camera intrinsics 
-    Mat     cameraMatrix_;
+    cv::Mat     cameraMatrix_;
 };
 
 }

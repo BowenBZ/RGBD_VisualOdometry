@@ -84,8 +84,8 @@ int main ( int argc, char** argv )
         if (pauseEveryFrame) {
             cin.get();
         }
-        Mat color = cv::imread ( rgbFiles[i] );
-        Mat depth = cv::imread ( depthFiles[i], -1 );
+        cv::Mat color = cv::imread ( rgbFiles[i] );
+        cv::Mat depth = cv::imread ( depthFiles[i], -1 );
         if ( color.data == nullptr || depth.data == nullptr ) {
             cout << "Frame missing" << endl;
             break;

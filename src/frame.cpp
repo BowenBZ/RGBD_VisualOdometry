@@ -15,8 +15,8 @@ Frame::Ptr Frame::CreateFrame(
     const FrameConfig& config,
     const double timestamp, 
     const Camera::Ptr& camera, 
-    const Mat& color, 
-    const Mat& depth)
+    const cv::Mat& color, 
+    const cv::Mat& depth)
 {
     return Frame::Ptr( new Frame(
         config,
@@ -32,14 +32,14 @@ Frame::Frame (  const FrameConfig config,
                 const size_t id, 
                 const double timestamp, 
                 const Camera::Ptr& camera, 
-                const Mat& color, 
-                const Mat& depth )
+                const cv::Mat& color, 
+                const cv::Mat& depth )
 : id_(id), timestamp_(timestamp), camera_(camera), color_(color.clone()), depth_(depth.clone()), T_c_w_(SE3())
 {
     config_ = config;
 }
 
-double Frame::GetDepth(const KeyPoint& kp)
+double Frame::GetDepth(const cv::KeyPoint& kp)
 {
     int x = cvRound(kp.pt.x);
     int y = cvRound(kp.pt.y);
@@ -78,9 +78,9 @@ void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& 
             cv::Range rowRange(rowStartIdx, rowEndIdx);
             cv::Range colRange(colStartIdx, colEndIdx);
 
-            vector<KeyPoint> kpts;
-            Mat des;
-            detector->detectAndCompute(color_(rowRange, colRange), Mat(), kpts, des);
+            vector<cv::KeyPoint> kpts;
+            cv::Mat des;
+            detector->detectAndCompute(color_(rowRange, colRange), cv::Mat(), kpts, des);
 
             for (size_t idx = 0; idx < min(kpts.size(), config_.maxFeaturesCnt / (config_.rowSectionCnt * config_.colSectionCnt)); ++idx) {
                 auto& kpt = kpts[idx];

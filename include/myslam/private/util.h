@@ -15,9 +15,9 @@ namespace myslam {
 inline bool Triangulation(const vector<SE3>&        poses,
                           const vector<Vector3d>&   normalizedMptPos, 
                           Vector3d&                 mptPosWorld) {
-    MatXX A(2 * poses.size(), 4);
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> A(2 * poses.size(), 4);
     for (size_t i = 0; i < poses.size(); ++i) {
-        Mat34 m = poses[i].matrix3x4();
+        Eigen::Matrix<double, 3, 4> m = poses[i].matrix3x4();
         A.block<1, 4>(2 * i, 0) = normalizedMptPos[i][0] * m.row(2) - m.row(0);
         A.block<1, 4>(2 * i + 1, 0) = normalizedMptPos[i][1] * m.row(2) - m.row(1);
     }
@@ -124,25 +124,25 @@ inline void find_matched_points(const cv::Mat& prev_desc,
     }
 }
 
-inline Vector2d toVector2d(const Point2f& pt) {
+inline Vector2d toVector2d(const cv::Point2f& pt) {
     return Vector2d ( pt.x, pt.y );
 }
 
-inline Vector2d toVector2d(const KeyPoint& kp) {
+inline Vector2d toVector2d(const cv::KeyPoint& kp) {
     return toVector2d( kp.pt );
 }
 
-inline Vector3d toVector3d(const Point3f& pt) {
+inline Vector3d toVector3d(const cv::Point3f& pt) {
     return Vector3d ( pt.x, pt.y, pt.z );
 }
 
-inline Point3f toPoint3f(const Vector3d& pt) {
-    return Point3f( pt(0,0), pt(1,0), pt(2,0) );
+inline cv::Point3f toPoint3f(const Vector3d& pt) {
+    return cv::Point3f( pt(0,0), pt(1,0), pt(2,0) );
 }
 
 struct KeyPointHash   
 {  
-    size_t operator()(const KeyPoint& kpt) const  
+    size_t operator()(const cv::KeyPoint& kpt) const  
     {  
         return kpt.hash();  
     }  
@@ -150,19 +150,19 @@ struct KeyPointHash
 
 struct KeyPointsComparision  
 {  
-    bool operator()(const KeyPoint& kpt1, const KeyPoint& kpt2) const  
+    bool operator()(const cv::KeyPoint& kpt1, const cv::KeyPoint& kpt2) const  
     {  
         return kpt1.hash() == kpt2.hash();  
     }  
 };
 
-typedef unordered_set<KeyPoint, KeyPointHash, KeyPointsComparision> KeyPointSet;
+typedef unordered_set<cv::KeyPoint, KeyPointHash, KeyPointsComparision> KeyPointSet;
 
 // Compute the Hamming distance between 2 descriptors
-// Descriptor is provided as a row in the Mat
+// Descriptor is provided as a row in the cv::Mat
 inline double ComputeDescriptorDistance(
-    const Mat& desMat1, size_t row1,
-    const Mat& desMat2, size_t row2) {
+    const cv::Mat& desMat1, size_t row1,
+    const cv::Mat& desMat2, size_t row2) {
 
     assert(desMat1.cols == desMat2.cols);
 

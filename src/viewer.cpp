@@ -152,7 +152,7 @@ void Viewer::DrawFrame(Frame::Ptr frame, const float* color) {
 
     glPushMatrix();
 
-    Matrix4f m = Twc.matrix().template cast<float>();
+    Eigen::Matrix4f m = Twc.matrix().template cast<float>();
     glMultMatrixf((GLfloat*)m.data());
 
     if (color == nullptr) {

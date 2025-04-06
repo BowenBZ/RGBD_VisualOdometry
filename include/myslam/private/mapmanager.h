@@ -23,15 +23,22 @@ class MapManager
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    typedef std::shared_ptr<MapManager> Ptr;
     typedef unordered_map<size_t, Mappoint::Ptr> MappointIdToPtr;
     typedef unordered_map<size_t, Frame::Ptr> KeyframeIdToPtr;
 
     static MapManager& Instance() {
-        static MapManager map_;
-        return map_;
+        static MapManager mapManager;
+        return mapManager;
     }
-    
+
+    // Delete copy constructor and copy assignment operator.
+    MapManager(const MapManager&) = delete;
+    MapManager& operator=(const MapManager&) = delete;
+
+    // Delete move constructor and move assignment operator.
+    MapManager(MapManager&&) = delete;
+    MapManager& operator=(MapManager&&) = delete;
+
     void AddKeyframe(const Frame::Ptr& frame) {
         keyframesDict_[frame->GetId()] = frame;
     }
@@ -72,6 +79,8 @@ private:
     MappointIdToPtr     mappointsDict_;       // all mappoints
 
     unordered_map<size_t, size_t> oldMptIdNewMptIdMap_;  // mpt mapping after replacement
+
+    MapManager() { }
 };
 
 } //namespace

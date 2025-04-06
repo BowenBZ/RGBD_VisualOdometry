@@ -10,11 +10,9 @@
 namespace myslam
 {
 
-Backend::Backend(const Camera::Ptr camera): camera_(std::move(camera)) {
+Backend::Backend(const Camera::Ptr camera): camera_(camera), mapManager_(&MapManager::Instance()) {
     config_.baInlierThres = Config::get<double>("backend.ba_inlier_threshold");
     config_.reMatchDescriptorDistance = Config::get<double>("backend.re_match_descriptor_distance");
-
-    mapManager_ = MapManager::Ptr(&MapManager::Instance());
 
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
         g2o::make_unique<BlockSolverType>(g2o::make_unique<CSparseLinearSolverType>()));
