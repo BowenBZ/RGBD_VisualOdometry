@@ -1,8 +1,8 @@
 /*
- * MapManager which maintains the mappoints and keyframes with <id, shared_ptr> pair. Other components should only maintain the index of respective resources
+ * MapManager which maintains the mappoints and keyframes with <id, std::shared_ptr> std::pair. Other components should only maintain the index of respective resources
  */
 
-#include "myslam/private/mapmanager.h"
+#include "myslam/private/mapmanager.hpp"
 
 namespace myslam
 {
@@ -10,7 +10,7 @@ namespace myslam
 void MapManager::GetMappointsNearKeyframe(const Frame::Ptr& keyframe, MappointIdToPtr& mptIdToMpt) {
     mptIdToMpt.clear();
 
-    list<size_t> allCovisibleKfIds;
+    std::list<size_t> allCovisibleKfIds;
     keyframe->GetAllCovisibleKfIds(allCovisibleKfIds);
     // Add current keyFrame to the covisible keyframe map
     allCovisibleKfIds.push_back(keyframe->GetId());

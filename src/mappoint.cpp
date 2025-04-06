@@ -1,9 +1,10 @@
-#include "myslam/private/mappoint.h"
+#include "myslam/private/mappoint.hpp"
 
-#include "myslam/common_include.h"
-#include "myslam/private/util.h"
-#include "myslam/private/frame.h"
-#include "myslam/private/mapmanager.h"
+#include "myslam/private/frame.hpp"
+#include "myslam/private/mapmanager.hpp"
+#include "myslam/private/util.hpp"
+
+#include <myslam/common_include.hpp>
 
 namespace myslam
 {
@@ -24,7 +25,7 @@ Mappoint::Mappoint(const size_t id, const Vector3d& pos, const cv::Mat& descript
   triangulated_(false), optimized_(false), outlier_(false) { }
 
 
-void Mappoint::AddObservedByKeyframe(const shared_ptr<Frame>& kf) {
+void Mappoint::AddObservedByKeyframe(const std::shared_ptr<Frame>& kf) {
     const auto& kfId = kf->GetId();
     assert(!observedByKfId_.count(kfId));
 
@@ -60,7 +61,7 @@ void Mappoint::UpdateDescriptor() {
     }
 
     // Get all matched keypoint descriptors for this mappoint
-    vector<cv::Mat> descriptors;
+    std::vector<cv::Mat> descriptors;
     size_t desCnt = descriptors.size();
     descriptors.reserve(desCnt);
     for(auto& kfId: observedByKfId_) {
@@ -71,7 +72,7 @@ void Mappoint::UpdateDescriptor() {
     }
 
     // Calculate the distance between descriptors
-    vector<vector<double>> descriptorDistances(desCnt, vector<double>(desCnt, 0));
+    std::vector<std::vector<double>> descriptorDistances(desCnt, std::vector<double>(desCnt, 0));
     for(size_t i = 0; i < desCnt; ++i) {
         for(size_t j = i + 1; j < desCnt; ++j) {
             double distance = ComputeDescriptorDistance(
@@ -84,7 +85,7 @@ void Mappoint::UpdateDescriptor() {
     }
 
     // Calculate the medium distance from each descriptor to the others, and select the minumum
-    double minMedium = numeric_limits<double>::max();
+    double minMedium = std::numeric_limits<double>::max();
     double desIdx = 0;
     for(size_t i = 0; i < desCnt; ++i) {
         auto& distances = descriptorDistances[i];

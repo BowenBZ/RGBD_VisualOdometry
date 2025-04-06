@@ -1,7 +1,9 @@
 #ifndef MYSLAM_UTIL_H
 #define MYSLAM_UTIL_H
 
-#include "myslam/common_include.h"
+#include <myslam/common_include.hpp>
+
+#include <unordered_set>
 
 namespace myslam {
 
@@ -12,8 +14,8 @@ namespace myslam {
  * @param mptPosWorld  triangulated point in the world
  * @return true if success
  */
-inline bool Triangulation(const vector<SE3>&        poses,
-                          const vector<Vector3d>&   normalizedMptPos, 
+inline bool Triangulation(const std::vector<SE3>&        poses,
+                          const std::vector<Vector3d>&   normalizedMptPos, 
                           Vector3d&                 mptPosWorld) {
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> A(2 * poses.size(), 4);
     for (size_t i = 0; i < poses.size(); ++i) {
@@ -96,7 +98,7 @@ inline void find_matched_points(const cv::Mat& prev_desc,
         matched_prev_indices[j] = min_idx;
     }
 
-    // Create a vector of current point indices: 0, 1, ..., N2-1.
+    // Create a std::vector of current point indices: 0, 1, ..., N2-1.
     // Compute bidirectional matches: for each current descriptor j, check if:
     //   j == matched_curr_indices[ matched_prev_indices[j] ]
     std::vector<bool> bidirectional_match(N2, false);
@@ -156,7 +158,7 @@ struct KeyPointsComparision
     }  
 };
 
-typedef unordered_set<cv::KeyPoint, KeyPointHash, KeyPointsComparision> KeyPointSet;
+typedef std::unordered_set<cv::KeyPoint, KeyPointHash, KeyPointsComparision> KeyPointSet;
 
 // Compute the Hamming distance between 2 descriptors
 // Descriptor is provided as a row in the cv::Mat

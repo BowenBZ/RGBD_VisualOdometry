@@ -11,12 +11,18 @@
 #ifndef MYSLAM_BACKEND_H
 #define MYSLAM_BACKEND_H
 
-#include "myslam/common_include.h"
-#include "myslam/camera.h"
-#include "myslam/private/frame.h"
-#include "myslam/private/g2o_types.h"
-#include "myslam/private/mapmanager.h"
-#include "myslam/private/mappoint.h"
+#include <myslam/common_include.hpp>
+#include <myslam/camera.hpp>
+
+#include "myslam/private/frame.hpp"
+#include "myslam/private/g2o_types.hpp"
+#include "myslam/private/mapmanager.hpp"
+#include "myslam/private/mappoint.hpp"
+
+#include <mutex>
+#include <condition_variable>
+#include <thread>
+#include <functional>
 
 namespace myslam {
 
@@ -40,7 +46,7 @@ public:
 
     Backend(const Camera::Ptr camera);
 
-    void RegisterTrackingMapUpdateCallback(function<void(function<void(unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler) {
+    void RegisterTrackingMapUpdateCallback(std::function<void(std::function<void(std::unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler) {
         frontendMapUpdateHandler_ = frontendMapUpdateHandler;
     }
 
@@ -58,10 +64,10 @@ public:
 private:
     BackendConfig       config_;
 
-    thread              backendThread_;
+    std::thread         backendThread_;
     bool                backendRunning_;
-    mutex               backendMutex_;
-    condition_variable  backendUpdateTrigger_;
+    std::mutex          backendMutex_;
+    std::condition_variable  backendUpdateTrigger_;
 
     Camera::Ptr         camera_;
     MapManager*         mapManager_;
@@ -69,25 +75,25 @@ private:
     bool                isIdle_;
 
     // Queue to store new keyframe id from frontend
-    queue<size_t>       newKeyframeIdQueue_;
+    std::queue<size_t>  newKeyframeIdQueue_;
 
     Frame::Ptr          keyframePrev_;
     Frame::Ptr          keyframeCurr_;
     
     g2o::SparseOptimizer                                                    optimizer_;
 
-    unordered_map<size_t, pair<Frame::Ptr, VertexPose*>>                    kfIdToCovKfThenVertex_;
-    unordered_map<size_t, pair<Mappoint::Ptr, VertexMappoint*>>             mptIdToMptThenVertex_;
+    std::unordered_map<size_t, std::pair<Frame::Ptr, VertexPose*>>                    kfIdToCovKfThenVertex_;
+    std::unordered_map<size_t, std::pair<Mappoint::Ptr, VertexMappoint*>>             mptIdToMptThenVertex_;
     // keyframes not belonging to covisible keyframes but could observe the local mappoints
-    unordered_map<size_t, pair<Frame::Ptr, VertexPose*>>                    kfIdToFixedKfThenVertex_;
-    list<GraphEdgeInfo>                                                     edges_;
+    std::unordered_map<size_t, std::pair<Frame::Ptr, VertexPose*>>                    kfIdToFixedKfThenVertex_;
+    std::list<GraphEdgeInfo>                                                     edges_;
 
-    list<pair<Frame::Ptr, size_t>>                                          observingMptToRemove_;
+    std::list<std::pair<Frame::Ptr, size_t>>                                          observingMptToRemove_;
     
     // New created mappoints from current keyframe needs to be removed if we found previous matched mappoint
-    list<size_t>                                                            mptIdToRemove_;
+    std::list<size_t>                                                            mptIdToRemove_;
 
-    function<void(function<void(unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler_;
+    std::function<void(std::function<void(std::unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler_;
 
     // main function for backend thread
     void BackendLoop();

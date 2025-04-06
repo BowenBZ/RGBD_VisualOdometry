@@ -1,17 +1,18 @@
-#include "myslam/frontend.h"
+#include <myslam/frontend.hpp>
 
-#include "myslam/config.h"
-#include "myslam/private/frame.h"
-#include "myslam/private/g2o_types.h"
-#include "myslam/private/mapmanager.h"
+#include <myslam/config.hpp>
+
+#include "myslam/private/frame.hpp"
+#include "myslam/private/superpoint_model.hpp"
+#include "myslam/private/mapmanager.hpp"
+#include "myslam/private/g2o_types.hpp"
+#include "myslam/private/backend.hpp"
+#include "myslam/private/util.hpp"
 
 #include <opencv2/core/eigen.hpp>
 
-#include <cstddef>
-#include <algorithm>
-#include <optional>
-#include <unordered_map>
-#include <utility>
+#include <unordered_set>
+#include <mutex>
 
 namespace myslam
 {
@@ -48,28 +49,31 @@ Frontend::Frontend(const Camera::Ptr& camera): camera_(camera), mapManager_(&Map
     // Setup backend
     backend_ = Backend::Ptr(new myslam::Backend(camera_));
     backend_->RegisterTrackingMapUpdateCallback(
-            [&](function<void(TrackingMap&)> updater) {
+            [&](std::function<void(TrackingMap&)> updater) {
                 UpdateTrackingMap(updater);
             });
 
     // Setup frame configs
-    frameConfig_.maxFeaturesCnt = (size_t)Config::get<int>("frontend.number_of_features");
-    frameConfig_.rowSectionCnt = (size_t)Config::get<int>("frontend.row_section_cnt");
-    frameConfig_.colSectionCnt = (size_t)Config::get<int>("frontend.col_section_cnt");
+    struct FrameConfig frameConfig;
+    frameConfig.maxFeaturesCnt = (size_t)Config::get<int>("frontend.number_of_features");
+    frameConfig.rowSectionCnt = (size_t)Config::get<int>("frontend.row_section_cnt");
+    frameConfig.colSectionCnt = (size_t)Config::get<int>("frontend.col_section_cnt");
 
-    frameConfig_.imgCols = (size_t)Config::get<int>("frame.width");
-    frameConfig_.imgRows = (size_t)Config::get<int>("frame.height");
+    frameConfig.imgCols = (size_t)Config::get<int>("frame.width");
+    frameConfig.imgRows = (size_t)Config::get<int>("frame.height");
 
-    frameConfig_.gridSize = (size_t)Config::get<double>("pixel_grid_size");
-    frameConfig_.gridColCnt = (size_t)ceil((double)frameConfig_.imgCols / frameConfig_.gridSize);
-    frameConfig_.gridRowCnt = (size_t)ceil((double)frameConfig_.imgCols / frameConfig_.gridSize);
+    frameConfig.gridSize = (size_t)Config::get<double>("pixel_grid_size");
+    frameConfig.gridColCnt = (size_t)ceil((double)frameConfig.imgCols / frameConfig.gridSize);
+    frameConfig.gridRowCnt = (size_t)ceil((double)frameConfig.imgCols / frameConfig.gridSize);
 
-    frameConfig_.searchGridRadius = Config::get<int>("search_grid_radius");
+    frameConfig.searchGridRadius = Config::get<int>("search_grid_radius");
 
-    frameConfig_.descriptorDistanceThres = Config::get<double>("max_descriptor_distance");
-    frameConfig_.bestSecondaryDistanceRatio = Config::get<double>("min_best_secondary_distance_ratio");
+    frameConfig.descriptorDistanceThres = Config::get<double>("max_descriptor_distance");
+    frameConfig.bestSecondaryDistanceRatio = Config::get<double>("min_best_secondary_distance_ratio");
 
-    frameConfig_.activeCovisibleWeight = (size_t)Config::get<double>("active_covisible_keyframe_weight");
+    frameConfig.activeCovisibleWeight = (size_t)Config::get<double>("active_covisible_keyframe_weight");
+
+    frameConfig_ = std::shared_ptr<struct FrameConfig>(&frameConfig);
 
     state_ = INITIALIZING;
 }
@@ -77,13 +81,13 @@ Frontend::Frontend(const Camera::Ptr& camera): camera_(camera), mapManager_(&Map
 bool Frontend::AddFrame(const Measurement& measurement)
 {
     // Lock tracking map, so it cannot be updated during frontend processing
-    unique_lock<mutex> lock(trackingMapMutex_);
+    std::unique_lock<std::mutex> lock(trackingMapMutex_);
 
-    cout << "Frontend status: " << VOStateStr[state_] << endl;
+    printf("Frontend status: %s\n", VOStateStr[state_].c_str());
     framePrev_ = frameCurr_;
 
     Frame::Ptr frame = Frame::CreateFrame(
-            frameConfig_,
+            *frameConfig_,
             measurement.timestamp,
             camera_,
             measurement.color,
@@ -119,7 +123,7 @@ bool Frontend::AddFrame(const Measurement& measurement)
 
     if (viewer_)
     {
-        unordered_set<size_t> matchedKptsIdx;
+        std::unordered_set<size_t> matchedKptsIdx;
         for (const auto& match: matchedKptIdxToInfo_) {
             matchedKptsIdx.insert(match.first);
         }
@@ -180,7 +184,7 @@ bool Frontend::TrackingHandler() {
     CreateTempMappoints();
 
     if (!IsGoodEstimation()) {
-        cout << "Cannot estimate Pose" << endl;
+        printf("Cannot estimate Pose\n");
         accuLostFrameNums_++;
         state_ = (++accuLostFrameNums_ > frontendConfig_.maxLostFrames) ? LOST : TRACKING;
         return false;
@@ -196,11 +200,11 @@ bool Frontend::TrackingHandler() {
 }
 
 void Frontend::LostHandler() {
-    cout << "Tracking is lost" << endl;
+    printf("Tracking is lost\n");
 }
 
-void Frontend::UpdateTrackingMap(function<void(TrackingMap&)> updater) {
-    unique_lock<mutex> lock(trackingMapMutex_);
+void Frontend::UpdateTrackingMap(std::function<void(TrackingMap&)> updater) {
+    std::unique_lock<std::mutex> lock(trackingMapMutex_);
 
     const SE3 old_T_kf_from_w = keyframeCurr_->GetTcw();
 
@@ -229,7 +233,7 @@ void Frontend::UpdateTrackingMap(function<void(TrackingMap&)> updater) {
         }
     }
 
-    cout << "Tracking map is updated" << endl;
+    printf("Tracking map is updated\n");
 }
 
 #pragma mark - Feature matching
@@ -237,8 +241,8 @@ void Frontend::UpdateTrackingMap(function<void(TrackingMap&)> updater) {
 void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
 {
     cv::Mat trackingMapDescriptors;
-    unordered_map<int, size_t> trackingMapDescriptorIdxToMptId;
-    unordered_map<size_t, size_t> matchedMptIdToKptIdx;
+    std::unordered_map<int, size_t> trackingMapDescriptorIdxToMptId;
+    std::unordered_map<size_t, size_t> matchedMptIdToKptIdx;
 
     for (auto &[mptId, mpt] : trackingMap)
     {
@@ -250,7 +254,7 @@ void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
         matchedMptIdToKptIdx[matchInfo.mpt->GetId()] = kptIdx;
     }
 
-    vector<cv::DMatch> matches;
+    std::vector<cv::DMatch> matches;
     flannMatcher_.match(trackingMapDescriptors, frameCurr_->GetDescriptors(), matches);
 
     // compute the min distance of the best match
@@ -260,7 +264,7 @@ void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
                         [](const cv::DMatch &m1, const cv::DMatch &m2)
                         { return m1.distance < m2.distance; })
                         ->distance;
-    float maxDis = max<float>(min_dis * frontendConfig_.minDisRatio, 30.0);
+    float maxDis = std::max<float>(min_dis * frontendConfig_.minDisRatio, 30.0);
 
     for (cv::DMatch &m : matches)
     {
@@ -289,14 +293,14 @@ void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
         }
     }
 
-    cout << "  Size of tracking map: " << trackingMap.size() << endl;
-    cout << "  Size of matched <keypoint, mappoint> pairs: " << matchedKptIdxToInfo_.size() << endl;
+    printf("  Size of tracking map: %zu\n", trackingMap.size());
+    printf("  Size of matched <keypoint, mappoint> pairs: %zu\n", matchedKptIdxToInfo_.size());
 }
 
 void Frontend::MatchKeyPointsWithMappointsNN(TrackingMap& trackingMap) {
     cv::Mat trackingMapDescriptors;
-    unordered_map<int, size_t> trackingMapDescriptorIdxToMptId;
-    unordered_map<size_t, size_t> matchedMptIdToKptIdx;
+    std::unordered_map<int, size_t> trackingMapDescriptorIdxToMptId;
+    std::unordered_map<size_t, size_t> matchedMptIdToKptIdx;
 
     for (auto &[mptId, mpt] : trackingMap)
     {
@@ -304,8 +308,8 @@ void Frontend::MatchKeyPointsWithMappointsNN(TrackingMap& trackingMap) {
         trackingMapDescriptors.push_back(mpt->GetDescriptor());
     }
 
-    vector<int> matchedCurrentIndices;
-    vector<int> matchedPrevIndices;
+    std::vector<int> matchedCurrentIndices;
+    std::vector<int> matchedPrevIndices;
     find_matched_points(trackingMapDescriptors, frameCurr_->GetDescriptors(), nnThresh_, matchedCurrentIndices, matchedPrevIndices);
     assert(matchedCurrentIndices.size() == matchedPrevIndices.size());
 
@@ -317,8 +321,8 @@ void Frontend::MatchKeyPointsWithMappointsNN(TrackingMap& trackingMap) {
         matchedKptIdxToInfo_[currentIdx] = {trackingMap[matchedMptId], 0};
     }
 
-    cout << "  Size of tracking map: " << trackingMap.size() << endl;
-    cout << "  Size of matched <keypoint, mappoint> pairs: " << matchedKptIdxToInfo_.size() << endl;
+    printf("  Size of tracking map: %zu\n", trackingMap.size());
+    printf("  Size of matched <keypoint, mappoint> pairs: %zu\n", matchedKptIdxToInfo_.size());
 }
 
 #pragma mark - Motion-only BA
@@ -326,9 +330,9 @@ void Frontend::MatchKeyPointsWithMappointsNN(TrackingMap& trackingMap) {
 void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
 {
     // Construct the 3d-2d observations
-    vector<size_t> kptIndices;
-    vector<cv::Point3f> pts3d;
-    vector<cv::Point2f> pts2d;
+    std::vector<size_t> kptIndices;
+    std::vector<cv::Point3f> pts3d;
+    std::vector<cv::Point2f> pts2d;
 
     for (auto& [kptIdx, info] : matchedKptIdxToInfo_) {
         kptIndices.push_back(kptIdx);
@@ -350,7 +354,7 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
     assert(inliers.rows != 0);
     printf("  Size of inlier after P3P ransac: %d\n", inliers.rows);
 
-    // Covert rotation vector to matrix and to eigen types
+    // Covert rotation std::vector to matrix and to eigen types
     cv::Mat rotMat;
     cv::Rodrigues(rotVec, rotMat);
     Eigen::Matrix3d rotMatEigen;
@@ -371,7 +375,7 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
     optimizer_.addVertex(poseVertex);
 
     // Construct edges, optimizer.clear() will deallocate them
-    vector<pair<UnaryEdgeProjection *, bool>> edges(inliers.rows);
+    std::vector<std::pair<UnaryEdgeProjection *, bool>> edges(inliers.rows);
     for (size_t inlierIdx = 0; inlierIdx < inliers.rows; ++inlierIdx)
     {
         int pointIdx = inliers.at<int>(inlierIdx);

@@ -11,10 +11,11 @@
 #ifndef MAPMANAGER_H
 #define MAPMANAGER_H
 
-#include "myslam/common_include.h"
-#include "myslam/private/frame.h"
-#include "myslam/private/mappoint.h"
-#include "myslam/config.h"
+#include <myslam/common_include.hpp>
+#include <myslam/config.hpp>
+
+#include "myslam/private/frame.hpp"
+#include "myslam/private/mappoint.hpp"
 
 namespace myslam
 {
@@ -23,8 +24,8 @@ class MapManager
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    typedef unordered_map<size_t, Mappoint::Ptr> MappointIdToPtr;
-    typedef unordered_map<size_t, Frame::Ptr> KeyframeIdToPtr;
+    typedef std::unordered_map<size_t, Mappoint::Ptr> MappointIdToPtr;
+    typedef std::unordered_map<size_t, Frame::Ptr> KeyframeIdToPtr;
 
     static MapManager& Instance() {
         static MapManager mapManager;
@@ -78,7 +79,7 @@ private:
     KeyframeIdToPtr     keyframesDict_;       // all key-frames
     MappointIdToPtr     mappointsDict_;       // all mappoints
 
-    unordered_map<size_t, size_t> oldMptIdNewMptIdMap_;  // mpt mapping after replacement
+    std::unordered_map<size_t, size_t> oldMptIdNewMptIdMap_;  // mpt mapping after replacement
 
     MapManager() { }
 };

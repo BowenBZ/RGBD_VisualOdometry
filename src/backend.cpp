@@ -1,11 +1,12 @@
-#include "myslam/private/backend.h"
+#include "myslam/private/backend.hpp"
 
-#include "mappoint.h"
-#include "myslam/private/util.h"
-#include "myslam/private/mapmanager.h"
+#include "myslam/private/mappoint.hpp"
+#include "myslam/private/mapmanager.hpp"
+#include "myslam/private/util.hpp"
+
+#include <unordered_map>
 
 #include <boost/timer/timer.hpp>
-#include <unordered_map>
 
 namespace myslam
 {
@@ -31,7 +32,7 @@ void Backend::Stop() {
 }
 
 void Backend::AddNewKeyframeInfoToQueue(const size_t keyframeId) {
-    unique_lock<mutex> lock(backendMutex_);
+    std::unique_lock<std::mutex> lock(backendMutex_);
 
     newKeyframeIdQueue_.push(keyframeId);
     backendUpdateTrigger_.notify_one();
@@ -41,7 +42,7 @@ void Backend::BackendLoop()
 {
     while (backendRunning_)
     {
-        unique_lock<mutex> lock(backendMutex_);
+        std::unique_lock<std::mutex> lock(backendMutex_);
         if (newKeyframeIdQueue_.size() == 0) {
             isIdle_ = true;
             backendUpdateTrigger_.wait(lock);
@@ -87,7 +88,7 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
     }
 
     // Some matched mappoints may already get removed in last backend optimization
-    list<size_t> observedMptToRemove;
+    std::list<size_t> observedMptToRemove;
     for (const auto& [mptId, _]: keyframeCurr_->GetAllObservingMptIdToKptIdx()) {
         if (mapManager_->GetMappoint(mptId) == nullptr) {
             observedMptToRemove.push_back(mptId);
@@ -97,8 +98,8 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
         keyframeCurr_->RemoveObservingMappointCreatedFromOtherFrame(mptId);
     }
 
-    unordered_map<size_t, pair<size_t, double>> kptIdxToMptIdAndDistance;
-    unordered_map<size_t, Mappoint::Ptr> nearbyMpt;
+    std::unordered_map<size_t, std::pair<size_t, double>> kptIdxToMptIdAndDistance;
+    std::unordered_map<size_t, Mappoint::Ptr> nearbyMpt;
     mapManager_->GetMappointsNearKeyframe(keyframePrev_, nearbyMpt);
     for(auto& [mptId, mpt]: nearbyMpt) {
         // Check if this mpt already matches with new keyframe
@@ -127,7 +128,7 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
             continue;
         }
 
-        kptIdxToMptIdAndDistance[kptIdx] = make_pair(mptId, distance);
+        kptIdxToMptIdAndDistance[kptIdx] = std::make_pair(mptId, distance);
     }
 
     // Add the new observations
@@ -155,7 +156,7 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
 
 void Backend::OptimizeLocalMap()
 {
-    list<size_t> covisibleKfIds;
+    std::list<size_t> covisibleKfIds;
     keyframeCurr_->GetActiveCovisibleKfIds(covisibleKfIds);
     // Add current keyframe
     covisibleKfIds.push_back(keyframeCurr_->GetId());
@@ -176,7 +177,7 @@ void Backend::OptimizeLocalMap()
         optimizer_.addVertex(poseVertex);
 
         // Record in map
-        kfIdToCovKfThenVertex_[kfId] = make_pair(kf, poseVertex);
+        kfIdToCovKfThenVertex_[kfId] = std::make_pair(kf, poseVertex);
 
         // Create mappoint vertices
         for (auto &[mptId, _] : kf->GetAllObservingMptIdToKptIdx())
@@ -202,7 +203,7 @@ void Backend::OptimizeLocalMap()
             optimizer_.addVertex(mptVertex);
 
             // Record in map
-            mptIdToMptThenVertex_[mptId] = make_pair(mpt, mptVertex);
+            mptIdToMptThenVertex_[mptId] = std::make_pair(mpt, mptVertex);
         }
     }
 
@@ -214,8 +215,8 @@ void Backend::OptimizeLocalMap()
     {   
         auto& [mpt, mptVertex] = mptAndVertex;
 
-        vector<SE3> poses;
-        vector<Vector3d> normalizedPos;
+        std::vector<SE3> poses;
+        std::vector<Vector3d> normalizedPos;
         // TODO: enable triangulation
         // bool needTriangulate = !mpt->outlier_ && !(mpt->triangulated_ || mpt->optimized_);
         bool needTriangulate = false;
@@ -245,7 +246,7 @@ void Backend::OptimizeLocalMap()
                 optimizer_.addVertex(poseVertex);
 
                 // Record in map
-                kfIdToFixedKfThenVertex_[kfId] = make_pair(keyframe, poseVertex);
+                kfIdToFixedKfThenVertex_[kfId] = std::make_pair(keyframe, poseVertex);
             }
 
             // Add edge
@@ -303,7 +304,7 @@ void Backend::OptimizeLocalMap()
                 // level 1 edges won't be optimized later
                 edge->setLevel(1);
                 isOutlier = true;
-                observingMptToRemove_.push_back(make_pair(kf, mpt->GetId()));
+                observingMptToRemove_.push_back(std::make_pair(kf, mpt->GetId()));
                 ++outlierCnt;
             } else {
                 edge->setLevel(0);
@@ -332,7 +333,7 @@ void Backend::OptimizeLocalMap()
 void Backend::UpdateFrontendTrackingMap() {
 
     // Also write update back at this step
-    frontendMapUpdateHandler_([&](unordered_map<size_t, Mappoint::Ptr>& trackingMap){
+    frontendMapUpdateHandler_([&](std::unordered_map<size_t, Mappoint::Ptr>& trackingMap){
 
         for(const auto& [kf, mptId]: observingMptToRemove_) {
             kf->RemoveObservingMappointCreatedFromOtherFrame(mptId);

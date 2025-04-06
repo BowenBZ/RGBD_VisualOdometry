@@ -5,6 +5,9 @@
 #ifndef MYSLAM_G2O_TYPES_H
 #define MYSLAM_G2O_TYPES_H
 
+#include <myslam/common_include.hpp>
+#include <myslam/camera.hpp>
+
 #include <g2o/core/base_vertex.h>
 #include <g2o/core/base_unary_edge.h>
 #include <g2o/core/block_solver.h>
@@ -14,9 +17,6 @@
 #include <g2o/types/sba/types_six_dof_expmap.h>
 #include <g2o/solvers/dense/linear_solver_dense.h>
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
-
-#include "myslam/common_include.h"
-#include "myslam/camera.h"
 
 typedef g2o::BlockSolver_6_3 BlockSolverType;
 typedef g2o::LinearSolverDense<BlockSolverType::PoseMatrixType> DenseLinearSolverType;

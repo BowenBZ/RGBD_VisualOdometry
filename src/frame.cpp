@@ -1,10 +1,10 @@
-#include "myslam/private/frame.h"
+#include "myslam/private/frame.hpp"
+
+#include "myslam/private/util.hpp"
+#include "myslam/private/mapmanager.hpp"
+#include "myslam/private/superpoint_model.hpp"
 
 #include <algorithm>
-#include <opencv2/opencv.hpp>
-
-#include "myslam/private/util.h"
-#include "myslam/private/mapmanager.h"
 
 namespace myslam
 {
@@ -12,7 +12,7 @@ namespace myslam
 size_t Frame::factoryId_ = 0;
 
 Frame::Ptr Frame::CreateFrame(
-    const FrameConfig& config,
+    const struct FrameConfig& config,
     const double timestamp, 
     const Camera::Ptr& camera, 
     const cv::Mat& color, 
@@ -28,7 +28,7 @@ Frame::Ptr Frame::CreateFrame(
     );
 }
 
-Frame::Frame (  const FrameConfig config,
+Frame::Frame (  const struct FrameConfig config,
                 const size_t id, 
                 const double timestamp, 
                 const Camera::Ptr& camera, 
@@ -78,15 +78,15 @@ void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& 
             cv::Range rowRange(rowStartIdx, rowEndIdx);
             cv::Range colRange(colStartIdx, colEndIdx);
 
-            vector<cv::KeyPoint> kpts;
+            std::vector<cv::KeyPoint> kpts;
             cv::Mat des;
             detector->detectAndCompute(color_(rowRange, colRange), cv::Mat(), kpts, des);
 
-            for (size_t idx = 0; idx < min(kpts.size(), config_.maxFeaturesCnt / (config_.rowSectionCnt * config_.colSectionCnt)); ++idx) {
+            for (size_t idx = 0; idx < std::min(kpts.size(), config_.maxFeaturesCnt / (config_.rowSectionCnt * config_.colSectionCnt)); ++idx) {
                 auto& kpt = kpts[idx];
                 kpt.pt.x += colStartIdx;
                 kpt.pt.y += rowStartIdx;
-                keypointInfo_.push_back({kpt, des.row(idx).clone(), nullopt});
+                keypointInfo_.push_back({kpt, des.row(idx).clone(), std::nullopt});
                 descriptors_.push_back(des.row(idx).clone());
             }
         }
@@ -108,7 +108,7 @@ void Frame::ExtractKeypointsAndDescriptorsWithSuperPointModel(const SuperPointMo
 
     for (size_t idx = 0; idx < points.size(); idx++) {
         cv::KeyPoint kpt(points[idx].x, points[idx].y, 1.f);
-        keypointInfo_.push_back({kpt, descriptors_.row(idx).clone(), nullopt});
+        keypointInfo_.push_back({kpt, descriptors_.row(idx).clone(), std::nullopt});
     }
 
     ConstructKeypointGrids();
@@ -152,9 +152,9 @@ bool Frame::SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool do
     mayObserveMpt = true;
     
     const size_t mptGridIdx = GetGridIdx(pixelPos[0], pixelPos[1]);
-    list<size_t> nearbyGrids;
+    std::list<size_t> nearbyGrids;
     getNearbyGrids(mptGridIdx, nearbyGrids);
-    vector<pair<size_t, double>> kptIdxToDistance;
+    std::vector<std::pair<size_t, double>> kptIdxToDistance;
     for (auto& gridIdx: nearbyGrids) {
         // This grid doesn't contain any keypoint
         if (!gridToKptIdx_.count(gridIdx)) {
@@ -175,17 +175,17 @@ bool Frame::SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool do
     }
 
     sort(kptIdxToDistance.begin(), kptIdxToDistance.end(), 
-        [](const pair<size_t, double>& kpt1, const pair<size_t, double>& kpt2) {
+        [](const std::pair<size_t, double>& kpt1, const std::pair<size_t, double>& kpt2) {
             return kpt1.second < kpt2.second;
         });
 
-    const pair<size_t, double>& bestKptToDistance = kptIdxToDistance[0];
+    const std::pair<size_t, double>& bestKptToDistance = kptIdxToDistance[0];
     if (bestKptToDistance.second > config_.descriptorDistanceThres) {
         return false;
     }
 
     if (kptIdxToDistance.size() >= 2) {
-        const pair<size_t, double>& secondKptToDistance = kptIdxToDistance[1];
+        const std::pair<size_t, double>& secondKptToDistance = kptIdxToDistance[1];
         if (bestKptToDistance.second / secondKptToDistance.second < config_.bestSecondaryDistanceRatio) {
             return false;
         }
@@ -206,7 +206,7 @@ size_t Frame::GetGridIdx(size_t colIdx, size_t rowIdx) {
     return rowIdx * config_.gridColCnt + colIdx;
 }
 
-void Frame::getNearbyGrids(size_t gridIdx, list<size_t>& nearbyGrids) {
+void Frame::getNearbyGrids(size_t gridIdx, std::list<size_t>& nearbyGrids) {
     nearbyGrids.clear();
 
     size_t rowIdx = gridIdx / config_.gridColCnt;
@@ -295,7 +295,7 @@ void Frame::RemoveObservingMappointCreatedFromOtherFrame(const size_t mptId) {
     size_t kptIdx = observingMptIdToKptIdx_[mptId];
 
     assert(keypointInfo_[kptIdx].optMatchedMptId.has_value());
-    keypointInfo_[kptIdx].optMatchedMptId = nullopt;
+    keypointInfo_[kptIdx].optMatchedMptId = std::nullopt;
 
     observingMptIdToKptIdx_.erase(mptId);
 
@@ -347,7 +347,7 @@ void Frame::RemoveObservingMappointCreatedFromThisFrame(const size_t mptId) {
     size_t kptIdx = observingMptIdToKptIdx_[mptId];
 
     assert(keypointInfo_[kptIdx].optMatchedMptId.has_value());
-    keypointInfo_[kptIdx].optMatchedMptId = nullopt;
+    keypointInfo_[kptIdx].optMatchedMptId = std::nullopt;
 
     observingMptIdToKptIdx_.erase(mptId);
 

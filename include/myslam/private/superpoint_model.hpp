@@ -6,6 +6,8 @@
 
 #include <iostream>
 
+namespace myslam {
+
 typedef struct {
     int x;
     int y;
@@ -14,7 +16,7 @@ typedef struct {
 
 class SuperPointModel {
 public: 
-  typedef std::shared_ptr<SuperPointModel> Ptr;
+    typedef std::shared_ptr<SuperPointModel> Ptr;
 
     SuperPointModel(std::string modelPath, float confidenceThresh, float distThresh);
 
@@ -24,8 +26,8 @@ public:
     Input
       img - OpenCV cv::Mat grayscale float32 input image in range [0,1].
     Output
-      corners - vector of corners
-      desc - vector of unit unit normalized descriptors. (256, N)
+      corners - std::vector of corners
+      desc - std::vector of unit unit normalized descriptors. (256, N)
     */
     void Process(const cv::Mat& image, std::vector<CornerPoint>& corners, cv::Mat& desc);
 
@@ -72,4 +74,5 @@ private:
     void nms_fast(const torch::Tensor& in_corners, const int imageHeight, const int imageWidth, torch::Tensor& out_corners);
 };
 
+}
 #endif // SUPERPOINT_MODEL_H

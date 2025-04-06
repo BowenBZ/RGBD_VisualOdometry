@@ -14,16 +14,23 @@
 #ifndef FrontEnd_H
 #define FrontEnd_H
 
-#include "myslam/common_include.h"
-#include "myslam/private/frame.h"
-#include "myslam/private/mappoint.h"
-#include "myslam/private/superpoint_model.hpp"
-#include "myslam/viewer.h"
-#include "myslam/private/backend.h"
+#include <myslam/common_include.hpp>
+#include <myslam/camera.hpp>
+#include <myslam/viewer.hpp>
+
+#include <g2o/core/sparse_optimizer.h>
+
 #include <functional>
 
 namespace myslam 
 {
+
+class Frame;
+struct FrameConfig;
+class Mappoint;
+class MapManager;
+class SuperPointModel;
+class Backend;
 
 typedef struct {
     double timestamp;
@@ -49,7 +56,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     typedef std::shared_ptr<Frontend> Ptr;
-    typedef unordered_map<size_t, Mappoint::Ptr> TrackingMap;
+    typedef std::unordered_map<size_t, std::shared_ptr<Mappoint>> TrackingMap;
 
     enum VOState {
         INITIALIZING=0,
@@ -57,7 +64,7 @@ public:
         LOST
     };
 
-    Frontend(const Camera::Ptr& camera);
+    Frontend(const std::shared_ptr<Camera>& camera);
     
     // entry point for application
     bool AddFrame(const Measurement& measurement);
@@ -76,58 +83,58 @@ public:
     void Stop();
     
 private:  
-    const vector<string> VOStateStr {
+    const std::vector<std::string> VOStateStr {
         "Initializing", 
         "Tracking", 
         "Lost" 
     };                                          // used for logging
 
-    FrameConfig             frameConfig_;
+    std::shared_ptr<struct FrameConfig> frameConfig_;
     FrontendConfig          frontendConfig_;
 
-    Camera::Ptr             camera_;
-    Viewer::Ptr             viewer_;
-    Backend::Ptr            backend_;
-    MapManager*             mapManager_;
-    SuperPointModel::Ptr    superpointModel_;
-    bool                    enableSuperpoint_;
+    std::shared_ptr<Camera>             camera_;
+    Viewer::Ptr                         viewer_;
+    std::shared_ptr<Backend>            backend_;
+    MapManager*                         mapManager_;
+    std::shared_ptr<SuperPointModel>    superpointModel_;
+    bool                                enableSuperpoint_;
 
     VOState                 state_;             // current VO status
     size_t                  accuLostFrameNums_; // number of lost times
 
-    Frame::Ptr              framePrev_;         // last frame
-    Frame::Ptr              frameCurr_;         // current frame 
-    Frame::Ptr              keyframeCurr_;      // current keyframe
+    std::shared_ptr<Frame>  framePrev_;         // last frame
+    std::shared_ptr<Frame>  frameCurr_;         // current frame 
+    std::shared_ptr<Frame>  keyframeCurr_;      // current keyframe
 
     cv::Ptr<cv::ORB>        orb_;               // Orb detector and computer 
     cv::FlannBasedMatcher   flannMatcher_;      // flann matcher used if active search fails
     float                   nnThresh_;          // Threshold for NN matcher
 
     // mutex for update tracking map
-    mutex                   trackingMapMutex_;
+    std::mutex              trackingMapMutex_;
     // the local tracking map sent from backend
     TrackingMap             trackingMap_;       
     // Mappoints observed by last frame, including matched mappoints from trackingMap_ and new mappoints created from last frame 
     TrackingMap             lastFrameMpts_;
 
     typedef struct {
-        Mappoint::Ptr mpt;
+        std::shared_ptr<Mappoint> mpt;
         float distance;
     } MatchInfo;
     // Matched (keypoint idx of current frame -> (mappoint id, distance))
-    unordered_map<size_t, MatchInfo>   matchedKptIdxToInfo_;
+    std::unordered_map<size_t, MatchInfo>   matchedKptIdxToInfo_;
     
     g2o::SparseOptimizer    optimizer_;
 
     // (keypoint idx of current frame -> new created mappoints from current frame)
-    unordered_map<size_t, Mappoint::Ptr> kptIdxToNewMpt_;
+    std::unordered_map<size_t, std::shared_ptr<Mappoint>> kptIdxToNewMpt_;
 
     void InitializationHandler();
     bool TrackingHandler();
     void LostHandler();
 
     // update tracking map, called by backend
-    void UpdateTrackingMap(function<void(TrackingMap&)> updater);
+    void UpdateTrackingMap(std::function<void(TrackingMap&)> updater);
 
     // Find matched mappoints in tracking map for keypoints extracted from current frame
     void MatchKeyPointsWithMappoints(TrackingMap& trackingMap);

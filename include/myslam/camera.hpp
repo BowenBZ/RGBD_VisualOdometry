@@ -5,7 +5,7 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
-#include "myslam/common_include.h"
+#include <myslam/common_include.hpp>
 
 namespace myslam
 {
@@ -48,7 +48,7 @@ public:
 
 private:
     float   fx_, fy_, cx_, cy_, depthScale_;  // Camera intrinsics 
-    cv::Mat     cameraMatrix_;
+    cv::Mat cameraMatrix_;
 };
 
 }

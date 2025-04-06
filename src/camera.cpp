@@ -17,10 +17,11 @@
  *
  */
 
-#include "myslam/camera.h"
+#include <myslam/camera.hpp>
 
-#include "myslam/config.h"
-#include "myslam/private/util.h"
+#include "myslam/private/util.hpp"
+
+#include <myslam/config.hpp>
 
 namespace myslam
 {

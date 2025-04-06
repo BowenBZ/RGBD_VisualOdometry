@@ -1,16 +1,18 @@
 #ifndef MYSLAM_VIEWER_H
 #define MYSLAM_VIEWER_H
 
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <myslam/common_include.hpp>
+
 #include <pangolin/pangolin.h>
-#include "myslam/common_include.h"
-#include "myslam/private/frame.h"
-#include "myslam/private/util.h"
-#include "myslam/private/mapmanager.h"
+
+#include <mutex>
+#include <thread>
+#include <unordered_set>
 
 namespace myslam {
+
+class Frame;
+class Mappoint;
 
 class Viewer {
 
@@ -33,8 +35,8 @@ public:
 
     void SetCurrentFrame(
         const cv::Mat& colorImage,
-        const Frame::Ptr& current_frame, 
-        const unordered_set<size_t>& matchedKptsIdx);
+        const std::shared_ptr<Frame>& current_frame, 
+        const std::unordered_set<size_t>& matchedKptsIdx);
 
     /*
       Update the all_keyframes_ and all_mappoints_
@@ -43,17 +45,16 @@ public:
 
 private:
     bool viewer_running_;
-    thread viewer_thread_;
-    mutex viewer_data_mutex_;
+    std::thread viewer_thread_;
+    std::mutex viewer_data_mutex_;
 
-    MapManager::KeyframeIdToPtr all_keyframes_;
-    MapManager::MappointIdToPtr all_mappoints_;
-    MapManager::MappointIdToPtr active_mappoints_;
+    std::unordered_map<size_t, std::shared_ptr<Frame>> all_keyframes_;
+    std::unordered_map<size_t, std::shared_ptr<Mappoint>> all_mappoints_;
+    std::unordered_map<size_t, std::shared_ptr<Mappoint>> active_mappoints_;
     cv::Mat colorImage_;
-    Frame::Ptr current_frame_;
-    KeyPointSet keypointsCurr_;
+    std::shared_ptr<Frame> current_frame_;
 
-    unordered_set<size_t> matchedKptsIdx_;
+    std::unordered_set<size_t> matchedKptsIdx_;
 
     pangolin::OpenGlRenderState vis_camera_;
     pangolin::View vis_display_;
@@ -62,7 +63,7 @@ private:
 
     void Setup();
 
-    void DrawFrame(Frame::Ptr frame, const float* color);
+    void DrawFrame(std::shared_ptr<Frame> frame, const float* color);
 
     void DrawMapPoints();
 

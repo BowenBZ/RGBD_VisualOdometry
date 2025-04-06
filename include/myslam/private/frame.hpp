@@ -11,17 +11,21 @@
 #ifndef FRAME_H
 #define FRAME_H
 
-#include <optional>
+#include <myslam/common_include.hpp>
+#include <myslam/camera.hpp>
 
-#include "myslam/common_include.h"
-#include "myslam/camera.h"
-#include "myslam/private/mappoint.h"
+#include "myslam/private/mappoint.hpp"
 #include "myslam/private/superpoint_model.hpp"
+
+#include <optional>
+#include <unordered_set>
 
 namespace myslam 
 {
 
-typedef struct {
+class SuperPointModel;
+
+struct FrameConfig {
     size_t      maxFeaturesCnt;    // max extracted features
     size_t      rowSectionCnt;     // how many section in rows for feature detection
     size_t      colSectionCnt;     // how many section in cols for feature detection
@@ -38,7 +42,7 @@ typedef struct {
     double      bestSecondaryDistanceRatio;     // min ratio between best match and secondary match to accept the best match 
 
     size_t      activeCovisibleWeight;          // threshold to set active covisible keyframe
-} FrameConfig;
+};
 
 typedef struct {
     // detected keypoints
@@ -48,10 +52,10 @@ typedef struct {
 
     // Matched mappoint id. Only get populated if it's a keyframe
     // A feature point may not have matched mappoint if no matching found & no depth value found.
-    optional<size_t> optMatchedMptId;
+    std::optional<size_t> optMatchedMptId;
 } KeypointInfo;
 
-class Frame : public enable_shared_from_this<Frame>
+class Frame : public std::enable_shared_from_this<Frame>
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -62,7 +66,7 @@ public:
 
     // factory function
     static Frame::Ptr CreateFrame(
-        const FrameConfig& config,
+        const struct FrameConfig& config,
         const double timestamp, 
         const Camera::Ptr& camera, 
         const cv::Mat& color, 
@@ -101,7 +105,7 @@ public:
 
     void ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& detector);
 
-    void ExtractKeypointsAndDescriptorsWithSuperPointModel(const SuperPointModel::Ptr model);
+    void ExtractKeypointsAndDescriptorsWithSuperPointModel(const std::shared_ptr<SuperPointModel> model);
 
     const size_t GetKeypointsSize() const {
         return keypointInfo_.size();
@@ -154,7 +158,7 @@ public:
     // Remove observed mappoint created from this frame
     void RemoveObservingMappointCreatedFromThisFrame(const size_t mptId);
 
-    const unordered_map<size_t, size_t>& GetAllObservingMptIdToKptIdx() {
+    const std::unordered_map<size_t, size_t>& GetAllObservingMptIdToKptIdx() {
         return observingMptIdToKptIdx_;
     }
 
@@ -164,22 +168,22 @@ public:
     }
 
     // Return the matched mappoint id matched with given keypoint index
-    optional<size_t> GetMatchedMappointIdForKeypoint(const size_t kptIdx) {
+    std::optional<size_t> GetMatchedMappointIdForKeypoint(const size_t kptIdx) {
         assert(kptIdx < keypointInfo_.size());
         return keypointInfo_[kptIdx].optMatchedMptId;
     }
 
     // Return the idx of the keypoint matched with given mappoint
-    optional<size_t> GetMatchedKeypointIdxForMappoint(const size_t& mptId) {
+    std::optional<size_t> GetMatchedKeypointIdxForMappoint(const size_t& mptId) {
         if (!observingMptIdToKptIdx_.count(mptId)) {
-            return nullopt;
+            return std::nullopt;
         }
         return observingMptIdToKptIdx_[mptId];
     }
 
 #pragma mark - only observing relationships
 
-    const unordered_set<size_t>& GetMappointIdsOnlyObservedByThisFrame() {
+    const std::unordered_set<size_t>& GetMappointIdsOnlyObservedByThisFrame() {
         return onlyThisObservedMptId_;
     }
 
@@ -196,12 +200,12 @@ public:
 
 #pragma mark - covisible keyframes
 
-    void GetActiveCovisibleKfIds(list<size_t>& activeCovisibleKfIds) {
+    void GetActiveCovisibleKfIds(std::list<size_t>& activeCovisibleKfIds) {
         activeCovisibleKfIds.clear();
         activeCovisibleKfIds.insert(activeCovisibleKfIds.end(), activeCovisibleKfIds_.begin(), activeCovisibleKfIds_.end());
     }
 
-    void GetAllCovisibleKfIds(list<size_t>& allCovisibleKfIds) {
+    void GetAllCovisibleKfIds(std::list<size_t>& allCovisibleKfIds) {
         allCovisibleKfIds.clear();
         for (auto& [kfId, _]: allCovisibleKfIdToWeight_) {
             allCovisibleKfIds.push_back(kfId);
@@ -213,7 +217,7 @@ private:
     size_t                  id_;            // id of this frame
     double                  timestamp_;     // timestamp of RGB image
 
-    FrameConfig             config_;
+    struct FrameConfig      config_;
 
     cv::Mat                     color_;         // color image, become null after temporary mappoint creation
     cv::Mat                     depth_;         // depth image, become null after temporary mappoint creation
@@ -221,27 +225,26 @@ private:
     SE3                     T_c_w_;         // transform from world to camera
     
     // detected feature points info
-    vector<KeypointInfo>    keypointInfo_;
+    std::vector<KeypointInfo>    keypointInfo_;
     // Each row is a descriptor
     cv::Mat                     descriptors_;
 
-    unordered_map<size_t, list<size_t>> gridToKptIdx_;       // idx of keypoints for a grid
+    std::unordered_map<size_t, std::list<size_t>> gridToKptIdx_;       // idx of keypoints for a grid
 
     // Only keyframe will use following fields. 
     // No need to add lock to the observation relationship, since frontend and backend won't modify the observation relationship the same time.
 
     // <mpt id, keypoint idx>
-    unordered_map<size_t, size_t>   observingMptIdToKptIdx_;
+    std::unordered_map<size_t, size_t>   observingMptIdToKptIdx_;
     // id of mappoints only observed by this frame
-    unordered_set<size_t>           onlyThisObservedMptId_;
+    std::unordered_set<size_t>           onlyThisObservedMptId_;
 
     // <covisible keyframe id, weight>
-    unordered_map<size_t, size_t>   allCovisibleKfIdToWeight_;
+    std::unordered_map<size_t, size_t>   allCovisibleKfIdToWeight_;
     // Active covisible keyframes ids (has same observed mappoints >= activeCovisibleWeight_)
-    unordered_set<size_t>           activeCovisibleKfIds_;
+    std::unordered_set<size_t>           activeCovisibleKfIds_;
 
-
-    Frame(const FrameConfig config,
+    Frame(const struct FrameConfig config,
           const size_t id, 
           const double timestamp, 
           const Camera::Ptr& camera, 
@@ -258,7 +261,7 @@ private:
     size_t GetGridIdx(size_t colIdx, size_t rowIdx);
 
     // Get nearby grid idx including the input grid
-    void getNearbyGrids(size_t gridIdx, list<size_t>& nearbyGrids);
+    void getNearbyGrids(size_t gridIdx, std::list<size_t>& nearbyGrids);
 
     // Update the covisible keyframe with new weight. Called by another object
     void UpdateCovisibleKeyframeWeight(const size_t otherKfId, const size_t weight);

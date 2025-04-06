@@ -17,12 +17,12 @@
  *
  */
 
-#include "myslam/config.h"
+#include <myslam/config.hpp>
 
 namespace myslam 
 {
     
-void Config::setParameterFile( const std::string& filename )
+void Config::setParameterFile(const std::string& filename)
 {
     if (config_ == nullptr) {
         config_ = std::shared_ptr<Config>(new Config);

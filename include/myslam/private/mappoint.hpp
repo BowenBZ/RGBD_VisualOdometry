@@ -9,7 +9,9 @@
 #ifndef MAPPOINT_H
 #define MAPPOINT_H
 
-#include "myslam/common_include.h"
+#include <myslam/common_include.hpp>
+
+#include <unordered_set>
 
 namespace myslam
 {
@@ -75,7 +77,7 @@ public:
     // only be called by keyframe object
     void RemoveObservedByKeyframe(const size_t kfId);
 
-    unordered_set<size_t>& GetObservedByKeyframeIds() {
+    std::unordered_set<size_t>& GetObservedByKeyframeIds() {
         return observedByKfId_;
     }
 
@@ -100,7 +102,7 @@ private:
     Vector3d                    pos_;           
 
     // No need to add lock since frontend and backend won't update at the same time.
-    unordered_set<size_t>       observedByKfId_;
+    std::unordered_set<size_t>       observedByKfId_;
 
     // The keyframe this mappoint is created from
     size_t                      anchorKfId_;

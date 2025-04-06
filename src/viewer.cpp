@@ -1,7 +1,10 @@
-#include "myslam/viewer.h"
-#include <pangolin/pangolin.h>
-#include <opencv2/opencv.hpp>
+#include <myslam/viewer.hpp>
 
+#include "myslam/private/frame.hpp"
+#include "myslam/private/mapmanager.hpp"
+
+#include <unordered_set>
+#include <unistd.h>
 
 namespace myslam {
 
@@ -9,9 +12,9 @@ namespace myslam {
 void Viewer::SetCurrentFrame(
     const cv::Mat& colorImage,
     const Frame::Ptr& current_frame, 
-    const unordered_set<size_t>& matchedKptsIdx) {
+    const std::unordered_set<size_t>& matchedKptsIdx) {
 
-    unique_lock<mutex> lck(viewer_data_mutex_);
+    std::unique_lock<std::mutex> lck(viewer_data_mutex_);
     colorImage_ = colorImage.clone();
     current_frame_ = current_frame;
     matchedKptsIdx_.clear();
@@ -48,7 +51,7 @@ void Viewer::ThreadLoop() {
         // glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         vis_display.Activate(vis_camera);
 
-        unique_lock<mutex> lock(viewer_data_mutex_);
+        std::unique_lock<std::mutex> lock(viewer_data_mutex_);
         if (current_frame_) {
             DrawFrame(current_frame_, red);
             // FollowCurrentFrame(vis_camera);

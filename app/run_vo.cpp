@@ -1,17 +1,12 @@
 /*
  * Sample code to run the RGBD VO system
  */
-#include <fstream>
-#include <iostream>
+
+#include <myslam/myslam.hpp>
+ 
 #include <boost/timer/timer.hpp>
 
-#include <opencv2/opencv.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <Eigen/Core>
-
-#include "myslam/config.h"
-#include "myslam/frontend.h"
-#include "myslam/viewer.h"
+using namespace std;
 
 void writePosetoFile(ofstream& outputFile, const string& timestamp, const SE3& Twc) {
     Vector3d translation = Twc.translation();
@@ -39,8 +34,8 @@ int main ( int argc, char** argv )
         cout<<"please generate the associate file called associate.txt!"<<endl;
         return 1;
     }
-    vector<string> rgbFiles, depthFiles;
-    vector<double> rgbTimes, depthTimes;
+    std::vector<string> rgbFiles, depthFiles;
+    std::vector<double> rgbTimes, depthTimes;
     while ( !fin.eof() )
     {
         string rgbTime, rgbFile, depthTime, depthFile;

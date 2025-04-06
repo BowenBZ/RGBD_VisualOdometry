@@ -2,6 +2,8 @@
 
 #include <torch/nn/functional.h>
 
+namespace myslam {
+
 SuperPointModel::SuperPointModel(std::string modelPath, float confidenceThresh, float distThresh) {
     _confidenceThresh = confidenceThresh;
     _distThresh = distThresh;
@@ -226,3 +228,5 @@ void SuperPointModel::nms_fast(const torch::Tensor& in_corners, const int imageH
     // Get surviving corners.
     out_corners = corners.index_select(1, inds_keep);
 }
+
+} // namespace myslam
