@@ -27,8 +27,13 @@
 namespace myslam {
 
 typedef struct {
-    double  reMatchDescriptorDistance;
-    double  baInlierThres;
+    // ORB features
+    float  reMatchDescriptorDistance;
+    
+    // Superpoint features
+    float  reMatchDescriptorDistanceSuperpoint;
+
+    float  baInlierThres;
 } BackendConfig;
 
 typedef struct {
@@ -63,6 +68,7 @@ public:
 
 private:
     BackendConfig       config_;
+    bool                superpointEnabled_;
 
     std::thread         backendThread_;
     bool                backendRunning_;

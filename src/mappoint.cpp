@@ -11,18 +11,19 @@ namespace myslam
 
 size_t Mappoint::factoryId_ = 0;
 
-Mappoint::Ptr Mappoint::CreateMappoint(const Vector3d& pos, const cv::Mat& descriptor)
+Mappoint::Ptr Mappoint::CreateMappoint(const Vector3d& pos, const cv::Mat& descriptor, const bool superpointEnabled)
 {
     // Vector3d is deep copy, while cv::Mat is shadow copy
     return Mappoint::Ptr( 
-        new Mappoint(++factoryId_, pos, descriptor)
+        new Mappoint(++factoryId_, pos, descriptor, superpointEnabled)
     );
 }
 
 
-Mappoint::Mappoint(const size_t id, const Vector3d& pos, const cv::Mat& descriptor)
+Mappoint::Mappoint(const size_t id, const Vector3d& pos, const cv::Mat& descriptor, const bool superpointEnabled)
 : id_(id), pos_(pos), descriptor_(descriptor.clone()), norm_(Vector3d::Zero()),
-  triangulated_(false), optimized_(false), outlier_(false) { }
+  triangulated_(false), optimized_(false), outlier_(false),
+  superpointEnabled_(superpointEnabled) { }
 
 
 void Mappoint::AddObservedByKeyframe(const std::shared_ptr<Frame>& kf) {
@@ -75,10 +76,9 @@ void Mappoint::UpdateDescriptor() {
     std::vector<std::vector<double>> descriptorDistances(desCnt, std::vector<double>(desCnt, 0));
     for(size_t i = 0; i < desCnt; ++i) {
         for(size_t j = i + 1; j < desCnt; ++j) {
-            double distance = ComputeDescriptorDistance(
-                descriptors[i], 0,
-                descriptors[j], 0
-            );
+            double distance = superpointEnabled_ ? 
+                ComputeSuperpointDescriptorL2Distance(descriptors[i], descriptors[j]): 
+                ComputeDescriptorHammingDistance(descriptors[i], 0, descriptors[j], 0);
             descriptorDistances[i][j] = distance;
             descriptorDistances[j][i] = distance;
         }

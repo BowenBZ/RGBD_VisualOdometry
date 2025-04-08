@@ -33,6 +33,11 @@ inline bool Triangulation(const std::vector<SE3>&        poses,
 }
 
 /*
+Find the matched keypoints by finding the minimum L2 distance, i.e.
+distance = \sqrt{ \sum_i^256 (x_i - y_i)^2 }
+         = \sqrt{ \sum_i^256 (x_i^2 + y_i^2 - 2 x_i y_i) }
+         = \sqrt{ 2 - 2 * x \dot y}
+
 Input:
 - prev_desc (N1, 256)
 - curr_desc (N2, 256)
@@ -45,7 +50,8 @@ inline void find_matched_points(const cv::Mat& prev_desc,
                                 const cv::Mat& curr_desc,
                                 const float nn_thresh,
                                 std::vector<int>& matchedCurrentIndices,
-                                std::vector<int>& matchedPrevIndices) {
+                                std::vector<int>& matchedPrevIndices,
+                                std::vector<float>& matchedDistance) {
     matchedCurrentIndices.clear();
     matchedPrevIndices.clear();
 
@@ -121,7 +127,10 @@ inline void find_matched_points(const cv::Mat& prev_desc,
     for (int j = 0; j < N2; j++) {
         if (bidirectional_match[j] && pass_thresh_match[j]) {
             matchedCurrentIndices.push_back(j);
-            matchedPrevIndices.push_back(matched_prev_indices[j]);
+            int prev_idx = matched_prev_indices[j];
+            matchedPrevIndices.push_back(prev_idx);
+            float score = distance.at<float>(prev_idx, j);
+            matchedDistance.push_back(score);
         }
     }
 }
@@ -162,7 +171,7 @@ typedef std::unordered_set<cv::KeyPoint, KeyPointHash, KeyPointsComparision> Key
 
 // Compute the Hamming distance between 2 descriptors
 // Descriptor is provided as a row in the cv::Mat
-inline double ComputeDescriptorDistance(
+inline double ComputeDescriptorHammingDistance(
     const cv::Mat& desMat1, size_t row1,
     const cv::Mat& desMat2, size_t row2) {
 
@@ -178,6 +187,27 @@ inline double ComputeDescriptorDistance(
     return distance;
 }
 
+// Compute the Hamming distance between 2 descriptors
+// Descriptor is provided as a row in the cv::Mat
+inline double ComputeSuperpointDescriptorL2Distance(const cv::Mat& desMat1, const cv::Mat& desMat2) {
+
+    assert(desMat1.cols == desMat2.cols);
+    assert(desMat1.rows == 1);
+    assert(desMat2.rows == 1);
+
+    // Compute L2 distance = sqrt(2 - 2 * dot_product) element-wise.
+
+    cv::Mat desMat2_T;
+    cv::transpose(desMat2, desMat2_T);
+    // (1xN) x (Nx1)
+    cv::Mat dot_product = desMat1 * desMat2_T;
+    
+    // Use element-wise operations.
+    cv::Mat distance = 2 - 2 * dot_product;
+    cv::sqrt(distance, distance);
+
+    return distance.at<float>(0, 0);
+}
 
 } // namespace
 

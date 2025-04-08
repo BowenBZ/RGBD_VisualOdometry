@@ -14,6 +14,9 @@ namespace myslam
 Backend::Backend(const Camera::Ptr camera): camera_(camera), mapManager_(&MapManager::Instance()) {
     config_.baInlierThres = Config::get<double>("backend.ba_inlier_threshold");
     config_.reMatchDescriptorDistance = Config::get<double>("backend.re_match_descriptor_distance");
+    config_.reMatchDescriptorDistanceSuperpoint = Config::get<double>("backend.re_match_descriptor_distance_superpoint");
+
+    superpointEnabled_ = Config::get<int>("superpoint.enable");
 
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
         g2o::make_unique<BlockSolverType>(g2o::make_unique<CSparseLinearSolverType>()));
@@ -107,13 +110,19 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
             continue;
         }
 
-        double distance;
+        float distance;
         size_t kptIdx;
-        bool mayObserveMpt;
         // Cannot find match
-        if (!keyframeCurr_->SearchKeypointMatchCandidate(mpt, false, kptIdx, distance, mayObserveMpt) ||
+        if (superpointEnabled_) {
+            if (!keyframeCurr_->SearchSuperpointKeypointMatchCandidate(mpt, config_.reMatchDescriptorDistanceSuperpoint, 0.5, kptIdx, distance)) {
+                continue;
+            }
+        } else {
+            bool mayObserveMpt;
+            if (!keyframeCurr_->SearchKeypointMatchCandidate(mpt, false, kptIdx, distance, mayObserveMpt) ||
             distance > config_.reMatchDescriptorDistance) {
-            continue;
+                continue;
+            }
         }
 
         // This kpt already matches with previous mappoint
@@ -133,8 +142,8 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
 
     // Add the new observations
     for(auto& [kptIdx, mptIdAndDistance]: kptIdxToMptIdAndDistance) {
-        auto& [mptId, _] = mptIdAndDistance;
-        auto& mpt = nearbyMpt[mptId];
+        const auto& mptId = mptIdAndDistance.first;
+        const auto& mpt = nearbyMpt[mptId];
 
         // Remove the new created mappoint
         const auto& optNewCreatedMptId = keyframeCurr_->GetMatchedMappointIdForKeypoint(kptIdx);
@@ -143,7 +152,8 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
             const auto& newMptId = optNewCreatedMptId.value();
             const auto& newCreatedMpt = mapManager_->GetMappoint(newMptId);
             assert(newCreatedMpt);
-            keyframeCurr_->RemoveObservingMappointCreatedFromThisFrame(newMptId);
+            bool toRemove = keyframeCurr_->RemoveObservingMappointCreatedFromThisFrame(newMptId);
+            assert(toRemove);
             mptIdToRemove_.push_back(newMptId);
         }
 
@@ -336,11 +346,24 @@ void Backend::UpdateFrontendTrackingMap() {
     frontendMapUpdateHandler_([&](std::unordered_map<size_t, Mappoint::Ptr>& trackingMap){
 
         for(const auto& [kf, mptId]: observingMptToRemove_) {
-            kf->RemoveObservingMappointCreatedFromOtherFrame(mptId);
+            // Cannot remove the observation between anchor keyframe and the mappoint
+            const auto& mpt = mapManager_->GetMappoint(mptId);
+            assert(mpt);
 
-            // mpt's observedBy keyframe changes, need to recalculate descriptor
-            auto mpt = mapManager_->GetMappoint(mptId);
-            mpt->UpdateDescriptor();
+            const bool isAnchorFrame = (mpt->GetAnchoringKeyframeId() == kf->GetId());
+            if (isAnchorFrame) {
+                const bool toRemove = kf->RemoveObservingMappointCreatedFromThisFrame(mptId);
+                if (toRemove) {
+                    mptIdToRemove_.push_back(mptId);
+                } else {
+                    // mpt's observedBy keyframe changes, need to recalculate descriptor
+                    mpt->UpdateDescriptor();
+                }
+            } else {
+                kf->RemoveObservingMappointCreatedFromOtherFrame(mptId);
+                // mpt's observedBy keyframe changes, need to recalculate descriptor
+                mpt->UpdateDescriptor();
+            }
         }
 
         for (const auto &[_, kfAndVertex] : kfIdToCovKfThenVertex_) {

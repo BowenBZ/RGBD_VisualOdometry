@@ -41,7 +41,7 @@ public:
     
     // factory function to create mappoint
     // there will be only 1 time copy of parameters happening in the private constructor
-    static Mappoint::Ptr CreateMappoint(const Vector3d& pos, const cv::Mat& descriptor);
+    static Mappoint::Ptr CreateMappoint(const Vector3d& pos, const cv::Mat& descriptor, const bool superpointEnabled);
 
     const Vector3d& GetPosition() const {
         return pos_;
@@ -92,6 +92,7 @@ public:
 private:
     static size_t               factoryId_;
     size_t                      id_;
+    bool                        superpointEnabled_;
 
     // Descriptor for keypoint matching, coming from the best keypoint descriptor 
     cv::Mat                         descriptor_;
@@ -108,7 +109,7 @@ private:
     size_t                      anchorKfId_;
 
     // mappoint can only be created by factory
-    Mappoint(const size_t id, const Vector3d& pos, const cv::Mat& descriptor);
+    Mappoint(const size_t id, const Vector3d& pos, const cv::Mat& descriptor, const bool superpointEnabled);
 
 };
 

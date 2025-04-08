@@ -2,6 +2,7 @@
 
 #include <myslam/config.hpp>
 
+#include "myslam/private/mappoint.hpp"
 #include "myslam/private/frame.hpp"
 #include "myslam/private/superpoint_model.hpp"
 #include "myslam/private/mapmanager.hpp"
@@ -13,6 +14,7 @@
 
 #include <unordered_set>
 #include <mutex>
+#include <utility>
 
 namespace myslam
 {
@@ -163,10 +165,19 @@ bool Frontend::TrackingHandler() {
     matchedKptIdxToInfo_.clear();
     if (enableSuperpoint_) {
         printf("Feature matching\n");
-        MatchKeyPointsWithMappointsNN(trackingMap_);
-
+        MatchKeyPointsWithLastFrameNN();
         printf("Estimate pose\n");
         EstimateCurrentFramePose(true);
+
+        /*
+        if (keyframeCurr_ != framePrev_) {
+            printf("Map tracking\n");
+            if (MatchKeyPointsWithTrackingMap()) {
+                printf("Estimate pose\n");
+                EstimateCurrentFramePose(true);
+            }
+        }
+        */
     } else {
         printf("Frame tracking\n");
         MatchKeyPointsWithMappoints(lastFrameMpts_);
@@ -190,7 +201,6 @@ bool Frontend::TrackingHandler() {
     accuLostFrameNums_ = 0;
     
     if (IsKeyframe()) {
-        printf("Current frame is a new keyframe\n");
         SendKeyframeToBackend();
     }
 
@@ -295,11 +305,13 @@ void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
     printf("  Size of matched <keypoint, mappoint> pairs: %zu\n", matchedKptIdxToInfo_.size());
 }
 
-void Frontend::MatchKeyPointsWithMappointsNN(TrackingMap& trackingMap) {
+void Frontend::MatchKeyPointsWithLastFrameNN() {
     cv::Mat trackingMapDescriptors;
     std::unordered_map<int, size_t> trackingMapDescriptorIdxToMptId;
     std::unordered_map<size_t, size_t> matchedMptIdToKptIdx;
 
+    // auto& trackingMap = lastFrameMpts_;
+    auto& trackingMap = trackingMap_;
     for (auto &[mptId, mpt] : trackingMap)
     {
         trackingMapDescriptorIdxToMptId[trackingMapDescriptors.rows] = mptId;
@@ -308,19 +320,69 @@ void Frontend::MatchKeyPointsWithMappointsNN(TrackingMap& trackingMap) {
 
     std::vector<int> matchedCurrentIndices;
     std::vector<int> matchedPrevIndices;
-    find_matched_points(trackingMapDescriptors, frameCurr_->GetDescriptors(), nnThresh_, matchedCurrentIndices, matchedPrevIndices);
+    std::vector<float> matchedDistance;
+    find_matched_points(trackingMapDescriptors, frameCurr_->GetDescriptors(), nnThresh_, matchedCurrentIndices, matchedPrevIndices, matchedDistance);
     assert(matchedCurrentIndices.size() == matchedPrevIndices.size());
 
     for (int i = 0; i < matchedCurrentIndices.size(); i++) {
         const int currentIdx = matchedCurrentIndices[i];
         const int pervIdx = matchedPrevIndices[i];
         const int matchedMptId = trackingMapDescriptorIdxToMptId[pervIdx];
+        const float distance = matchedDistance[i];
         // Provide a dummy distance
-        matchedKptIdxToInfo_[currentIdx] = {trackingMap[matchedMptId], 0};
+        matchedKptIdxToInfo_[currentIdx] = {trackingMap[matchedMptId], distance};
     }
 
-    printf("  Size of tracking map: %zu\n", trackingMap.size());
+    printf("  Size of last frame's mappoints: %zu\n", trackingMap.size());
     printf("  Size of matched <keypoint, mappoint> pairs: %zu\n", matchedKptIdxToInfo_.size());
+}
+
+bool Frontend::MatchKeyPointsWithTrackingMap() {
+    auto& trackingMap = trackingMap_;
+
+    // Get the matched mappoint in tracking map
+    std::unordered_set<size_t> matchedTrackingMpt;
+    for (auto& [kptIdx, info] : matchedKptIdxToInfo_) {
+        const size_t mptId = info.mpt->GetId();
+        if (trackingMap.count(mptId)) {
+            matchedTrackingMpt.insert(mptId);
+        }
+    }
+
+    // Project unmatched mappoints to current frame
+    bool projectNewMpt = false;
+    for (auto &[mptId, mpt] : trackingMap)
+    {
+        if (matchedTrackingMpt.count(mptId)) {
+            continue;
+        }
+
+        size_t kptIdx = 0;
+        float distance = 0;
+        bool matched = frameCurr_->SearchSuperpointKeypointMatchCandidate(mpt, nnThresh_, 0.5, kptIdx, distance);
+        // Not find matched keypoint
+        if (!matched) {
+            continue;
+        }
+
+        // If the keypoint already has matches
+        if (matchedKptIdxToInfo_.count(kptIdx)) {
+            // If the matched mapppoint is not from local map or the this match has smaller distance
+            const bool matchedWithTrackingMap = trackingMap.count(matchedKptIdxToInfo_[kptIdx].mpt->GetId());
+            const bool smallerDistance = distance < matchedKptIdxToInfo_[kptIdx].distance;
+            if (matchedWithTrackingMap || smallerDistance) {
+                projectNewMpt = true;
+                matchedKptIdxToInfo_[kptIdx] = {mpt, distance};
+            }
+        } else {
+            projectNewMpt = true;
+            matchedKptIdxToInfo_[kptIdx] = {mpt, distance};
+        }
+    }
+
+    // Add new matched mpts
+    printf("  Project new mpt %d, total matches: %zu\n", projectNewMpt, matchedKptIdxToInfo_.size());
+    return projectNewMpt;
 }
 
 #pragma mark - Motion-only BA
@@ -474,6 +536,7 @@ bool Frontend::IsKeyframe()
         matchedTrackingMptCount += trackingMap_.count(matchInfo.mpt->GetId());
     }
     if (matchedTrackingMptCount < frontendConfig_.minInliersForKeyframe) {
+        printf("Current frame is a new keyframe since matched mpt count %zu < %zu\n", matchedTrackingMptCount, frontendConfig_.minInliersForKeyframe);
         return true;
     }
 
@@ -483,6 +546,7 @@ bool Frontend::IsKeyframe()
     const Vector3d rot = d.tail<3>();
     const bool isLargeMotion = rot.norm() > frontendConfig_.maxFrameRotAllowed || trans.norm() > frontendConfig_.maxFrameTransAllowed;
     if (isLargeMotion) {
+        printf("Current frame is a new keyframe since motion is too large\n");
         return true;
     }
     return false;
@@ -515,14 +579,15 @@ void Frontend::CreateTempMappoints() {
         
         // Create a mappoint
         // all parameters will have a deep copy inside the constructor
-        Mappoint::Ptr mpt = Mappoint::CreateMappoint(mptPos, frameCurr_->GetDescriptor(kptIdx));
+        Mappoint::Ptr mpt = Mappoint::CreateMappoint(mptPos, frameCurr_->GetDescriptor(kptIdx), enableSuperpoint_);
 
         lastFrameMpts_[mpt->GetId()] = mpt;
         kptIdxToNewMpt_[kptIdx] = mpt;
     }
     // After creating temporary mappoints, the raw color and depth are no longer needed
     frameCurr_->ReleaseRawFrameData();
-    printf("Created temp mappoints: %zu\n", kptIdxToNewMpt_.size());
+    printf("Created %zu new temp mappoints, total mappoints from this frame: %zu\n", 
+            kptIdxToNewMpt_.size(), lastFrameMpts_.size());
 }
 
 void Frontend::SendKeyframeToBackend() {

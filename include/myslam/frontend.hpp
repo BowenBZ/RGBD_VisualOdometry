@@ -139,8 +139,12 @@ private:
     // Find matched mappoints in tracking map for keypoints extracted from current frame
     void MatchKeyPointsWithMappoints(TrackingMap& trackingMap);
 
-    // Find matched mappints in tracking map for keypoints extracted from current frame using NN match
-    void MatchKeyPointsWithMappointsNN(TrackingMap& trackingMap);
+    // Match current frame's keypoints with last frame's temp mappoint using NN match
+    void MatchKeyPointsWithLastFrameNN();
+
+    /// Match current frame's keypoints with tracking map
+    /// @param return if projected new mappoints to current frame
+    bool MatchKeyPointsWithTrackingMap();
 
     // Estimate the pose with 3D-2D methods (mappoint, keypoint)
     void EstimateCurrentFramePose(const bool doMotionBA); 

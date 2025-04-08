@@ -131,7 +131,9 @@ public:
 #pragma mark - Feature matching
 
     // Get matched keypoint idx for the mappoint
-    bool SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, double& distance, bool& mayObserveMpt);
+    bool SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, float& distance, bool& mayObserveMpt);
+
+    bool SearchSuperpointKeypointMatchCandidate(const Mappoint::Ptr& mpt, const float distanceMatchThresh, const float distanceRatioThresh, size_t& kptIdx, float& distance);
 
 #pragma mark - observing relationships
 
@@ -155,8 +157,9 @@ public:
     // Remove observed mappoint and also update the covisible keyframes
     void RemoveObservingMappointCreatedFromOtherFrame(const size_t mptId);
 
-    // Remove observed mappoint created from this frame
-    void RemoveObservingMappointCreatedFromThisFrame(const size_t mptId);
+    // Remove observed mappoint created from this frame.
+    // @param return if this mappoint is not observed by any keyframe
+    bool RemoveObservingMappointCreatedFromThisFrame(const size_t mptId);
 
     const std::unordered_map<size_t, size_t>& GetAllObservingMptIdToKptIdx() {
         return observingMptIdToKptIdx_;
@@ -187,11 +190,12 @@ public:
         return onlyThisObservedMptId_;
     }
 
+    // Add the "only" observation. The mappoint is only observed by this (key)frame.
     void AddOnlyThisObservedMpt(const size_t mptId) {
         onlyThisObservedMptId_.insert(mptId);
     }
 
-    // Remove the "only" observation. Note this frame may still observe the mappoint
+    // Remove the "only" observation. Note this (key)frame may still observe the mappoint
     void RemoveOnlyThisObservedMpt(const size_t mptId) {
         if (onlyThisObservedMptId_.count(mptId)) {
             onlyThisObservedMptId_.erase(mptId);

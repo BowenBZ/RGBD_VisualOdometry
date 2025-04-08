@@ -124,7 +124,7 @@ void Frame::ConstructKeypointGrids() {
 
 #pragma mark - Feature matching
 
-bool Frame::SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, double& distance, bool& mayObserveMpt) {
+bool Frame::SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, float& distance, bool& mayObserveMpt) {
     mayObserveMpt = false;
 
     Vector3d posInCam = T_c_w_ * mpt->GetPosition();
@@ -162,7 +162,7 @@ bool Frame::SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool do
         }
 
         for (auto& kptIdx: gridToKptIdx_[gridIdx]) {
-            double distance = ComputeDescriptorDistance(
+            double distance = ComputeDescriptorHammingDistance(
                 mpt->GetDescriptor(), 0, 
                 keypointInfo_[kptIdx].descriptor, 0);
 
@@ -187,6 +187,71 @@ bool Frame::SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool do
     if (kptIdxToDistance.size() >= 2) {
         const std::pair<size_t, double>& secondKptToDistance = kptIdxToDistance[1];
         if (bestKptToDistance.second / secondKptToDistance.second < config_->bestSecondaryDistanceRatio) {
+            return false;
+        }
+    }
+    
+    kptIdx = bestKptToDistance.first;
+    distance = bestKptToDistance.second;
+    return true;
+}
+
+bool Frame::SearchSuperpointKeypointMatchCandidate(const Mappoint::Ptr& mpt, const float distanceMatchThresh, const float distanceRatioThresh, size_t& kptIdx, float& distance) {
+    Vector3d posInCam = T_c_w_ * mpt->GetPosition();
+    if (posInCam[2] < 0) {
+        return false;
+    } 
+    
+    Vector2d pixelPos = camera_->Camera2Pixel(posInCam);
+    if (pixelPos[0] < 0 || pixelPos[0] >= config_->imgCols ||
+        pixelPos[1] < 0 || pixelPos[1] >= config_->imgRows) {
+        return false;
+    }
+
+    /*
+        Vector3d direction = mpt->GetPosition() - this->GetCamCenter();
+        direction.normalize();
+        double angle = acos( direction.transpose() * mpt->GetNormDirection() );
+        if ( angle > M_PI / 6 ) {
+            return false;
+        }
+    */
+
+    const size_t mptGridIdx = GetGridIdx(pixelPos[0], pixelPos[1]);
+    std::list<size_t> nearbyGrids;
+    getNearbyGrids(mptGridIdx, nearbyGrids);
+    std::vector<std::pair<size_t, double>> kptIdxToDistance;
+    for (auto& gridIdx: nearbyGrids) {
+        // This grid doesn't contain any keypoint
+        if (!gridToKptIdx_.count(gridIdx)) {
+            continue;
+        }
+
+        for (auto& kptIdx: gridToKptIdx_[gridIdx]) {
+            double distance = ComputeSuperpointDescriptorL2Distance(
+                mpt->GetDescriptor(), keypointInfo_[kptIdx].descriptor);
+
+            kptIdxToDistance.push_back({kptIdx, distance});
+        }
+    }
+
+    if (kptIdxToDistance.empty()) {
+        return false;
+    }
+
+    sort(kptIdxToDistance.begin(), kptIdxToDistance.end(), 
+        [](const std::pair<size_t, double>& kpt1, const std::pair<size_t, double>& kpt2) {
+            return kpt1.second < kpt2.second;
+        });
+
+    const std::pair<size_t, double>& bestKptToDistance = kptIdxToDistance[0];
+    if (bestKptToDistance.second > distanceMatchThresh) {
+        return false;
+    }
+
+    if (kptIdxToDistance.size() >= 2) {
+        const std::pair<size_t, double>& secondKptToDistance = kptIdxToDistance[1];
+        if (bestKptToDistance.second / secondKptToDistance.second < distanceRatioThresh) {
             return false;
         }
     }
@@ -341,7 +406,7 @@ void Frame::RemoveObservingMappointCreatedFromOtherFrame(const size_t mptId) {
     // TODO: if all the observations has been removed, consider this keyframe as outlier?
 }
 
-void Frame::RemoveObservingMappointCreatedFromThisFrame(const size_t mptId) {
+bool Frame::RemoveObservingMappointCreatedFromThisFrame(const size_t mptId) {
     // Remove the <kpt idx, mpt id> relationship
     assert(observingMptIdToKptIdx_.count(mptId));
     size_t kptIdx = observingMptIdToKptIdx_[mptId];
@@ -351,11 +416,44 @@ void Frame::RemoveObservingMappointCreatedFromThisFrame(const size_t mptId) {
 
     observingMptIdToKptIdx_.erase(mptId);
 
-    // Remove the only observation
-    assert(onlyThisObservedMptId_.count(mptId));
-    onlyThisObservedMptId_.erase(mptId);
+    // Remove the only observation. Note this mpt may be observed by other frames
+    RemoveOnlyThisObservedMpt(mptId);
 
-    // No need to operate on the mpt itself since it will be removed
+    // Remove mpt observedBy
+    const auto& mpt = MapManager::Instance().GetMappoint(mptId);
+    assert(mpt);
+    assert(mpt->GetAnchoringKeyframeId() == id_);
+    mpt->RemoveObservedByKeyframe(id_);
+
+    // If this mappoint is not observed by other keyframe, it will be removed
+    if (mpt->GetObservedByKeyframeIds().size() == 0) {
+        return true;
+    }
+
+    // Need to update covisible graph if the mappoint are observed by other keyframes
+    // Update covisible graph
+    size_t newAnchorKFId = 0;
+    for (auto& otherKFId: mpt->GetObservedByKeyframeIds()) {
+        assert(otherKFId != this->id_);
+        newAnchorKFId = otherKFId;
+
+        auto otherKF = MapManager::Instance().GetKeyframe(otherKFId);
+        assert(otherKF->IsObservingMappoint(mptId));
+
+        auto& covisibleWeight = allCovisibleKfIdToWeight_[otherKFId];
+        --covisibleWeight;
+        if (covisibleWeight == 0) {
+            allCovisibleKfIdToWeight_.erase(otherKFId);
+        } else if (covisibleWeight < config_->activeCovisibleWeight) {
+            activeCovisibleKfIds_.erase(otherKFId);
+        }
+        
+        otherKF->UpdateCovisibleKeyframeWeight(this->id_, covisibleWeight);
+    }
+    // Need to update the anchor keyframe's id since the observation with the original one is removed
+    mpt->AddAnchoringKeyframeId(newAnchorKFId);
+
+    return false;
 }
 
 #pragma mark - covisible keyframes
