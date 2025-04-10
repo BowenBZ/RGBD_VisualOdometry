@@ -145,13 +145,14 @@ void Frontend::InitializationHandler() {
     keyframeCurr_ = frameCurr_;
 
     CreateTempMappoints();
-    assert(lastFrameMpts_.size() == kptIdxToNewMpt_.size());
+    assert(lastFrameMap_.size() == kptIdxToNewMpt_.size());
     for(auto& [kptIdx, mpt]: kptIdxToNewMpt_) {
         mapManager_->AddMappoint(mpt);
         frameCurr_->AddObservingMappointCreatedFromThisFrame(kptIdx, mpt);
     }
-    trackingMap_.clear();
-    trackingMap_.insert(lastFrameMpts_.begin(), lastFrameMpts_.end());
+    localMap_.clear();
+    localMap_.insert(lastFrameMap_.begin(), lastFrameMap_.end());
+    UpdateTrackingMapInfo(localMap_, localMapInfo_);
 
     // RGBD camera only needs 1 frame to configure since it could get the depth information
     state_ = TRACKING;
@@ -165,27 +166,17 @@ bool Frontend::TrackingHandler() {
     matchedKptIdxToInfo_.clear();
     if (enableSuperpoint_) {
         printf("Feature matching\n");
-        MatchKeyPointsWithLastFrameNN();
+        MatchKeyPointsWithTrackingMapAndLastFrameNN();
         printf("Estimate pose\n");
         EstimateCurrentFramePose(true);
-
-        /*
-        if (keyframeCurr_ != framePrev_) {
-            printf("Map tracking\n");
-            if (MatchKeyPointsWithTrackingMap()) {
-                printf("Estimate pose\n");
-                EstimateCurrentFramePose(true);
-            }
-        }
-        */
     } else {
         printf("Frame tracking\n");
-        MatchKeyPointsWithMappoints(lastFrameMpts_);
+        MatchKeyPointsWithMappoints(lastFrameMap_, lastFrameMapInfo_);
         EstimateCurrentFramePose(true);
     
         // Compute pose based on tracking map
         printf("Map tracking");
-        MatchKeyPointsWithMappoints(trackingMap_);
+        MatchKeyPointsWithMappoints(localMap_, localMapInfo_);
         EstimateCurrentFramePose(true);
     }
 
@@ -217,7 +208,8 @@ void Frontend::UpdateTrackingMap(std::function<void(TrackingMap&)> updater) {
     const SE3 old_T_kf_from_w = keyframeCurr_->GetTcw();
 
     // Use updater to update tracking map
-    updater(trackingMap_);
+    updater(localMap_);
+    UpdateTrackingMapInfo(localMap_, localMapInfo_);
 
     // If the reference frame is different from keyframe, we also need to adjust the pose of the current frame
     if (frameCurr_ != keyframeCurr_) {
@@ -232,8 +224,8 @@ void Frontend::UpdateTrackingMap(std::function<void(TrackingMap&)> updater) {
 
         const SE3 T = new_T_c_from_w.inverse() * old_T_c_from_w;
         // Update the mappoint position only observed by last frame
-        for (auto& [mptId, mpt]: lastFrameMpts_) {
-            if (!trackingMap_.count(mptId)) {
+        for (auto& [mptId, mpt]: lastFrameMap_) {
+            if (!localMap_.count(mptId)) {
                 const Vector3d& oldPosition = mpt->GetPosition();
                 const Vector3d newPosition = T * mpt->GetPosition();
                 mpt->SetPosition(newPosition);
@@ -244,26 +236,27 @@ void Frontend::UpdateTrackingMap(std::function<void(TrackingMap&)> updater) {
     printf("Tracking map is updated\n");
 }
 
-#pragma mark - Feature matching
-
-void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
-{
-    cv::Mat trackingMapDescriptors;
-    std::unordered_map<int, size_t> trackingMapDescriptorIdxToMptId;
-    std::unordered_map<size_t, size_t> matchedMptIdToKptIdx;
+void Frontend::UpdateTrackingMapInfo(const TrackingMap& trackingMap, TrackingMapInfo& info) {
+    info.clear();
 
     for (auto &[mptId, mpt] : trackingMap)
     {
-        trackingMapDescriptorIdxToMptId[trackingMapDescriptors.rows] = mptId;
-        trackingMapDescriptors.push_back(mpt->GetDescriptor());
+        info.descriptors.push_back(mpt->GetDescriptor());
+        info.mptIds.push_back(mptId);
     }
+}
 
+#pragma mark - Feature matching
+
+void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap, TrackingMapInfo& info)
+{
+    std::unordered_map<size_t, size_t> matchedMptIdToKptIdx;
     for (const auto& [kptIdx, matchInfo]: matchedKptIdxToInfo_) {
         matchedMptIdToKptIdx[matchInfo.mpt->GetId()] = kptIdx;
     }
 
     std::vector<cv::DMatch> matches;
-    flannMatcher_.match(trackingMapDescriptors, frameCurr_->GetDescriptors(), matches);
+    flannMatcher_.match(info.descriptors, frameCurr_->GetDescriptors(), matches);
 
     // compute the min distance of the best match
     float min_dis = std::min_element(
@@ -279,7 +272,7 @@ void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
         // filter out the matches whose distance is large
         if (m.distance <= maxDis)
         {
-            auto& mptId = trackingMapDescriptorIdxToMptId[m.queryIdx];
+            auto& mptId = info.mptIds[m.queryIdx];
             auto& kptIdx = m.trainIdx;
 
             // Check whether this keypoint already has a better matched mappoint
@@ -305,85 +298,43 @@ void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap)
     printf("  Size of matched <keypoint, mappoint> pairs: %zu\n", matchedKptIdxToInfo_.size());
 }
 
-void Frontend::MatchKeyPointsWithLastFrameNN() {
-    cv::Mat trackingMapDescriptors;
-    std::unordered_map<int, size_t> trackingMapDescriptorIdxToMptId;
-    std::unordered_map<size_t, size_t> matchedMptIdToKptIdx;
+void Frontend::MatchKeyPointsWithTrackingMapAndLastFrameNN() {
+    auto findMatch = [](TrackingMap& trackingMap, 
+                                  TrackingMapInfo& trackingMapInfo, 
+                                  cv::Mat currDescriptors, 
+                                  const float nnThresh, 
+                                  std::unordered_map<size_t, MatchInfo>& matchedKptIdxToInfo) {
+        KeypointsMatchInfo matchInfo;
+        find_matched_points(trackingMapInfo.descriptors, currDescriptors, nnThresh, matchInfo);
+        assert(matchInfo.matchedCurrentIndices.size() == matchInfo.matchedPrevIndices.size());
 
-    // auto& trackingMap = lastFrameMpts_;
-    auto& trackingMap = trackingMap_;
-    for (auto &[mptId, mpt] : trackingMap)
-    {
-        trackingMapDescriptorIdxToMptId[trackingMapDescriptors.rows] = mptId;
-        trackingMapDescriptors.push_back(mpt->GetDescriptor());
-    }
-
-    std::vector<int> matchedCurrentIndices;
-    std::vector<int> matchedPrevIndices;
-    std::vector<float> matchedDistance;
-    find_matched_points(trackingMapDescriptors, frameCurr_->GetDescriptors(), nnThresh_, matchedCurrentIndices, matchedPrevIndices, matchedDistance);
-    assert(matchedCurrentIndices.size() == matchedPrevIndices.size());
-
-    for (int i = 0; i < matchedCurrentIndices.size(); i++) {
-        const int currentIdx = matchedCurrentIndices[i];
-        const int pervIdx = matchedPrevIndices[i];
-        const int matchedMptId = trackingMapDescriptorIdxToMptId[pervIdx];
-        const float distance = matchedDistance[i];
-        // Provide a dummy distance
-        matchedKptIdxToInfo_[currentIdx] = {trackingMap[matchedMptId], distance};
-    }
-
-    printf("  Size of last frame's mappoints: %zu\n", trackingMap.size());
-    printf("  Size of matched <keypoint, mappoint> pairs: %zu\n", matchedKptIdxToInfo_.size());
-}
-
-bool Frontend::MatchKeyPointsWithTrackingMap() {
-    auto& trackingMap = trackingMap_;
-
-    // Get the matched mappoint in tracking map
-    std::unordered_set<size_t> matchedTrackingMpt;
-    for (auto& [kptIdx, info] : matchedKptIdxToInfo_) {
-        const size_t mptId = info.mpt->GetId();
-        if (trackingMap.count(mptId)) {
-            matchedTrackingMpt.insert(mptId);
-        }
-    }
-
-    // Project unmatched mappoints to current frame
-    bool projectNewMpt = false;
-    for (auto &[mptId, mpt] : trackingMap)
-    {
-        if (matchedTrackingMpt.count(mptId)) {
-            continue;
-        }
-
-        size_t kptIdx = 0;
-        float distance = 0;
-        bool matched = frameCurr_->SearchSuperpointKeypointMatchCandidate(mpt, nnThresh_, 0.5, kptIdx, distance);
-        // Not find matched keypoint
-        if (!matched) {
-            continue;
-        }
-
-        // If the keypoint already has matches
-        if (matchedKptIdxToInfo_.count(kptIdx)) {
-            // If the matched mapppoint is not from local map or the this match has smaller distance
-            const bool matchedWithTrackingMap = trackingMap.count(matchedKptIdxToInfo_[kptIdx].mpt->GetId());
-            const bool smallerDistance = distance < matchedKptIdxToInfo_[kptIdx].distance;
-            if (matchedWithTrackingMap || smallerDistance) {
-                projectNewMpt = true;
-                matchedKptIdxToInfo_[kptIdx] = {mpt, distance};
+        // Take all matches with map, and fill in remained one from last frame
+        for (int i = 0; i < matchInfo.matchedCurrentIndices.size(); i++) {
+            const int currentIdx = matchInfo.matchedCurrentIndices[i];
+            if (matchedKptIdxToInfo.count(currentIdx)) {
+                // This kpt already matches with tracking map
+                continue;
             }
-        } else {
-            projectNewMpt = true;
-            matchedKptIdxToInfo_[kptIdx] = {mpt, distance};
+            
+            const int pervIdx = matchInfo.matchedPrevIndices[i];
+            const int matchedMptId = trackingMapInfo.mptIds[pervIdx];
+            const float distance = matchInfo.matchedDistance[i];
+            
+            matchedKptIdxToInfo[currentIdx] = {trackingMap[matchedMptId], distance};
         }
+    };
+    matchedKptIdxToInfo_.clear();
+    findMatch(localMap_, localMapInfo_, frameCurr_->GetDescriptors(), nnThresh_, matchedKptIdxToInfo_);
+    const size_t trackingMapMatchedCnt = matchedKptIdxToInfo_.size();
+    if (framePrev_ != keyframeCurr_) {
+        findMatch(lastFrameMap_, lastFrameMapInfo_, frameCurr_->GetDescriptors(), nnThresh_, matchedKptIdxToInfo_);
     }
+    const size_t totalMatchedCnt = matchedKptIdxToInfo_.size();
 
-    // Add new matched mpts
-    printf("  Project new mpt %d, total matches: %zu\n", projectNewMpt, matchedKptIdxToInfo_.size());
-    return projectNewMpt;
+    printf("  Size of matched <keypoint, mappoint> pairs: %zu (%zu + %zu)\n", 
+                totalMatchedCnt, trackingMapMatchedCnt, totalMatchedCnt - trackingMapMatchedCnt);
 }
+
 
 #pragma mark - Motion-only BA
 
@@ -533,7 +484,7 @@ bool Frontend::IsKeyframe()
 
     size_t matchedTrackingMptCount = 0;
     for (const auto& [kpt, matchInfo]: matchedKptIdxToInfo_) {
-        matchedTrackingMptCount += trackingMap_.count(matchInfo.mpt->GetId());
+        matchedTrackingMptCount += localMap_.count(matchInfo.mpt->GetId());
     }
     if (matchedTrackingMptCount < frontendConfig_.minInliersForKeyframe) {
         printf("Current frame is a new keyframe since matched mpt count %zu < %zu\n", matchedTrackingMptCount, frontendConfig_.minInliersForKeyframe);
@@ -553,15 +504,15 @@ bool Frontend::IsKeyframe()
 }
 
 void Frontend::CreateTempMappoints() {
-    lastFrameMpts_.clear();
+    lastFrameMap_.clear();
     kptIdxToNewMpt_.clear();
     for (size_t kptIdx = 0; kptIdx < frameCurr_->GetKeypointsSize(); ++kptIdx)
     {
         // If the keypoint matches with mappoint from local map, just put that mappoint into last frame mappoint
         if (matchedKptIdxToInfo_.count(kptIdx)) {
             const auto& mpt = matchedKptIdxToInfo_[kptIdx].mpt;
-            if (trackingMap_.count(mpt->GetId())) {
-                lastFrameMpts_[mpt->GetId()] = mpt;
+            if (localMap_.count(mpt->GetId())) {
+                lastFrameMap_[mpt->GetId()] = mpt;
                 continue;
             }
         }
@@ -581,13 +532,15 @@ void Frontend::CreateTempMappoints() {
         // all parameters will have a deep copy inside the constructor
         Mappoint::Ptr mpt = Mappoint::CreateMappoint(mptPos, frameCurr_->GetDescriptor(kptIdx), enableSuperpoint_);
 
-        lastFrameMpts_[mpt->GetId()] = mpt;
+        lastFrameMap_[mpt->GetId()] = mpt;
         kptIdxToNewMpt_[kptIdx] = mpt;
     }
+    UpdateTrackingMapInfo(lastFrameMap_, lastFrameMapInfo_);
+
     // After creating temporary mappoints, the raw color and depth are no longer needed
     frameCurr_->ReleaseRawFrameData();
     printf("Created %zu new temp mappoints, total mappoints from this frame: %zu\n", 
-            kptIdxToNewMpt_.size(), lastFrameMpts_.size());
+            kptIdxToNewMpt_.size(), lastFrameMap_.size());
 }
 
 void Frontend::SendKeyframeToBackend() {
@@ -600,7 +553,7 @@ void Frontend::SendKeyframeToBackend() {
     // Then add new keyframe's observation relationships for previous mappoints from local map
     for (const auto& [kptIdx, matchInfo] : matchedKptIdxToInfo_) {
         const auto& mpt = matchInfo.mpt;
-        if (trackingMap_.count(mpt->GetId())) {
+        if (localMap_.count(mpt->GetId())) {
             frameCurr_->AddObservingMappointCreatedFromOtherFrame(kptIdx, mpt);
         }
     }

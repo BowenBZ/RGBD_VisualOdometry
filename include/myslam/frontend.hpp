@@ -57,6 +57,15 @@ public:
 
     typedef std::shared_ptr<Frontend> Ptr;
     typedef std::unordered_map<size_t, std::shared_ptr<Mappoint>> TrackingMap;
+    typedef struct TrackingMapInfo {
+        cv::Mat descriptors;
+        std::vector<size_t> mptIds;
+
+        void clear() {
+            descriptors = cv::Mat();
+            mptIds.clear();
+        }
+    } TrackingMapInfo;
 
     enum VOState {
         INITIALIZING=0,
@@ -113,9 +122,12 @@ private:
     // mutex for update tracking map
     std::mutex              trackingMapMutex_;
     // the local tracking map sent from backend
-    TrackingMap             trackingMap_;       
+    TrackingMap             localMap_;
+    TrackingMapInfo         localMapInfo_;
+
     // Mappoints observed by last frame, including matched mappoints from trackingMap_ and new mappoints created from last frame 
-    TrackingMap             lastFrameMpts_;
+    TrackingMap             lastFrameMap_;
+    TrackingMapInfo         lastFrameMapInfo_;
 
     typedef struct {
         std::shared_ptr<Mappoint> mpt;
@@ -136,15 +148,14 @@ private:
     // update tracking map, called by backend
     void UpdateTrackingMap(std::function<void(TrackingMap&)> updater);
 
+    /// Update the tracking map info when tracking is updated
+    void UpdateTrackingMapInfo(const TrackingMap& trackingMap, TrackingMapInfo& info);
+
     // Find matched mappoints in tracking map for keypoints extracted from current frame
-    void MatchKeyPointsWithMappoints(TrackingMap& trackingMap);
+    void MatchKeyPointsWithMappoints(TrackingMap& trackingMap, TrackingMapInfo& info);
 
-    // Match current frame's keypoints with last frame's temp mappoint using NN match
-    void MatchKeyPointsWithLastFrameNN();
-
-    /// Match current frame's keypoints with tracking map
-    /// @param return if projected new mappoints to current frame
-    bool MatchKeyPointsWithTrackingMap();
+    /// Match current frame's keypoints with tracking map and then last frame
+    void MatchKeyPointsWithTrackingMapAndLastFrameNN();
 
     // Estimate the pose with 3D-2D methods (mappoint, keypoint)
     void EstimateCurrentFramePose(const bool doMotionBA); 

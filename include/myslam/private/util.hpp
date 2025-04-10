@@ -32,6 +32,18 @@ inline bool Triangulation(const std::vector<SE3>&        poses,
     return false;
 }
 
+typedef struct KeypointsMatchInfo {
+    std::vector<int> matchedCurrentIndices;
+    std::vector<int> matchedPrevIndices;
+    std::vector<float> matchedDistance;
+
+    void clear() {
+        matchedCurrentIndices.clear();
+        matchedPrevIndices.clear();
+        matchedDistance.clear();
+    }
+} KeypointsMatchInfo;
+
 /*
 Find the matched keypoints by finding the minimum L2 distance, i.e.
 distance = \sqrt{ \sum_i^256 (x_i - y_i)^2 }
@@ -49,11 +61,8 @@ Output:
 inline void find_matched_points(const cv::Mat& prev_desc,
                                 const cv::Mat& curr_desc,
                                 const float nn_thresh,
-                                std::vector<int>& matchedCurrentIndices,
-                                std::vector<int>& matchedPrevIndices,
-                                std::vector<float>& matchedDistance) {
-    matchedCurrentIndices.clear();
-    matchedPrevIndices.clear();
+                                KeypointsMatchInfo& matchInfo) {
+    matchInfo.clear();
 
     // If no previous descriptors, return empty matched points and all current points as unmatched.
     if (prev_desc.empty()) {
@@ -126,11 +135,11 @@ inline void find_matched_points(const cv::Mat& prev_desc,
     // Final match: for each current point j, it is a valid match if both conditions are true.
     for (int j = 0; j < N2; j++) {
         if (bidirectional_match[j] && pass_thresh_match[j]) {
-            matchedCurrentIndices.push_back(j);
+            matchInfo.matchedCurrentIndices.push_back(j);
             int prev_idx = matched_prev_indices[j];
-            matchedPrevIndices.push_back(prev_idx);
+            matchInfo.matchedPrevIndices.push_back(prev_idx);
             float score = distance.at<float>(prev_idx, j);
-            matchedDistance.push_back(score);
+            matchInfo.matchedDistance.push_back(score);
         }
     }
 }
