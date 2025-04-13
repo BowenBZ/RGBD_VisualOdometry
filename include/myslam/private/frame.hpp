@@ -133,7 +133,7 @@ public:
     // Get matched keypoint idx for the mappoint
     bool SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, float& distance, bool& mayObserveMpt);
 
-    bool SearchSuperpointKeypointMatchCandidate(const Mappoint::Ptr& mpt, const float distanceMatchThresh, const float distanceRatioThresh, size_t& kptIdx, float& distance);
+    bool SearchSuperpointKeypointMatchCandidate(const Mappoint::Ptr& mpt, const float distanceMatchThresh, const std::optional<float> distanceRatioThresh, size_t& kptIdx, float& distance);
 
 #pragma mark - observing relationships
 
@@ -157,9 +157,8 @@ public:
     // Remove observed mappoint and also update the covisible keyframes
     void RemoveObservingMappointCreatedFromOtherFrame(const size_t mptId);
 
-    // Remove observed mappoint created from this frame.
-    // @param return if this mappoint is not observed by any keyframe
-    bool RemoveObservingMappointCreatedFromThisFrame(const size_t mptId);
+    /// Remove observed mappoint created from this frame.
+    void RemoveObservingMappointCreatedFromThisFrame(const size_t mptId);
 
     const std::unordered_map<size_t, size_t>& GetAllObservingMptIdToKptIdx() {
         return observingMptIdToKptIdx_;

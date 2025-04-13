@@ -31,6 +31,7 @@ class Mappoint;
 class MapManager;
 class SuperPointModel;
 class Backend;
+class UnaryEdgeProjection;
 
 typedef struct {
     double timestamp;
@@ -125,7 +126,7 @@ private:
     TrackingMap             localMap_;
     TrackingMapInfo         localMapInfo_;
 
-    // Mappoints observed by last frame, including matched mappoints from trackingMap_ and new mappoints created from last frame 
+    // New mappoints created from last frame 
     TrackingMap             lastFrameMap_;
     TrackingMapInfo         lastFrameMapInfo_;
 
@@ -136,6 +137,12 @@ private:
     // Matched (keypoint idx of current frame -> (mappoint id, distance))
     std::unordered_map<size_t, MatchInfo>   matchedKptIdxToInfo_;
     
+    typedef struct {
+        UnaryEdgeProjection *edge;
+        bool isOutlier;
+        size_t kptIdx;
+    } EdgeInfo;
+
     g2o::SparseOptimizer    optimizer_;
 
     // (keypoint idx of current frame -> new created mappoints from current frame)
@@ -153,6 +160,14 @@ private:
 
     // Find matched mappoints in tracking map for keypoints extracted from current frame
     void MatchKeyPointsWithMappoints(TrackingMap& trackingMap, TrackingMapInfo& info);
+
+    /// Helper function to match current descriptors with tracking map
+    /// @param trackingMap the mappoints to track against
+    /// @param trackingMapInfo metadata of mappoints
+    /// @param currDescriptors descriptors of current frame
+    /// @param nnThresh max distance threshold for a matched keypoint and mappoint
+    /// @param matchedKptIdxToInfo matched keypoint to its match info
+    void FindMatch(TrackingMap& trackingMap, TrackingMapInfo& trackingMapInfo, cv::Mat currDescriptors, const float nnThresh, std::unordered_map<size_t, MatchInfo>& matchedKptIdxToInfo);
 
     /// Match current frame's keypoints with tracking map and then last frame
     void MatchKeyPointsWithTrackingMapAndLastFrameNN();

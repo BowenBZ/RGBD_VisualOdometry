@@ -117,8 +117,6 @@ int main ( int argc, char** argv )
 
     fout.close();
     cout << "Finished. \nWrote trajectory to " << outputPath << endl; 
-    cout << "\nPress <enter> to continue\n"; 
-    cin.get();
 
     return 0;
 }

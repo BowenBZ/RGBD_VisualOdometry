@@ -22,7 +22,6 @@ Mappoint::Ptr Mappoint::CreateMappoint(const Vector3d& pos, const cv::Mat& descr
 
 Mappoint::Mappoint(const size_t id, const Vector3d& pos, const cv::Mat& descriptor, const bool superpointEnabled)
 : id_(id), pos_(pos), descriptor_(descriptor.clone()), norm_(Vector3d::Zero()),
-  triangulated_(false), optimized_(false), outlier_(false),
   superpointEnabled_(superpointEnabled) { }
 
 

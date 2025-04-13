@@ -150,14 +150,16 @@ if __name__=="__main__":
     second_xyz_full_aligned = rot * second_xyz_full + trans
     
     if args.verbose:
-        print("compared_pose_pairs %d pairs"%(len(trans_error)))
+        print(f"compared_pose_pairs {len(trans_error)} pairs")
 
-        print("absolute_translational_error.rmse %f m"%numpy.sqrt(numpy.dot(trans_error,trans_error) / len(trans_error)))
-        print("absolute_translational_error.mean %f m"%numpy.mean(trans_error))
-        print("absolute_translational_error.median %f m"%numpy.median(trans_error))
-        print("absolute_translational_error.std %f m"%numpy.std(trans_error))
-        print("absolute_translational_error.min %f m"%numpy.min(trans_error))
-        print("absolute_translational_error.max %f m"%numpy.max(trans_error))
+        # Change to cm uint
+        trans_error = trans_error * 100
+        print(f"absolute_translational_error.rmse {numpy.sqrt(numpy.dot(trans_error,trans_error) / len(trans_error)):.2f} cm")
+        print(f"absolute_translational_error.mean {numpy.mean(trans_error):.2f} cm")
+        print(f"absolute_translational_error.median {numpy.median(trans_error):.2f} cm")
+        print(f"absolute_translational_error.std {numpy.std(trans_error):.2f} cm")
+        print(f"absolute_translational_error.min {numpy.min(trans_error):.2f} cm")
+        print(f"absolute_translational_error.max {numpy.max(trans_error):.2f} cm")
     else:
         print("%f"%numpy.sqrt(numpy.dot(trans_error,trans_error) / len(trans_error)))
         

@@ -25,20 +25,6 @@ public:
 
     typedef std::shared_ptr<Mappoint> Ptr;
 
-    bool        triangulated_;          // whether have been triangulated in frontend
-
-    // If this mappoint is optimized as inlier by backend
-    // only optimized and inlier mpt can be used as tracking map for frontend
-    bool        optimized_;
-
-    // If this mappoint is not observed by any keyframe
-    // Outlier mappoint cannot 
-    // 1. used as a point in tracking map in frontend
-    // 2. matched with new keyframe
-    // 3. be triangulated or optimized
-    // 4. should be removed from map manager
-    bool        outlier_;
-    
     // factory function to create mappoint
     // there will be only 1 time copy of parameters happening in the private constructor
     static Mappoint::Ptr CreateMappoint(const Vector3d& pos, const cv::Mat& descriptor, const bool superpointEnabled);
@@ -76,6 +62,10 @@ public:
     
     // only be called by keyframe object
     void RemoveObservedByKeyframe(const size_t kfId);
+
+    size_t GetObservedByKeyframeCount() const {
+        return observedByKfId_.size();
+    }
 
     std::unordered_set<size_t>& GetObservedByKeyframeIds() {
         return observedByKfId_;

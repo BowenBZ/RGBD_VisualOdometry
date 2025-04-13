@@ -37,6 +37,17 @@ typedef struct {
 } BackendConfig;
 
 typedef struct {
+    Frame::Ptr frame;
+    VertexPose* vertex;
+} KFVertexInfo;
+
+typedef struct {
+    Mappoint::Ptr mpt;
+    VertexMappoint* vertex;
+} MptVertexInfo;
+
+
+typedef struct {
     BinaryEdgeProjection* edge;
     bool isOutlier;
     Frame::Ptr keyframe;
@@ -86,18 +97,16 @@ private:
     Frame::Ptr          keyframePrev_;
     Frame::Ptr          keyframeCurr_;
     
-    g2o::SparseOptimizer                                                    optimizer_;
+    g2o::SparseOptimizer                        optimizer_;
 
-    std::unordered_map<size_t, std::pair<Frame::Ptr, VertexPose*>>                    kfIdToCovKfThenVertex_;
-    std::unordered_map<size_t, std::pair<Mappoint::Ptr, VertexMappoint*>>             mptIdToMptThenVertex_;
-    // keyframes not belonging to covisible keyframes but could observe the local mappoints
-    std::unordered_map<size_t, std::pair<Frame::Ptr, VertexPose*>>                    kfIdToFixedKfThenVertex_;
-    std::list<GraphEdgeInfo>                                                     edges_;
+    std::unordered_map<size_t, KFVertexInfo>    kfVertexInfo_;
+    std::unordered_map<size_t, MptVertexInfo>   mptVertexInfo_;
 
-    std::list<std::pair<Frame::Ptr, size_t>>                                          observingMptToRemove_;
+    std::list<GraphEdgeInfo>                    edgeInfo_;
+    std::list<GraphEdgeInfo>                    outlierEdgeInfo_;
     
     // New created mappoints from current keyframe needs to be removed if we found previous matched mappoint
-    std::list<size_t>                                                            mptIdToRemove_;
+    std::list<size_t>                           mptIdToRemove_;
 
     std::function<void(std::function<void(std::unordered_map<size_t, Mappoint::Ptr>&)>)> frontendMapUpdateHandler_;
 

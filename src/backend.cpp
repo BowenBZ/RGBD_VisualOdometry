@@ -63,8 +63,8 @@ void Backend::BackendLoop()
 
             boost::timer::cpu_timer timer;
 
-            ProjectMoreMappointsToNewKeyframe();
-            OptimizeLocalMap();
+            // ProjectMoreMappointsToNewKeyframe();
+            // OptimizeLocalMap();
 
             boost::timer::cpu_times elapsed_times(timer.elapsed());
             printf("[Backend] Time cost (ms): %f\n\n", (elapsed_times.user + elapsed_times.system) / pow(10.0, 6.0));
@@ -112,9 +112,9 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
 
         float distance;
         size_t kptIdx;
-        // Cannot find match
+        // Active search to find match
         if (superpointEnabled_) {
-            if (!keyframeCurr_->SearchSuperpointKeypointMatchCandidate(mpt, config_.reMatchDescriptorDistanceSuperpoint, 0.5, kptIdx, distance)) {
+            if (!keyframeCurr_->SearchSuperpointKeypointMatchCandidate(mpt, config_.reMatchDescriptorDistanceSuperpoint, std::nullopt, kptIdx, distance)) {
                 continue;
             }
         } else {
@@ -127,10 +127,15 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
 
         // This kpt already matches with previous mappoint
         const auto optMatchedMptId = keyframeCurr_->GetMatchedMappointIdForKeypoint(kptIdx);
-        if (optMatchedMptId.has_value() &&
-            !keyframeCurr_->GetMappointIdsOnlyObservedByThisFrame().count(optMatchedMptId.value())) {
-            continue;
-        }
+        if (optMatchedMptId.has_value()) {
+            const auto& mpt = mapManager_->GetMappoint(optMatchedMptId.value());
+            assert(mpt);
+        
+            // This means the mpt is created from previous keyframe
+            if (mpt->GetObservedByKeyframeCount() > 1) {
+                continue;
+            }
+        } 
 
         // There is other old mpt matched with this new kpt
         if (kptIdxToMptIdAndDistance.count(kptIdx) && kptIdxToMptIdAndDistance[kptIdx].second <= distance) {
@@ -152,8 +157,8 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
             const auto& newMptId = optNewCreatedMptId.value();
             const auto& newCreatedMpt = mapManager_->GetMappoint(newMptId);
             assert(newCreatedMpt);
-            bool toRemove = keyframeCurr_->RemoveObservingMappointCreatedFromThisFrame(newMptId);
-            assert(toRemove);
+            keyframeCurr_->RemoveObservingMappointCreatedFromThisFrame(newMptId);
+            assert(newCreatedMpt->GetObservedByKeyframeCount() == 0);
             mptIdToRemove_.push_back(newMptId);
         }
 
@@ -168,6 +173,8 @@ void Backend::OptimizeLocalMap()
 {
     std::list<size_t> covisibleKfIds;
     keyframeCurr_->GetActiveCovisibleKfIds(covisibleKfIds);
+    // keyframeCurr_->GetAllCovisibleKfIds(covisibleKfIds);
+
     // Add current keyframe
     covisibleKfIds.push_back(keyframeCurr_->GetId());
 
@@ -181,47 +188,46 @@ void Backend::OptimizeLocalMap()
 
         // Create camera pose vertex
         VertexPose* poseVertex = new VertexPose;
-        poseVertex->setId(++vertexIndex);
+        poseVertex->setId(vertexIndex++);
         poseVertex->setEstimate(kf->GetTcw());
         poseVertex->setFixed(kf->GetId() == 0);
         optimizer_.addVertex(poseVertex);
 
         // Record in map
-        kfIdToCovKfThenVertex_[kfId] = std::make_pair(kf, poseVertex);
+        kfVertexInfo_[kfId] = {kf, poseVertex};
 
         // Create mappoint vertices
         for (auto &[mptId, _] : kf->GetAllObservingMptIdToKptIdx())
         {
-            if (mptIdToMptThenVertex_.count(mptId)) {
+            if (mptVertexInfo_.count(mptId)) {
                 continue;
             }
 
             auto mpt = mapManager_->GetMappoint(mptId);
             assert(mpt);
+            // If only 1 keyframe observed the mappint, we don't need to optimize it in BA, but only adjust its position after BA
             if (mpt->GetObservedByKeyframeIds().size() == 1) {
-                continue;
-            }
-            if (mpt->outlier_) {
                 continue;
             }
 
             // Create mappoint vertex
             VertexMappoint* mptVertex = new VertexMappoint;
             mptVertex->setEstimate(mpt->GetPosition());
-            mptVertex->setId(++vertexIndex);
+            mptVertex->setId(vertexIndex++);
             mptVertex->setMarginalized(true);
             optimizer_.addVertex(mptVertex);
 
             // Record in map
-            mptIdToMptThenVertex_[mptId] = std::make_pair(mpt, mptVertex);
+            mptVertexInfo_[mptId] = {mpt, mptVertex};
         }
     }
 
+    size_t fixedKFVertexCnt = 0;
     int edgeIndex = 0;
 
     // Add all measurement edges, and fixed pose pose vertices, also perform triangulation
     size_t triangulatedCnt = 0;
-    for (auto& [mptId, mptAndVertex] : mptIdToMptThenVertex_)
+    for (auto& [mptId, mptAndVertex] : mptVertexInfo_)
     {   
         auto& [mpt, mptVertex] = mptAndVertex;
 
@@ -239,24 +245,21 @@ void Backend::OptimizeLocalMap()
             assert(optkptIdx.has_value());
             auto& measurement = keyframe->GetKeypoint(optkptIdx.value()).pt;
 
-            // TODO: check is keyframe is outlier
-
             VertexPose* poseVertex;
-            if (kfIdToCovKfThenVertex_.count(kfId)) {
+            if (kfVertexInfo_.count(kfId)) {
                 // If the keyframe is a covisible keyframe
-                poseVertex = kfIdToCovKfThenVertex_[kfId].second;
+                poseVertex = kfVertexInfo_[kfId].vertex;
             }
             else {
                 // Otherwise this keyframe is a 2nd-order covisible keyframe.
                 // It needs to be added into the graph optimization but it's pose should keep fixed.
                 poseVertex = new VertexPose;
-                poseVertex->setId(++vertexIndex);
+                poseVertex->setId(vertexIndex++);
                 poseVertex->setEstimate(keyframe->GetTcw());
                 poseVertex->setFixed(true);
                 optimizer_.addVertex(poseVertex);
-
-                // Record in map
-                kfIdToFixedKfThenVertex_[kfId] = std::make_pair(keyframe, poseVertex);
+                
+                fixedKFVertexCnt++;
             }
 
             // Add edge
@@ -264,7 +267,7 @@ void Backend::OptimizeLocalMap()
 
             edge->setVertex(0, poseVertex);
             edge->setVertex(1, mptVertex);
-            edge->setId(++edgeIndex);
+            edge->setId(edgeIndex++);
             edge->setMeasurement(toVector2d(measurement));
             edge->setInformation(Eigen::Matrix<double, 2, 2>::Identity());
             auto rk = new g2o::RobustKernelHuber();
@@ -272,7 +275,7 @@ void Backend::OptimizeLocalMap()
             edge->setRobustKernel(rk);
             optimizer_.addEdge(edge);
 
-            edges_.push_back({edge, false, keyframe, mpt});
+            edgeInfo_.push_back({edge, false, keyframe, mpt});
 
             if (needTriangulate) {
                 poses.push_back(keyframe->GetTcw());
@@ -286,7 +289,6 @@ void Backend::OptimizeLocalMap()
             {
                 // if triangulate successfully
                 mptVertex->setEstimate(pworld);
-                mpt->triangulated_ = true;
                 ++triangulatedCnt;
             }
         }
@@ -294,6 +296,7 @@ void Backend::OptimizeLocalMap()
 
     double adjustedInlierThres = config_.baInlierThres;
     size_t outlierCnt = 0;
+    outlierEdgeInfo_.clear();
 
     // Optimize 4 * 20 steps
     for(size_t iteration = 0; iteration < 4; ++iteration) {
@@ -301,11 +304,10 @@ void Backend::OptimizeLocalMap()
         optimizer_.optimize(20);
 
         outlierCnt = 0;
-        observingMptToRemove_.clear();
-
-        for (auto& [edge, isOutlier, kf, mpt] : edges_) {
+        for (auto& edgeInfo : edgeInfo_) {
+            const auto& edge = edgeInfo.edge;
             // Compute error for outlier edges since they won't be calculated during optimization
-            if (isOutlier) {
+            if (edgeInfo.isOutlier) {
                 edge->computeError();
             }
 
@@ -313,30 +315,31 @@ void Backend::OptimizeLocalMap()
             if (edge->chi2() > config_.baInlierThres) {
                 // level 1 edges won't be optimized later
                 edge->setLevel(1);
-                isOutlier = true;
-                observingMptToRemove_.push_back(std::make_pair(kf, mpt->GetId()));
-                ++outlierCnt;
+                edgeInfo.isOutlier = true;
+                outlierCnt++;
             } else {
                 edge->setLevel(0);
-                isOutlier = false;
+                edgeInfo.isOutlier = false;
             }
 
-            mpt->optimized_ = isOutlier;
+            if (iteration == 3 && edgeInfo.isOutlier) {
+                outlierEdgeInfo_.push_back(edgeInfo);
+            }
         }
 
         // Loose the threshold if the outlier is too much
-        double outlierRatio = outlierCnt / double(edges_.size());
+        double outlierRatio = outlierCnt / double(edgeInfo_.size());
         if (outlierRatio > 0.5) {
             adjustedInlierThres *= 2;
         }
     }
 
     printf("[Backend] optimization results:\n");
-    printf("  optimized pose count: %zu\n", kfIdToCovKfThenVertex_.size());
-    printf("  fixed pose count: %zu\n", kfIdToFixedKfThenVertex_.size());
-    printf("  optimized mappoint count: %zu\n", mptIdToMptThenVertex_.size());
+    printf("  optimized pose count: %zu\n", kfVertexInfo_.size());
+    printf("  fixed pose count: %zu\n", fixedKFVertexCnt);
+    printf("  optimized mappoint count: %zu\n", mptVertexInfo_.size());
     printf("  triangulated mappoints count: %zu\n", triangulatedCnt);
-    printf("  edge count: %zu\n", edges_.size());
+    printf("  edge count: %zu\n", edgeInfo_.size());
     printf("  outlier edge count: %zu\n\n", outlierCnt);
 }
 
@@ -345,31 +348,30 @@ void Backend::UpdateFrontendTrackingMap() {
     // Also write update back at this step
     frontendMapUpdateHandler_([&](std::unordered_map<size_t, Mappoint::Ptr>& trackingMap){
 
-        for(const auto& [kf, mptId]: observingMptToRemove_) {
-            // Cannot remove the observation between anchor keyframe and the mappoint
-            const auto& mpt = mapManager_->GetMappoint(mptId);
-            assert(mpt);
-
+        for(const auto& edgeInfo: outlierEdgeInfo_) {
+            const auto& kf = edgeInfo.keyframe;
+            const auto& mpt = edgeInfo.mappoint;
             const bool isAnchorFrame = (mpt->GetAnchoringKeyframeId() == kf->GetId());
             if (isAnchorFrame) {
-                const bool toRemove = kf->RemoveObservingMappointCreatedFromThisFrame(mptId);
-                if (toRemove) {
-                    mptIdToRemove_.push_back(mptId);
+                kf->RemoveObservingMappointCreatedFromThisFrame(mpt->GetId());
+                if (mpt->GetObservedByKeyframeCount() == 0) {
+                    mptIdToRemove_.push_back(mpt->GetId());
                 } else {
                     // mpt's observedBy keyframe changes, need to recalculate descriptor
                     mpt->UpdateDescriptor();
                 }
             } else {
-                kf->RemoveObservingMappointCreatedFromOtherFrame(mptId);
+                kf->RemoveObservingMappointCreatedFromOtherFrame(mpt->GetId());
                 // mpt's observedBy keyframe changes, need to recalculate descriptor
                 mpt->UpdateDescriptor();
             }
         }
 
-        for (const auto &[_, kfAndVertex] : kfIdToCovKfThenVertex_) {
-            auto& [kf, kfVertex] = kfAndVertex;
+        for (const auto kfVertexInfo : kfVertexInfo_) {
+            const auto& kf = kfVertexInfo.second.frame;
+            const auto& vertex = kfVertexInfo.second.vertex;
             const SE3 oldTcw = kf->GetTcw();
-            const SE3 newTcw = kfVertex->estimate();
+            const SE3 newTcw = vertex->estimate();
             kf->SetTcw(newTcw);
 
             const SE3 T = newTcw.inverse() * oldTcw;
@@ -383,11 +385,9 @@ void Backend::UpdateFrontendTrackingMap() {
             }
         }
 
-        for (const auto &[mptId, mptAndVertex] : mptIdToMptThenVertex_) {
-            auto& [mpt, mptVertex] = mptAndVertex;
-            if (mpt->outlier_) {
-                continue;
-            }
+        for (const auto &mptVertexInfo : mptVertexInfo_) {
+            const auto& mpt = mptVertexInfo.second.mpt;
+            const auto& mptVertex = mptVertexInfo.second.vertex;
 
             mpt->SetPosition(mptVertex->estimate());
             // since the mpt position and keyframe pose changes, update its norm direction
@@ -406,12 +406,11 @@ void Backend::UpdateFrontendTrackingMap() {
 
 void Backend::CleanUp() {
 
-    kfIdToCovKfThenVertex_.clear();
-    mptIdToMptThenVertex_.clear();
-    kfIdToFixedKfThenVertex_.clear();
-    edges_.clear();
+    kfVertexInfo_.clear();
+    mptVertexInfo_.clear();
 
-    observingMptToRemove_.clear();
+    edgeInfo_.clear();
+    outlierEdgeInfo_.clear();
 
     mptIdToRemove_.clear();
 

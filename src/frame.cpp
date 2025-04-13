@@ -196,7 +196,7 @@ bool Frame::SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool do
     return true;
 }
 
-bool Frame::SearchSuperpointKeypointMatchCandidate(const Mappoint::Ptr& mpt, const float distanceMatchThresh, const float distanceRatioThresh, size_t& kptIdx, float& distance) {
+bool Frame::SearchSuperpointKeypointMatchCandidate(const Mappoint::Ptr& mpt, const float distanceMatchThresh, const std::optional<float> distanceRatioThresh, size_t& kptIdx, float& distance) {
     Vector3d posInCam = T_c_w_ * mpt->GetPosition();
     if (posInCam[2] < 0) {
         return false;
@@ -249,9 +249,9 @@ bool Frame::SearchSuperpointKeypointMatchCandidate(const Mappoint::Ptr& mpt, con
         return false;
     }
 
-    if (kptIdxToDistance.size() >= 2) {
+    if (distanceRatioThresh.has_value() && kptIdxToDistance.size() >= 2) {
         const std::pair<size_t, double>& secondKptToDistance = kptIdxToDistance[1];
-        if (bestKptToDistance.second / secondKptToDistance.second < distanceRatioThresh) {
+        if (bestKptToDistance.second / secondKptToDistance.second < distanceRatioThresh.value()) {
             return false;
         }
     }
@@ -406,7 +406,7 @@ void Frame::RemoveObservingMappointCreatedFromOtherFrame(const size_t mptId) {
     // TODO: if all the observations has been removed, consider this keyframe as outlier?
 }
 
-bool Frame::RemoveObservingMappointCreatedFromThisFrame(const size_t mptId) {
+void Frame::RemoveObservingMappointCreatedFromThisFrame(const size_t mptId) {
     // Remove the <kpt idx, mpt id> relationship
     assert(observingMptIdToKptIdx_.count(mptId));
     size_t kptIdx = observingMptIdToKptIdx_[mptId];
@@ -425,9 +425,9 @@ bool Frame::RemoveObservingMappointCreatedFromThisFrame(const size_t mptId) {
     assert(mpt->GetAnchoringKeyframeId() == id_);
     mpt->RemoveObservedByKeyframe(id_);
 
-    // If this mappoint is not observed by other keyframe, it will be removed
+    // If this mappoint is not observed by other keyframe, no need to update the covisiblity graph
     if (mpt->GetObservedByKeyframeIds().size() == 0) {
-        return true;
+        return;
     }
 
     // Need to update covisible graph if the mappoint are observed by other keyframes
@@ -452,8 +452,6 @@ bool Frame::RemoveObservingMappointCreatedFromThisFrame(const size_t mptId) {
     }
     // Need to update the anchor keyframe's id since the observation with the original one is removed
     mpt->AddAnchoringKeyframeId(newAnchorKFId);
-
-    return false;
 }
 
 #pragma mark - covisible keyframes

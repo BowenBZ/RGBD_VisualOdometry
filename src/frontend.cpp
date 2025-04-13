@@ -298,43 +298,43 @@ void Frontend::MatchKeyPointsWithMappoints(TrackingMap& trackingMap, TrackingMap
     printf("  Size of matched <keypoint, mappoint> pairs: %zu\n", matchedKptIdxToInfo_.size());
 }
 
-void Frontend::MatchKeyPointsWithTrackingMapAndLastFrameNN() {
-    auto findMatch = [](TrackingMap& trackingMap, 
-                                  TrackingMapInfo& trackingMapInfo, 
-                                  cv::Mat currDescriptors, 
-                                  const float nnThresh, 
-                                  std::unordered_map<size_t, MatchInfo>& matchedKptIdxToInfo) {
-        KeypointsMatchInfo matchInfo;
-        find_matched_points(trackingMapInfo.descriptors, currDescriptors, nnThresh, matchInfo);
-        assert(matchInfo.matchedCurrentIndices.size() == matchInfo.matchedPrevIndices.size());
+void Frontend::FindMatch(TrackingMap& trackingMap, TrackingMapInfo& trackingMapInfo, cv::Mat currDescriptors, const float nnThresh, std::unordered_map<size_t, MatchInfo>& matchedKptIdxToInfo) {
 
-        // Take all matches with map, and fill in remained one from last frame
-        for (int i = 0; i < matchInfo.matchedCurrentIndices.size(); i++) {
-            const int currentIdx = matchInfo.matchedCurrentIndices[i];
-            if (matchedKptIdxToInfo.count(currentIdx)) {
-                // This kpt already matches with tracking map
-                continue;
-            }
-            
-            const int pervIdx = matchInfo.matchedPrevIndices[i];
-            const int matchedMptId = trackingMapInfo.mptIds[pervIdx];
-            const float distance = matchInfo.matchedDistance[i];
-            
-            matchedKptIdxToInfo[currentIdx] = {trackingMap[matchedMptId], distance};
+    KeypointsMatchInfo matchInfo;
+    find_matched_points(trackingMapInfo.descriptors, currDescriptors, nnThresh, matchInfo);
+    assert(matchInfo.matchedCurrentIndices.size() == matchInfo.matchedPrevIndices.size());
+
+    // Take all matches with map, and fill in remained one from last frame
+    for (int i = 0; i < matchInfo.matchedCurrentIndices.size(); i++) {
+        const int currentIdx = matchInfo.matchedCurrentIndices[i];
+        const int prevIdx = matchInfo.matchedPrevIndices[i];
+        const int matchedMptId = trackingMapInfo.mptIds[prevIdx];
+
+        // This kpt already has matches or this mappoint already has matches
+        if (matchedKptIdxToInfo.count(currentIdx)) {
+            continue;
         }
-    };
-    matchedKptIdxToInfo_.clear();
-    findMatch(localMap_, localMapInfo_, frameCurr_->GetDescriptors(), nnThresh_, matchedKptIdxToInfo_);
-    const size_t trackingMapMatchedCnt = matchedKptIdxToInfo_.size();
-    if (framePrev_ != keyframeCurr_) {
-        findMatch(lastFrameMap_, lastFrameMapInfo_, frameCurr_->GetDescriptors(), nnThresh_, matchedKptIdxToInfo_);
-    }
-    const size_t totalMatchedCnt = matchedKptIdxToInfo_.size();
 
-    printf("  Size of matched <keypoint, mappoint> pairs: %zu (%zu + %zu)\n", 
-                totalMatchedCnt, trackingMapMatchedCnt, totalMatchedCnt - trackingMapMatchedCnt);
+        const float distance = matchInfo.matchedDistance[i];        
+        matchedKptIdxToInfo[currentIdx] = {trackingMap[matchedMptId], distance};
+    }
 }
 
+void Frontend::MatchKeyPointsWithTrackingMapAndLastFrameNN() {
+    matchedKptIdxToInfo_.clear();
+
+    // Try to match with other mappoints from local map
+    FindMatch(localMap_, localMapInfo_, frameCurr_->GetDescriptors(), nnThresh_, matchedKptIdxToInfo_);
+    const size_t trackingMapMatchedCnt = matchedKptIdxToInfo_.size();
+    
+    // Try to match with new created temporay mappoints
+    FindMatch(lastFrameMap_, lastFrameMapInfo_, frameCurr_->GetDescriptors(), nnThresh_, matchedKptIdxToInfo_);
+    const size_t totalMatchedCnt = matchedKptIdxToInfo_.size();
+    const size_t tempMatchedCnt = totalMatchedCnt - trackingMapMatchedCnt;
+
+    printf("  Size of matched <keypoint, mappoint> pairs: %zu (%zu + %zu)\n", 
+                totalMatchedCnt, trackingMapMatchedCnt, tempMatchedCnt);
+}
 
 #pragma mark - Motion-only BA
 
@@ -380,21 +380,25 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
     }
 
     // Construct pose vertex
-    VertexPose *poseVertex = new VertexPose();
+    // No need to manually release the memory since the memory will be released when calling optimizer.clear()
+    VertexPose* poseVertex = new VertexPose();
     poseVertex->setId(0);
     poseVertex->setEstimate(pnpEstimatedPose);
     optimizer_.addVertex(poseVertex);
 
     // Construct edges, optimizer.clear() will deallocate them
-    std::vector<std::pair<UnaryEdgeProjection *, bool>> edges(inliers.rows);
-    for (size_t inlierIdx = 0; inlierIdx < inliers.rows; ++inlierIdx)
+    std::list<EdgeInfo> edgesInfo;
+    for (size_t idx = 0; idx < inliers.rows; idx++)
     {
-        int pointIdx = inliers.at<int>(inlierIdx);
+        const size_t inlierIdx = inliers.at<int>(idx);
+        const size_t kptIdx = kptIndices[inlierIdx];
+        const auto mpt = matchedKptIdxToInfo_[kptIdx].mpt;
+
         // 3D -> 2D projection
-        UnaryEdgeProjection *edge = new UnaryEdgeProjection(toVector3d(pts3d[pointIdx]), camera_);
-        edge->setId(inlierIdx);
+        UnaryEdgeProjection *edge = new UnaryEdgeProjection(mpt->GetPosition(), camera_);
+        edge->setId(idx);
         edge->setVertex(0, poseVertex);
-        edge->setMeasurement(toVector2d(pts2d[pointIdx]));
+        edge->setMeasurement(toVector2d(frameCurr_->GetKeypoint(kptIdx).pt));
         edge->setInformation(Eigen::Matrix2d::Identity());
         // Each edge needs to have a separate kernel object,
         // optimizer.clear() will deallocate them
@@ -403,7 +407,7 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
         edge->setRobustKernel(rk);
 
         // false means the edge is not outlier
-        edges[inlierIdx] = std::make_pair(edge, false);
+        edgesInfo.push_back({edge, false, kptIdx});
         optimizer_.addEdge(edge);
     }
 
@@ -413,9 +417,10 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
         optimizer_.optimize(10);
 
         // Handle outlier edges
-        for (auto& [edge, isOutlier]: edges) {
+        for (auto& edgeInfo: edgesInfo) {
+            auto& edge = edgeInfo.edge;
             // Compute error for outlier edges since they won't be calculated during optimization
-            if (isOutlier) {
+            if (edgeInfo.isOutlier) {
                 edge->computeError();
             }
 
@@ -423,10 +428,10 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
             if (edge->chi2() > frontendConfig_.baInlierThres) {
                 // level 1 edges won't be optimized later
                 edge->setLevel(1);
-                isOutlier = true;
+                edgeInfo.isOutlier = true;
             } else {
                 edge->setLevel(0);
-                isOutlier = false;
+                edgeInfo.isOutlier = false;
             }
 
             if (iteration == 2) {
@@ -435,20 +440,13 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
         }
     }
 
-    // Update the inlier matched kpt -> mpt
-    std::unordered_map<size_t, MatchInfo> baInlierKptIdxToInfo;
-    for (size_t edgeIdx = 0; edgeIdx < edges.size(); ++edgeIdx)
-    {
-        if (edges[edgeIdx].second) {
-            continue;
+    // Only keep the inlier matched kpt -> mpt
+    for (auto& edgeInfo: edgesInfo) {
+        if (edgeInfo.isOutlier) {
+            matchedKptIdxToInfo_.erase(edgeInfo.kptIdx);
         }
-
-        auto pointIdx = inliers.at<int>(edgeIdx);
-        auto& kptIdx = kptIndices[pointIdx];
-        baInlierKptIdxToInfo[kptIdx] = matchedKptIdxToInfo_[kptIdx];
     }
-    printf("  Size of inlier after BA: %zu\n", baInlierKptIdxToInfo.size());
-    matchedKptIdxToInfo_ = std::move(baInlierKptIdxToInfo);
+    printf("  Size of inlier after BA: %zu\n", matchedKptIdxToInfo_.size());
 
     // Set computed pose
     frameCurr_->SetTcw(poseVertex->estimate());
@@ -511,10 +509,11 @@ void Frontend::CreateTempMappoints() {
         // If the keypoint matches with mappoint from local map, just put that mappoint into last frame mappoint
         if (matchedKptIdxToInfo_.count(kptIdx)) {
             const auto& mpt = matchedKptIdxToInfo_[kptIdx].mpt;
-            if (localMap_.count(mpt->GetId())) {
+            if (!localMap_.count(mpt->GetId())) {
+                // if it's not from local map
                 lastFrameMap_[mpt->GetId()] = mpt;
-                continue;
             }
+            continue;
         }
 
         // Check if the keypoint has depth value

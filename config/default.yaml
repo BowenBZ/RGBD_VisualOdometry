@@ -51,8 +51,8 @@ frontend.match_ratio: 2.0
 active_covisible_keyframe_weight: 15
 
 # frontend paras
-frontend.ba_inlier_threshold: 5.991
-# frontend.ba_inlier_threshold: 10
+# frontend.ba_inlier_threshold: 5.991
+frontend.ba_inlier_threshold: 4
 frontend.max_num_lost: 10
 frontend.min_inliers_for_good_estimation: 10
 frontend.min_inliers_for_new_keyframe: 30
