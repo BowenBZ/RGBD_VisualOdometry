@@ -1,12 +1,12 @@
 [submodule "dependency/Sophus"]
 	path = dependency/Sophus
 	url = https://github.com/strasdat/Sophus/
-[submodule "dependency/g2o"]
-	path = dependency/g2o
-	url = https://github.com/RainerKuemmerle/g2o
 [submodule "dependency/Pangolin"]
 	path = dependency/Pangolin
 	url = https://github.com/stevenlovegrove/Pangolin
 [submodule "dependency/opencv"]
 	path = dependency/opencv
 	url = https://github.com/opencv/opencv.git
+[submodule "g2o"]
+	path = dependency/g2o
+	url = https://github.com/BowenBZ/g2o.git

@@ -18,6 +18,8 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
 
 ############### dependencies ######################
+set(DEPENDENCY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependency")
+
 # Eigen (header-only)
 find_package(Eigen3 REQUIRED)
 include_directories(${EIGEN3_INCLUDE_DIR})
@@ -27,7 +29,7 @@ find_package(Sophus REQUIRED)
 include_directories(${SOPHUS_INCLUDE_DIR})
 
 # OpenCV
-find_package(OpenCV 3.1 REQUIRED PATHS "/Users/bowen/Source/3rd_party/build_opencv")
+find_package(OpenCV 3.4 REQUIRED PATHS "${DEPENDENCY_DIR}/opencv/build")
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 # G2O
@@ -39,7 +41,7 @@ find_package(CSPARSE REQUIRED)
 include_directories(${CSPARSE_INCLUDE_DIR})
 
 # pangolin
-find_package(Pangolin REQUIRED)
+find_package(Pangolin REQUIRED PATHS "${DEPENDENCY_DIR}/Pangolin/build")
 
 # Boost
 find_package(Boost REQUIRED COMPONENTS timer)

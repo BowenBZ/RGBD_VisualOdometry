@@ -20,3 +20,5 @@ output/
 .DS_Store
 .cache/
 tools/__pycache__/
+
+libtorch/

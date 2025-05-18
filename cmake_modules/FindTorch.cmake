@@ -1,32 +1,35 @@
+set(TORCH_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}/../dependency/libtorch")
+set(TORCH_LIB_DIR "${TORCH_BASE_DIR}/lib")
+
 # Look for torch
 find_path(TORCH_SCRIPT
   NAMES torch/script.h
   PATHS
-  /Users/bowen/Source/3rd_party/libtorch/include
+  "${TORCH_BASE_DIR}/include"
 )
 
 find_path(TORCH_NN
   NAMES torch/nn/functional.h
   PATHS
-  /Users/bowen/Source/3rd_party/libtorch/include/torch/csrc/api/include
+  "${TORCH_BASE_DIR}/include/torch/csrc/api/include"
 )
 
 FIND_LIBRARY(TORCH_CORE
   NAMES torch
   PATHS
-  /Users/bowen/Source/3rd_party/libtorch/lib
+  ${TORCH_LIB_DIR}
 )
 
 FIND_LIBRARY(TORCH_C10 
   NAMES c10
   PATHS
-  /Users/bowen/Source/3rd_party/libtorch/lib
+  ${TORCH_LIB_DIR}
 )
 
 FIND_LIBRARY(TORCH_CPU
   NAMES torch_cpu
   PATHS
-  /Users/bowen/Source/3rd_party/libtorch/lib
+  ${TORCH_LIB_DIR}
 )
 
 if(TORCH_SCRIPT AND TORCH_NN AND TORCH_CORE AND TORCH_C10 AND TORCH_CPU)

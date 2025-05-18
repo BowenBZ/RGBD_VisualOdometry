@@ -13,15 +13,18 @@ The first image shows the frame with the features drew on, and the second image 
 
 ## Requirements
 
-* Ubuntu: 18.04
+* macOS: 15.4
 * CMake
-* Opencv: 3.1
 * Eigen3
-* Sophus: commit [13fb328](https://github.com/strasdat/Sophus/tree/13fb3288311485dc94e3226b69c9b59cd06ff94e)
-* G2O: commit [9b41a4e](https://github.com/RainerKuemmerle/g2o/tree/9b41a4ea5ade8e1250b9c1b279f3a9c098811b5a)
-* Pangolin: commit [1ec721d](https://github.com/stevenlovegrove/Pangolin/tree/1ec721d59ff6b799b9c24b8817f3b7ad2c929b83)
+* Submodules
+  * Sophus
+  * Opencv
+  * G2O
+  * Pangolin
 
-You could refers to the `docker/dockerfile` for commands of how to install the dependencies.
+Use `scripts/setup_dependency.sh` to build checkout and build submodules.
+
+You could also refer to the `docker/dockerfile` for commands of how to install the dependencies.
 
 **Note**. the dockerfile contains a `display_x11.patch` file for Pangolin package, it is mainly for the docker usage because docker requires X11 to run the GUI application. If you don't develope in the docker, you don't need to apply this patch.
 

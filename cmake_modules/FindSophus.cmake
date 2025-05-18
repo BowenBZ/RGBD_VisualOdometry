@@ -2,7 +2,7 @@
 find_path(SOPHUS_INCLUDE_DIR
   NAMES sophus/so3.hpp
   PATHS
-  /Users/bowen/Source/3rd_party/Sophus
+  "${CMAKE_CURRENT_LIST_DIR}/../dependency/Sophus"
 )
 
 if(SOPHUS_INCLUDE_DIR)

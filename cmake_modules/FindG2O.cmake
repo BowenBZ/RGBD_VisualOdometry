@@ -1,14 +1,17 @@
+set(G2O_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}/../dependency/g2o")
+set(G2O_LIB_DIR "${G2O_BASE_DIR}/lib")
+
 # Find the header files
 find_path(G2O_INCLUDE_DIR 
   NAME g2o/core/base_vertex.h
   PATHS
-  /Users/bowen/Source/3rd_party/g2o  
+  ${G2O_BASE_DIR}
 )
 
 find_path(G2O_CONFIG_DIR 
   NAME g2o/config.h
   PATHS
-  /Users/bowen/Source/3rd_party/build_g2o  
+  "${G2O_BASE_DIR}/build"
 )
 
 # Macro to unify finding both the debug and release versions of the
@@ -20,13 +23,13 @@ MACRO(FIND_G2O_LIBRARY MYLIBRARY MYLIBRARYNAME)
   FIND_LIBRARY("${MYLIBRARY}_DEBUG"
     NAMES "g2o_${MYLIBRARYNAME}_d"
     PATHS
-    /Users/bowen/Source/3rd_party/g2o/lib
+    ${G2O_LIB_DIR}
   )
 
   FIND_LIBRARY(${MYLIBRARY}
     NAMES "g2o_${MYLIBRARYNAME}"
     PATHS
-    /Users/bowen/Source/3rd_party/g2o/lib
+    ${G2O_LIB_DIR}
    )
   
   IF(NOT ${MYLIBRARY}_DEBUG)
