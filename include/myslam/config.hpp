@@ -24,10 +24,10 @@ public:
     static void setParameterFile( const std::string& filename ); 
     
     // access the parameter values
-    template< typename T >
-    static T get( const std::string& key )
+    template<typename T>
+    static T get(const std::string& key)
     {
-        return T( Config::config_->file_[key] );
+        return T(Config::config_->file_[key]);
     }
 };
 }

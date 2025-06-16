@@ -66,5 +66,7 @@ target_include_directories(myslam
     PRIVATE ${PROJECT_SOURCE_DIR}/include/myslam/private
 )
 
-add_subdirectory( app )
-# add_subdirectory( gtest )
+add_subdirectory(app)
+
+add_subdirectory("${DEPENDENCY_DIR}/googletest")
+add_subdirectory(test)

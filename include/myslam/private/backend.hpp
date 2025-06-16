@@ -119,6 +119,8 @@ private:
     // project more existing mappoint to new keyframe
     void ProjectMoreMappointsToNewKeyframe();
 
+    void ProjectMoreMappointsToNewKeyframeNN();
+
     // perform the optimization for local map
     void OptimizeLocalMap();
 

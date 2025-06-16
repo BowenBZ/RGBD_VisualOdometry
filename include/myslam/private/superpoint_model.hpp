@@ -24,10 +24,12 @@ public:
 
     /*
     Input
-      img - OpenCV cv::Mat grayscale float32 input image in range [0,1].
+      img - OpenCV cv::Mat grayscale float32 input image in range [0,1]
     Output
       corners - std::vector of corners
       desc - std::vector of unit unit normalized descriptors. (256, N)
+
+    Input image will be resized to (width: 320, height: 240) internally, but the corners are position in original image
     */
     void Process(const cv::Mat& image, std::vector<CornerPoint>& corners, cv::Mat& desc);
 

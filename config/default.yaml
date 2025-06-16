@@ -6,10 +6,10 @@ dataset_dir: /Users/bowen/Source/dataset/rgbd_dataset_freiburg1_xyz
 output_file: ./output/output.txt
 
 # single step mode
-single_step: 0
+single_step.enable: 0
 
 # viewer paras
-enable_viewer: 0
+viewer.enable: 0
 
 # camera intrinsics
 # Freiburg 1 RGB
@@ -17,40 +17,37 @@ camera.fx: 517.3
 camera.fy: 516.5
 camera.cx: 318.6
 camera.cy: 255.3
-
 camera.depth_scale: 5000
 
 # Frame configs
 frame.width: 640
 frame.height: 480
+frame.active_covisible_keyframe_weight: 15
 
-# SuperPoint model path
-superpoint.enable: 1
+frame.orb.number_of_features: 500
+frame.orb.scale_factor: 1.2
+frame.orb.level_pyramid: 8
+frame.orb.row_section_cnt: 2
+frame.orb.col_section_cnt: 2
+
+frame.active_search.grid_size: 10
+frame.active_search.search_grid_radius: 2
+frame.active_search.max_matched_descriptor_distance_orb: 30
+frame.active_search.min_best_secondary_distance_ratio_orb: 0.5
+
+# SuperPoint config
 superpoint.path: ./model/superpoint_converted.pt
 superpoint.confidenceThresh: 0.015
 superpoint.distThresh: 4
 superpoint.nnThresh: 0.7
 
-# keypoints extraction paras
-frontend.number_of_features: 500
-frontend.scale_factor: 1.2
-frontend.level_pyramid: 8
-frontend.row_section_cnt: 2
-frontend.col_section_cnt: 2
+# Frontend params
+frontend.use_superpoint: 1
+frontend.use_active_search: 0
 
-# active feature matching paras
-pixel_grid_size: 10
-search_grid_radius: 10
-max_descriptor_distance: 30
-min_best_secondary_distance_ratio: 0.5
 
-# flann feature matching paras
 frontend.match_ratio: 2.0
 
-# covisible paras
-active_covisible_keyframe_weight: 15
-
-# frontend paras
 # frontend.ba_inlier_threshold: 5.991
 frontend.ba_inlier_threshold: 4
 frontend.max_num_lost: 10
@@ -59,7 +56,7 @@ frontend.min_inliers_for_new_keyframe: 30
 frontend.max_frame_rotation_allowed: 0.05
 frontend.max_frame_translation_allowed: 0.05
 
-# backend paras
+# backend params
 backend.ba_inlier_threshold: 5.991
 backend.re_match_descriptor_distance: 10
 backend.re_match_descriptor_distance_superpoint: 0.7

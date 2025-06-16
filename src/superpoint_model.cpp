@@ -23,8 +23,10 @@ void SuperPointModel::Process(const cv::Mat& image, std::vector<CornerPoint>& co
 
     cv::Mat resizedImage;
     cv::cvtColor(image, resizedImage, cv::COLOR_BGR2GRAY);
-    // Resize input image from 640x480 to 320x240
-    cv::resize(resizedImage, resizedImage, {320, 240}, 0, 0, cv::INTER_LINEAR);
+    const float widthFactor = (float)image.size().width / _resize.width;
+    const float heightFactor = (float)image.size().height / _resize.height;
+    // Resize input image (from 640x480) to 320x240
+    cv::resize(resizedImage, resizedImage, _resize, 0, 0, cv::INTER_LINEAR);
     // Input image is in CV_8U, need to convert to float type
     resizedImage.convertTo(resizedImage, CV_32F, 1.0 / 255);
 
@@ -115,10 +117,10 @@ void SuperPointModel::Process(const cv::Mat& image, std::vector<CornerPoint>& co
 
     // Construct output pts
     auto accessor = selectedPts.accessor<float, 2>();
-    // Since the image are resized to half res, we need to convert it back for pixel positions
+    // Since the image are resized, we need to convert the keypoint position back to the original pixel position
     const int scaler = 2;
     for (int i = 0; i < selectedPts.size(1); i++) {
-        corners.push_back({(int)accessor[0][i] * 2, (int)accessor[1][i] * 2, accessor[2][i]});
+        corners.push_back({(int)(accessor[0][i] * widthFactor), (int)(accessor[1][i] * heightFactor), accessor[2][i]});
     }
 
     // Construct output descriptors

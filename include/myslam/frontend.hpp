@@ -25,6 +25,8 @@
 namespace myslam 
 {
 
+#pragma mark - forward declaration
+
 class Frame;
 struct FrameConfig;
 class Mappoint;
@@ -33,13 +35,12 @@ class SuperPointModel;
 class Backend;
 class UnaryEdgeProjection;
 
-typedef struct {
-    double timestamp;
-    cv::Mat color;
-    cv::Mat depth;
-} Measurement;
+#pragma mark - frontend types
 
-typedef struct {
+struct FrontendConfig {
+    bool                    useSuperpoint;
+    bool                    useActiveSearch;
+
     float                   minDisRatio;       // Ratio for selecting flann good matches
 
     double                  baInlierThres;     // Threshold to be consider as an inlier after BA
@@ -49,7 +50,17 @@ typedef struct {
     double                  maxFrameTransAllowed;  // minimal translation of two key-frames
 
     size_t                  maxLostFrames;     // Max number of lost tracking frames
-} FrontendConfig;
+
+    FrontendConfig();
+};
+
+struct Measurement{
+    double timestamp;
+    cv::Mat color;
+    cv::Mat depth;
+};
+
+#pragma mark - class Frontend
 
 class Frontend
 {
@@ -99,15 +110,14 @@ private:
         "Lost" 
     };                                          // used for logging
 
-    std::shared_ptr<struct FrameConfig> frameConfig_;
-    FrontendConfig          frontendConfig_;
+    std::shared_ptr<FrameConfig>        frameConfig_;
+    FrontendConfig                      frontendConfig_;
 
     std::shared_ptr<Camera>             camera_;
     Viewer::Ptr                         viewer_;
     std::shared_ptr<Backend>            backend_;
     MapManager*                         mapManager_;
     std::shared_ptr<SuperPointModel>    superpointModel_;
-    bool                                enableSuperpoint_;
 
     VOState                 state_;             // current VO status
     size_t                  accuLostFrameNums_; // number of lost times
@@ -171,6 +181,11 @@ private:
 
     /// Match current frame's keypoints with tracking map and then last frame
     void MatchKeyPointsWithTrackingMapAndLastFrameNN();
+
+    /// Find matched keypoints by projecting mappoints to current frame
+    /// @param trackingMap the mappoints to track against
+    /// @param trackingMapInfo metadata of mappoints
+    void MatchKeyPointsWithMappointsActiveSearch(TrackingMap& trackingMap, TrackingMapInfo&);
 
     // Estimate the pose with 3D-2D methods (mappoint, keypoint)
     void EstimateCurrentFramePose(const bool doMotionBA); 

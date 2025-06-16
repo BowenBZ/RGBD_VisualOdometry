@@ -1,5 +1,6 @@
 #include "myslam/private/frame.hpp"
 
+#include "myslam/config.hpp"
 #include "myslam/private/util.hpp"
 #include "myslam/private/mapmanager.hpp"
 #include "myslam/private/superpoint_model.hpp"
@@ -8,6 +9,37 @@
 
 namespace myslam
 {
+
+#pragma mark - Frame Config
+
+FrameConfig::FrameConfig() {
+    imgCols = Config::get<int>("frame.width");
+    imgRows = Config::get<int>("frame.height");
+    activeCovisibleWeight = Config::get<int>("frame.active_covisible_keyframe_weight");
+
+    orbConfig.numOfFeatures = Config::get<int>("frame.orb.number_of_features");
+    orbConfig.scaleFactor = Config::get<float>("frame.orb.scale_factor");
+    orbConfig.levelPyramid = Config::get<int>("frame.orb.level_pyramid");
+    orbConfig.rowSectionCnt = Config::get<int>("frame.orb.row_section_cnt");
+    orbConfig.colSectionCnt = Config::get<int>("frame.orb.col_section_cnt");
+
+    searchConfig.gridSize = Config::get<int>("frame.active_search.grid_size");
+    searchConfig.gridColCnt = ceil((double)imgCols / searchConfig.gridSize);
+    searchConfig.gridRowCnt = ceil((double)imgRows / searchConfig.gridSize);
+    searchConfig.searchGridRadius = Config::get<int>("frame.active_search.search_grid_radius");
+    searchConfig.descriptorMatchDistanceThreshORB = Config::get<double>("frame.active_search.max_matched_descriptor_distance_orb");
+    searchConfig.secondaryBestMatchDistanceRatioORB = Config::get<double>("frame.active_search.min_best_secondary_distance_ratio_orb");
+}
+
+#pragma mark - keypoint info
+
+struct GridInfo {
+    size_t id;
+    size_t rowIdx;
+    size_t colIdx;
+};
+
+#pragma mark - class Frame
 
 size_t Frame::factoryId_ = 0;
 
@@ -64,12 +96,12 @@ double Frame::GetDepth(const cv::KeyPoint& kp)
 
 #pragma mark - Feature extraction
 
-void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& detector) {
+void Frame::ExtractKeyPointsAndComputeDescriptorsORB(const cv::Ptr<cv::Feature2D>& detector) {
     
-    size_t rowPerSection = config_->imgRows / config_->rowSectionCnt;
-    size_t colPerSection = config_->imgCols / config_->colSectionCnt;
-    for(size_t rowSection = 0; rowSection < config_->rowSectionCnt; ++rowSection) {
-        for (size_t colSection = 0; colSection < config_->colSectionCnt; ++colSection) {
+    size_t rowPerSection = config_->imgRows / config_->orbConfig.rowSectionCnt;
+    size_t colPerSection = config_->imgCols / config_->orbConfig.colSectionCnt;
+    for(size_t rowSection = 0; rowSection < config_->orbConfig.rowSectionCnt; ++rowSection) {
+        for (size_t colSection = 0; colSection < config_->orbConfig.colSectionCnt; ++colSection) {
             size_t rowStartIdx = rowPerSection * rowSection;
             size_t rowEndIdx = rowPerSection * (rowSection + 1);
             size_t colStartIdx = colPerSection * colSection;
@@ -82,7 +114,7 @@ void Frame::ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& 
             cv::Mat des;
             detector->detectAndCompute(color_(rowRange, colRange), cv::Mat(), kpts, des);
 
-            for (size_t idx = 0; idx < std::min(kpts.size(), config_->maxFeaturesCnt / (config_->rowSectionCnt * config_->colSectionCnt)); ++idx) {
+            for (size_t idx = 0; idx < std::min(kpts.size(), config_->orbConfig.numOfFeatures / (config_->orbConfig.rowSectionCnt * config_->orbConfig.colSectionCnt)); ++idx) {
                 auto& kpt = kpts[idx];
                 kpt.pt.x += colStartIdx;
                 kpt.pt.y += rowStartIdx;
@@ -114,28 +146,18 @@ void Frame::ExtractKeypointsAndDescriptorsWithSuperPointModel(const SuperPointMo
     ConstructKeypointGrids();
 }
 
-void Frame::ConstructKeypointGrids() {
-    for (size_t i = 0; i < keypointInfo_.size(); ++i) {
-        auto& kptPos = keypointInfo_[i].keypoint.pt;
-        size_t gridIdx = GetGridIdx(kptPos.x, kptPos.y);
-        gridToKptIdx_[gridIdx].push_back(i);
-    }
-}
-
 #pragma mark - Feature matching
 
-bool Frame::SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, float& distance, bool& mayObserveMpt) {
-    mayObserveMpt = false;
-
+std::optional<KptMatchResult> Frame::SearchORBKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool doDirectionCheck) {
     Vector3d posInCam = T_c_w_ * mpt->GetPosition();
     if (posInCam[2] < 0) {
-        return false;
+        return std::nullopt;
     } 
     
     Vector2d pixelPos = camera_->Camera2Pixel(posInCam);
     if (pixelPos[0] < 0 || pixelPos[0] >= config_->imgCols ||
         pixelPos[1] < 0 || pixelPos[1] >= config_->imgRows) {
-        return false;
+        return std::nullopt;
     }
 
     if (doDirectionCheck) {
@@ -143,69 +165,64 @@ bool Frame::SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool do
         direction.normalize();
         double angle = acos( direction.transpose() * mpt->GetNormDirection() );
         if ( angle > M_PI / 6 ) {
-            return false;
+            return std::nullopt;
         }
     }
-
-    // This frame may observe this mappoint, but not gurantee to have a matched keypoint
-    // This is used by the fallback flann feature matching
-    mayObserveMpt = true;
     
-    const size_t mptGridIdx = GetGridIdx(pixelPos[0], pixelPos[1]);
-    std::list<size_t> nearbyGrids;
-    getNearbyGrids(mptGridIdx, nearbyGrids);
-    std::vector<std::pair<size_t, double>> kptIdxToDistance;
-    for (auto& gridIdx: nearbyGrids) {
+    GridInfo gridInfo;
+    KeypointPosToGridInfo(pixelPos[0], pixelPos[1], gridInfo);
+    std::list<GridInfo> nearbyGrids;
+    GetNearbyGrids(gridInfo, nearbyGrids);
+    std::vector<KptMatchResult> matchResults;
+    for (auto& nearbyGrid: nearbyGrids) {
         // This grid doesn't contain any keypoint
-        if (!gridToKptIdx_.count(gridIdx)) {
+        if (!gridToKptIdx_.count(nearbyGrid.id)) {
             continue;
         }
 
-        for (auto& kptIdx: gridToKptIdx_[gridIdx]) {
-            double distance = ComputeDescriptorHammingDistance(
+        for (auto& kptIdx: gridToKptIdx_[nearbyGrid.id]) {
+            const float distance = ComputeDescriptorHammingDistance(
                 mpt->GetDescriptor(), 0, 
                 keypointInfo_[kptIdx].descriptor, 0);
 
-            kptIdxToDistance.push_back({kptIdx, distance});
+            matchResults.push_back({kptIdx, distance});
         }
     }
 
-    if (kptIdxToDistance.empty()) {
-        return false;
+    if (matchResults.empty()) {
+        return std::nullopt;
     }
 
-    sort(kptIdxToDistance.begin(), kptIdxToDistance.end(), 
-        [](const std::pair<size_t, double>& kpt1, const std::pair<size_t, double>& kpt2) {
-            return kpt1.second < kpt2.second;
+    sort(matchResults.begin(), matchResults.end(), 
+        [](const KptMatchResult& res1, const KptMatchResult& res2) {
+            return res1.distance < res2.distance;
         });
 
-    const std::pair<size_t, double>& bestKptToDistance = kptIdxToDistance[0];
-    if (bestKptToDistance.second > config_->descriptorDistanceThres) {
-        return false;
+    const auto& bestMatch = matchResults[0];
+    if (bestMatch.distance > config_->searchConfig.descriptorMatchDistanceThreshORB) {
+        return std::nullopt;
     }
 
-    if (kptIdxToDistance.size() >= 2) {
-        const std::pair<size_t, double>& secondKptToDistance = kptIdxToDistance[1];
-        if (bestKptToDistance.second / secondKptToDistance.second < config_->bestSecondaryDistanceRatio) {
-            return false;
+    if (matchResults.size() >= 2) {
+        const auto& secondBestMatch = matchResults[1];
+        if (bestMatch.distance / secondBestMatch.distance < config_->searchConfig.secondaryBestMatchDistanceRatioORB) {
+            return std::nullopt;
         }
     }
     
-    kptIdx = bestKptToDistance.first;
-    distance = bestKptToDistance.second;
-    return true;
+    return bestMatch;
 }
 
-bool Frame::SearchSuperpointKeypointMatchCandidate(const Mappoint::Ptr& mpt, const float distanceMatchThresh, const std::optional<float> distanceRatioThresh, size_t& kptIdx, float& distance) {
+std::optional<KptMatchResult> Frame::SearchSuperpointKeypointMatchCandidate(const Mappoint::Ptr& mpt, const float distanceMatchThresh, const std::optional<float> distanceRatioThresh) {
     Vector3d posInCam = T_c_w_ * mpt->GetPosition();
     if (posInCam[2] < 0) {
-        return false;
+        return std::nullopt;
     } 
     
     Vector2d pixelPos = camera_->Camera2Pixel(posInCam);
     if (pixelPos[0] < 0 || pixelPos[0] >= config_->imgCols ||
         pixelPos[1] < 0 || pixelPos[1] >= config_->imgRows) {
-        return false;
+        return std::nullopt;
     }
 
     /*
@@ -217,74 +234,86 @@ bool Frame::SearchSuperpointKeypointMatchCandidate(const Mappoint::Ptr& mpt, con
         }
     */
 
-    const size_t mptGridIdx = GetGridIdx(pixelPos[0], pixelPos[1]);
-    std::list<size_t> nearbyGrids;
-    getNearbyGrids(mptGridIdx, nearbyGrids);
-    std::vector<std::pair<size_t, double>> kptIdxToDistance;
-    for (auto& gridIdx: nearbyGrids) {
+    GridInfo gridInfo;
+    KeypointPosToGridInfo(pixelPos[0], pixelPos[1], gridInfo);
+    std::list<GridInfo> nearbyGrids;
+    GetNearbyGrids(gridInfo, nearbyGrids);
+
+    std::vector<KptMatchResult> matchResults;
+    for (auto& nearbyGridInfo: nearbyGrids) {
         // This grid doesn't contain any keypoint
-        if (!gridToKptIdx_.count(gridIdx)) {
+        if (!gridToKptIdx_.count(nearbyGridInfo.id)) {
             continue;
         }
 
-        for (auto& kptIdx: gridToKptIdx_[gridIdx]) {
-            double distance = ComputeSuperpointDescriptorL2Distance(
+        for (auto& kptIdx: gridToKptIdx_[nearbyGridInfo.id]) {
+            float distance = ComputeSuperpointDescriptorL2Distance(
                 mpt->GetDescriptor(), keypointInfo_[kptIdx].descriptor);
 
-            kptIdxToDistance.push_back({kptIdx, distance});
+            matchResults.push_back({kptIdx, distance});
         }
     }
 
-    if (kptIdxToDistance.empty()) {
-        return false;
+    if (matchResults.empty()) {
+        return std::nullopt;
     }
 
-    sort(kptIdxToDistance.begin(), kptIdxToDistance.end(), 
-        [](const std::pair<size_t, double>& kpt1, const std::pair<size_t, double>& kpt2) {
-            return kpt1.second < kpt2.second;
+    sort(matchResults.begin(), matchResults.end(), 
+        [](const KptMatchResult& res1, const KptMatchResult& res2) {
+            return res1.distance < res2.distance;
         });
 
-    const std::pair<size_t, double>& bestKptToDistance = kptIdxToDistance[0];
-    if (bestKptToDistance.second > distanceMatchThresh) {
-        return false;
+    const auto& bestMatch = matchResults[0];
+    if (bestMatch.distance > distanceMatchThresh) {
+        return std::nullopt;
     }
 
-    if (distanceRatioThresh.has_value() && kptIdxToDistance.size() >= 2) {
-        const std::pair<size_t, double>& secondKptToDistance = kptIdxToDistance[1];
-        if (bestKptToDistance.second / secondKptToDistance.second < distanceRatioThresh.value()) {
-            return false;
+    if (distanceRatioThresh.has_value() && matchResults.size() >= 2) {
+        const auto& secondBestMatch = matchResults[1];
+        if (bestMatch.distance / secondBestMatch.distance < distanceRatioThresh.value()) {
+            return std::nullopt;
         }
     }
-    
-    kptIdx = bestKptToDistance.first;
-    distance = bestKptToDistance.second;
-    return true;
+
+    return bestMatch;
 }
 
-size_t Frame::GetGridIdx(double x, double y) {
-    size_t colIdx = (size_t)floor(x / config_->gridSize);
-    size_t rowIdx = (size_t)floor(y / config_->gridSize);
-    return GetGridIdx(colIdx, rowIdx);
+#pragma mark - Grid indexing
+
+void Frame::ConstructKeypointGrids() {
+    for (size_t i = 0; i < keypointInfo_.size(); ++i) {
+        auto& kptPos = keypointInfo_[i].keypoint.pt;
+        GridInfo gridInfo;
+        KeypointPosToGridInfo(kptPos.x, kptPos.y, gridInfo);
+        gridToKptIdx_[gridInfo.id].push_back(i);
+    }
 }
 
-size_t Frame::GetGridIdx(size_t colIdx, size_t rowIdx) {
-    return rowIdx * config_->gridColCnt + colIdx;
+void Frame::KeypointPosToGridInfo(const double x, const double y, GridInfo& gridInfo) {
+    gridInfo.colIdx = (size_t)floor(x / config_->searchConfig.gridSize);
+    gridInfo.rowIdx = (size_t)floor(y / config_->searchConfig.gridSize);
+    PopulateGridId(gridInfo);
 }
 
-void Frame::getNearbyGrids(size_t gridIdx, std::list<size_t>& nearbyGrids) {
+void Frame::PopulateGridId(GridInfo& gridInfo) {
+    gridInfo.id = gridInfo.rowIdx * config_->searchConfig.gridColCnt + gridInfo.colIdx;
+}
+
+void Frame::GetNearbyGrids(const GridInfo& gridInfo, std::list<GridInfo>& nearbyGrids) {
     nearbyGrids.clear();
 
-    size_t rowIdx = gridIdx / config_->gridColCnt;
-    size_t colIdx = gridIdx - rowIdx * config_->gridColCnt;
+    for (int drow = -config_->searchConfig.searchGridRadius; drow <= config_->searchConfig.searchGridRadius; ++drow) {
+        for (int dcol = -config_->searchConfig.searchGridRadius; dcol <= config_->searchConfig.searchGridRadius; ++dcol) {
+            int row = (int)(gridInfo.rowIdx) + drow;
+            int col = (int)(gridInfo.colIdx) + dcol;
 
-    for (int drow = -config_->searchGridRadius; drow <= config_->searchGridRadius; ++drow) {
-        for (int dcol = -config_->searchGridRadius; dcol <= config_->searchGridRadius; ++dcol) {
-            int row = (int)rowIdx + drow;
-            int col = (int)colIdx + dcol;
-
-            if (row >= 0 && row < config_->gridRowCnt &&
-                col >= 0 && col < config_->gridColCnt) {
-                    nearbyGrids.push_back(GetGridIdx((size_t)row, (size_t)col));
+            if (row >= 0 && row < config_->searchConfig.gridRowCnt &&
+                col >= 0 && col < config_->searchConfig.gridColCnt) {
+                    GridInfo gridInfo;
+                    gridInfo.rowIdx = row;
+                    gridInfo.colIdx = col;
+                    PopulateGridId(gridInfo);
+                    nearbyGrids.push_back(gridInfo);
                 }
         }
     }

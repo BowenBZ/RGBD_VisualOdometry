@@ -19,31 +19,45 @@
 namespace myslam
 {
 
+#pragma mark - config
+
+FrontendConfig::FrontendConfig() {
+    useSuperpoint = Config::get<int>("frontend.use_superpoint");
+    useActiveSearch = Config::get<float>("frontend.use_active_search");
+    minDisRatio = Config::get<float>("frontend.match_ratio");
+    baInlierThres = Config::get<double>("frontend.ba_inlier_threshold");
+    minInliersForGood = Config::get<int>("frontend.min_inliers_for_good_estimation");
+    maxLostFrames = Config::get<float>("frontend.max_num_lost");
+    minInliersForKeyframe = Config::get<int>("frontend.min_inliers_for_new_keyframe");
+    maxFrameRotAllowed = Config::get<double>("frontend.max_frame_rotation_allowed");
+    maxFrameTransAllowed = Config::get<double>("frontend.max_frame_translation_allowed");
+};
+
+#pragma mark - state control
+
 Frontend::Frontend(const Camera::Ptr& camera): camera_(camera), mapManager_(&MapManager::Instance()) {
-    // Setup superpoint model
-    superpointModel_ = SuperPointModel::Ptr(new SuperPointModel(Config::get<std::string>("superpoint.path"), 
-                                                                Config::get<double>("superpoint.confidenceThresh"),
-                                                                Config::get<double>("superpoint.distThresh")));
-    enableSuperpoint_ = Config::get<int>("superpoint.enable");
-    nnThresh_ = Config::get<float>("superpoint.nnThresh");
-    printf("SuperModel is initialized: %d\n", superpointModel_->Initialized());
-
     // Setup frontend config
-    frontendConfig_.minDisRatio = Config::get<float>("frontend.match_ratio");
-    frontendConfig_.baInlierThres = Config::get<double>("frontend.ba_inlier_threshold");
-    frontendConfig_.minInliersForGood = (size_t)Config::get<int>("frontend.min_inliers_for_good_estimation");
-    frontendConfig_.maxLostFrames = Config::get<float>("frontend.max_num_lost");
-    frontendConfig_.minInliersForKeyframe = (size_t)Config::get<int>("frontend.min_inliers_for_new_keyframe");
-    frontendConfig_.maxFrameRotAllowed = Config::get<double>("frontend.max_frame_rotation_allowed");
-    frontendConfig_.maxFrameTransAllowed = Config::get<double>("frontend.max_frame_translation_allowed");
+    frontendConfig_ = FrontendConfig();
+    
+    // Setup frame configs
+    frameConfig_ = FrameConfig::Ptr(new FrameConfig());
 
-    // Feature detector and matcher
-    orb_ = cv::ORB::create(Config::get<int>("frontend.number_of_features") / (Config::get<int>("frontend.row_section_cnt") * Config::get<int>("frontend.col_section_cnt")),
-                            Config::get<double>("frontend.scale_factor"),
-                            Config::get<int>("frontend.level_pyramid"));
-    flannMatcher_ = cv::FlannBasedMatcher(new cv::flann::LshIndexParams(5, 10, 2));
-
-    // Motion-only BA solver
+    if (frontendConfig_.useSuperpoint) {
+        // Setup superpoint model
+        superpointModel_ = SuperPointModel::Ptr(new SuperPointModel(Config::get<std::string>("superpoint.path"), 
+                                                                    Config::get<double>("superpoint.confidenceThresh"),
+                                                                    Config::get<double>("superpoint.distThresh")));
+        nnThresh_ = Config::get<float>("superpoint.nnThresh");
+        printf("SuperModel is initialized: %d\n", superpointModel_->Initialized());
+    } else {
+        // Setup ORB feature detector and matcher
+        orb_ = cv::ORB::create(frameConfig_->orbConfig.numOfFeatures / (frameConfig_->orbConfig.rowSectionCnt * frameConfig_->orbConfig.colSectionCnt),
+    frameConfig_->orbConfig.scaleFactor, 
+        frameConfig_->orbConfig.levelPyramid);
+        flannMatcher_ = cv::FlannBasedMatcher(new cv::flann::LshIndexParams(5, 10, 2));
+    }
+    
+    // Frontend motion-only BA solver
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
         g2o::make_unique<BlockSolverType>(g2o::make_unique<DenseLinearSolverType>()));
     optimizer_.setAlgorithm(solver);
@@ -54,26 +68,6 @@ Frontend::Frontend(const Camera::Ptr& camera): camera_(camera), mapManager_(&Map
             [&](std::function<void(TrackingMap&)> updater) {
                 UpdateTrackingMap(updater);
             });
-
-    // Setup frame configs
-    frameConfig_ = std::shared_ptr<struct FrameConfig>(new struct FrameConfig);
-    frameConfig_->maxFeaturesCnt = (size_t)Config::get<int>("frontend.number_of_features");
-    frameConfig_->rowSectionCnt = (size_t)Config::get<int>("frontend.row_section_cnt");
-    frameConfig_->colSectionCnt = (size_t)Config::get<int>("frontend.col_section_cnt");
-
-    frameConfig_->imgCols = (size_t)Config::get<int>("frame.width");
-    frameConfig_->imgRows = (size_t)Config::get<int>("frame.height");
-
-    frameConfig_->gridSize = (size_t)Config::get<double>("pixel_grid_size");
-    frameConfig_->gridColCnt = (size_t)ceil((double)frameConfig_->imgCols / frameConfig_->gridSize);
-    frameConfig_->gridRowCnt = (size_t)ceil((double)frameConfig_->imgCols / frameConfig_->gridSize);
-
-    frameConfig_->searchGridRadius = Config::get<int>("search_grid_radius");
-
-    frameConfig_->descriptorDistanceThres = Config::get<double>("max_descriptor_distance");
-    frameConfig_->bestSecondaryDistanceRatio = Config::get<double>("min_best_secondary_distance_ratio");
-
-    frameConfig_->activeCovisibleWeight = (size_t)Config::get<double>("active_covisible_keyframe_weight");
 
     state_ = INITIALIZING;
 }
@@ -94,11 +88,12 @@ bool Frontend::AddFrame(const Measurement& measurement)
             measurement.depth);
     frameCurr_ = frame;
 
-    if (enableSuperpoint_) {
+    if (frontendConfig_.useSuperpoint) {
         frameCurr_->ExtractKeypointsAndDescriptorsWithSuperPointModel(superpointModel_);
     } else {
-        frameCurr_->ExtractKeyPointsAndComputeDescriptors(orb_);
+        frameCurr_->ExtractKeyPointsAndComputeDescriptorsORB(orb_);
     }
+
     switch (state_)
     {
         case INITIALIZING:
@@ -164,11 +159,21 @@ bool Frontend::TrackingHandler() {
 
     // Compute pose based on last frame mappoints
     matchedKptIdxToInfo_.clear();
-    if (enableSuperpoint_) {
-        printf("Feature matching\n");
-        MatchKeyPointsWithTrackingMapAndLastFrameNN();
-        printf("Estimate pose\n");
-        EstimateCurrentFramePose(true);
+    if (frontendConfig_.useSuperpoint) {
+        if (frontendConfig_.useActiveSearch) {
+            printf("Frame tracking\n");
+            MatchKeyPointsWithMappointsActiveSearch(lastFrameMap_, lastFrameMapInfo_);
+            EstimateCurrentFramePose(true);
+
+            MatchKeyPointsWithMappointsActiveSearch(localMap_, localMapInfo_);
+            EstimateCurrentFramePose(true);
+        } else {
+            // NN match 
+            printf("Feature matching\n");
+            MatchKeyPointsWithTrackingMapAndLastFrameNN();
+            printf("Estimate pose\n");
+            EstimateCurrentFramePose(true);
+        }
     } else {
         printf("Frame tracking\n");
         MatchKeyPointsWithMappoints(lastFrameMap_, lastFrameMapInfo_);
@@ -334,6 +339,28 @@ void Frontend::MatchKeyPointsWithTrackingMapAndLastFrameNN() {
 
     printf("  Size of matched <keypoint, mappoint> pairs: %zu (%zu + %zu)\n", 
                 totalMatchedCnt, trackingMapMatchedCnt, tempMatchedCnt);
+}
+
+void Frontend::MatchKeyPointsWithMappointsActiveSearch(TrackingMap& trackingMap, TrackingMapInfo& info) {
+    matchedKptIdxToInfo_.clear();
+
+    float distanceThresh = 0.7;
+    for(const auto& [mptId, mpt]: trackingMap) {
+        const auto& matchResult = frameCurr_->SearchSuperpointKeypointMatchCandidate(mpt, distanceThresh, std::nullopt);
+
+        if (!matchResult.has_value()) {
+            continue;
+        }
+
+        const auto& kptIdx = matchResult->keypointIdx;
+        const auto& distance = matchResult->distance;
+        if ((matchedKptIdxToInfo_.count(kptIdx) && distance < matchedKptIdxToInfo_[kptIdx].distance) ||
+            !matchedKptIdxToInfo_.count(kptIdx)) {
+            matchedKptIdxToInfo_[kptIdx] = {mpt, distance};
+        }
+    }
+
+    printf("  Matched mpts %zu / %zu", matchedKptIdxToInfo_.size(), trackingMap.size());
 }
 
 #pragma mark - Motion-only BA
@@ -529,7 +556,7 @@ void Frontend::CreateTempMappoints() {
         
         // Create a mappoint
         // all parameters will have a deep copy inside the constructor
-        Mappoint::Ptr mpt = Mappoint::CreateMappoint(mptPos, frameCurr_->GetDescriptor(kptIdx), enableSuperpoint_);
+        Mappoint::Ptr mpt = Mappoint::CreateMappoint(mptPos, frameCurr_->GetDescriptor(kptIdx), frontendConfig_.useSuperpoint);
 
         lastFrameMap_[mpt->GetId()] = mpt;
         kptIdxToNewMpt_[kptIdx] = mpt;

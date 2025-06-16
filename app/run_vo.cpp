@@ -65,7 +65,7 @@ int main ( int argc, char** argv )
     myslam::Camera::Ptr camera ( new myslam::Camera );
     myslam::Frontend::Ptr frontend ( new myslam::Frontend(camera) );
     myslam::Viewer::Ptr viewer;
-    const bool enable_viewer = myslam::Config::get<int> ( "enable_viewer" );
+    const bool enable_viewer = myslam::Config::get<int> ( "viewer.enable" );
     if (enable_viewer) {
         cout << "Enable to show image" << endl; 
         viewer = myslam::Viewer::Ptr( new myslam::Viewer );
@@ -73,7 +73,7 @@ int main ( int argc, char** argv )
     }
     cout << "Finish initialization!\n\n" << endl;
     
-    bool pauseEveryFrame = (myslam::Config::get<int>("single_step") == 1);
+    bool pauseEveryFrame = (myslam::Config::get<int>("single_step.enable") == 1);
     for ( size_t i = 0; i < rgbFiles.size(); ++i )
     {
         if (pauseEveryFrame) {

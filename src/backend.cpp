@@ -1,5 +1,6 @@
 #include "myslam/private/backend.hpp"
 
+#include "frame.hpp"
 #include "myslam/private/mappoint.hpp"
 #include "myslam/private/mapmanager.hpp"
 #include "myslam/private/util.hpp"
@@ -16,7 +17,7 @@ Backend::Backend(const Camera::Ptr camera): camera_(camera), mapManager_(&MapMan
     config_.reMatchDescriptorDistance = Config::get<double>("backend.re_match_descriptor_distance");
     config_.reMatchDescriptorDistanceSuperpoint = Config::get<double>("backend.re_match_descriptor_distance_superpoint");
 
-    superpointEnabled_ = Config::get<int>("superpoint.enable");
+    superpointEnabled_ = Config::get<int>("frontend.use_superpoint");
 
     auto solver = new g2o::OptimizationAlgorithmLevenberg(
         g2o::make_unique<BlockSolverType>(g2o::make_unique<CSparseLinearSolverType>()));
@@ -63,7 +64,7 @@ void Backend::BackendLoop()
 
             boost::timer::cpu_timer timer;
 
-            // ProjectMoreMappointsToNewKeyframe();
+            // ProjectMoreMappointsToNewKeyframeNN();
             // OptimizeLocalMap();
 
             boost::timer::cpu_times elapsed_times(timer.elapsed());
@@ -110,19 +111,20 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
             continue;
         }
 
-        float distance;
-        size_t kptIdx;
         // Active search to find match
-        if (superpointEnabled_) {
-            if (!keyframeCurr_->SearchSuperpointKeypointMatchCandidate(mpt, config_.reMatchDescriptorDistanceSuperpoint, std::nullopt, kptIdx, distance)) {
-                continue;
-            }
-        } else {
-            bool mayObserveMpt;
-            if (!keyframeCurr_->SearchKeypointMatchCandidate(mpt, false, kptIdx, distance, mayObserveMpt) ||
-            distance > config_.reMatchDescriptorDistance) {
-                continue;
-            }
+        const auto& matchResult = superpointEnabled_ ?
+            keyframeCurr_->SearchSuperpointKeypointMatchCandidate(mpt, config_.reMatchDescriptorDistanceSuperpoint, std::nullopt): 
+            keyframeCurr_->SearchORBKeypointMatchCandidate(mpt, false);
+            
+        if (!matchResult.has_value()) {
+            continue;
+        }
+
+        const float distance = matchResult->distance;
+        const size_t kptIdx = matchResult->distance;
+
+        if (!superpointEnabled_ && distance > config_.reMatchDescriptorDistance) {
+            continue;
         }
 
         // This kpt already matches with previous mappoint
@@ -167,6 +169,96 @@ void Backend::ProjectMoreMappointsToNewKeyframe() {
     }
 
     printf("[Backend] Projected %zu old mpts to new keyframe\n", kptIdxToMptIdAndDistance.size());
+}
+
+void Backend::ProjectMoreMappointsToNewKeyframeNN() {
+    if (keyframePrev_ == nullptr) {
+        return;
+    }
+
+    // Some matched mappoints may already get removed in last backend optimization
+    std::list<size_t> observedMptToRemove;
+    for (const auto& [mptId, _]: keyframeCurr_->GetAllObservingMptIdToKptIdx()) {
+        if (mapManager_->GetMappoint(mptId) == nullptr) {
+            observedMptToRemove.push_back(mptId);
+        }
+    }
+    for (const auto& mptId: observedMptToRemove) {
+        keyframeCurr_->RemoveObservingMappointCreatedFromOtherFrame(mptId);
+    }
+
+    // Get nearby mappoints except those created from current keyframe
+    std::unordered_map<size_t, Mappoint::Ptr> nearbyMpt;
+    mapManager_->GetMappointsNearKeyframe(keyframePrev_, nearbyMpt);
+    for (auto& mptId: keyframeCurr_->GetMappointIdsOnlyObservedByThisFrame()) {
+        if (nearbyMpt.count(mptId)) {
+            nearbyMpt.erase(mptId);
+        }
+    }
+    
+    // Perform NN match for nearby mpt and current keyframe
+    cv::Mat descriptors;
+    std::vector<size_t> mptIds;
+    for (auto &[mptId, mpt] : nearbyMpt)
+    {
+        descriptors.push_back(mpt->GetDescriptor());
+        mptIds.push_back(mptId);
+    }
+
+    KeypointsMatchInfo matchInfo;
+    find_matched_points(descriptors, keyframeCurr_->GetDescriptors(), 0.7, matchInfo);
+    assert(matchInfo.matchedCurrentIndices.size() == matchInfo.matchedPrevIndices.size());
+
+    // Create new observations
+    std::list<std::pair<size_t, size_t>> newObservations;
+    for (int i = 0; i < matchInfo.matchedCurrentIndices.size(); i++) {
+        const int kptIdx = matchInfo.matchedCurrentIndices[i];
+        const int prevIdx = matchInfo.matchedPrevIndices[i];
+        const int newMatchedMptId = mptIds[prevIdx];
+
+        if (keyframeCurr_->IsObservingMappoint(newMatchedMptId)) {
+            continue;
+        }
+
+        // This kpt already matches with previous mappoint
+        const auto oldMatchedMptId = keyframeCurr_->GetMatchedMappointIdForKeypoint(kptIdx);
+        // The keypoint may not has matched mappoint if the depth is invalid
+        if (oldMatchedMptId.has_value()) {
+            const auto& oldMptId = oldMatchedMptId.value();
+            const auto& oldMpt = mapManager_->GetMappoint(oldMptId);
+            assert(oldMpt);
+        
+            // If the keypoint already matches with mappoints from previous keyframes
+            // This means the mpt is created from previous keyframe
+            if (oldMpt->GetObservedByKeyframeCount() > 1) {
+                continue;
+            }
+        } 
+
+        newObservations.push_back(std::make_pair(kptIdx, newMatchedMptId));
+    }
+
+    // Add the new observations
+    for(auto& [kptIdx, mptId]: newObservations) {
+        const auto& mpt = nearbyMpt[mptId];
+
+        // Remove the new created mappoint
+        const auto& optNewCreatedMptId = keyframeCurr_->GetMatchedMappointIdForKeypoint(kptIdx);
+        // Remove the old observations
+        if (optNewCreatedMptId.has_value()) {
+            const auto& newMptId = optNewCreatedMptId.value();
+            const auto& newCreatedMpt = mapManager_->GetMappoint(newMptId);
+            assert(newCreatedMpt);
+            keyframeCurr_->RemoveObservingMappointCreatedFromThisFrame(newMptId);
+            assert(newCreatedMpt->GetObservedByKeyframeCount() == 0);
+            mptIdToRemove_.push_back(newMptId);
+        }
+
+        // Add the observation for old mappoint
+        keyframeCurr_->AddObservingMappointCreatedFromOtherFrame(kptIdx, mpt);
+    }
+
+    printf("[Backend] Projected %zu old mpts to new keyframe\n", newObservations.size());
 }
 
 void Backend::OptimizeLocalMap()

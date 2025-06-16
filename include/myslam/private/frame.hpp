@@ -23,28 +23,41 @@
 namespace myslam 
 {
 
-class SuperPointModel;
+#pragma mark - config
 
 struct FrameConfig {
-    size_t      maxFeaturesCnt;    // max extracted features
-    size_t      rowSectionCnt;     // how many section in rows for feature detection
-    size_t      colSectionCnt;     // how many section in cols for feature detection
+    typedef std::shared_ptr<FrameConfig> Ptr;
 
-    size_t      imgCols;           // width of color image
-    size_t      imgRows;           // height of color image
+    size_t              imgCols;           // width of color image
+    size_t              imgRows;           // height of color image
+    size_t              activeCovisibleWeight;          // threshold to set active covisible keyframe
 
-    size_t      gridSize;          // pixel's grid size
-    size_t      gridColCnt;        // count of grid in image cols
-    size_t      gridRowCnt;        // count of grid in image rows
+    struct {
+        size_t      numOfFeatures;     // max extracted features
+        float       scaleFactor;        // scale factor for ORB feature
+        size_t      levelPyramid;       // pyramid for ORB feature
 
-    int         searchGridRadius;               // the radius of grid searching area
-    double      descriptorDistanceThres;        // max distance between 2 descriptors to be considered as matched
-    double      bestSecondaryDistanceRatio;     // min ratio between best match and secondary match to accept the best match 
+        size_t      rowSectionCnt;      // how many section in rows for feature detection
+        size_t      colSectionCnt;      // how many section in cols for feature detection
+    } orbConfig;
 
-    size_t      activeCovisibleWeight;          // threshold to set active covisible keyframe
+    struct {
+        size_t      gridSize;           // grid size in pixels
+        size_t      gridColCnt;         // horizontal counts of grids
+        size_t      gridRowCnt;         // vertical counts of grids
+
+        int         searchGridRadius;   // the radius of grid searching area
+
+        double      descriptorMatchDistanceThreshORB;     // max distance between 2 descriptors to be considered as matched
+        double      secondaryBestMatchDistanceRatioORB;   // min ratio between best match and secondary best match to accept the best match 
+    } searchConfig;
+
+    FrameConfig();
 };
 
-typedef struct {
+#pragma mark - feature matches
+
+struct KeypointInfo {
     // detected keypoints
     cv::KeyPoint keypoint;
     // extracted descriptors     
@@ -53,7 +66,16 @@ typedef struct {
     // Matched mappoint id. Only get populated if it's a keyframe
     // A feature point may not have matched mappoint if no matching found & no depth value found.
     std::optional<size_t> optMatchedMptId;
-} KeypointInfo;
+};
+
+struct GridInfo;
+
+struct KptMatchResult {
+    size_t keypointIdx;
+    float distance;
+};
+
+#pragma mark - class Frame
 
 class Frame : public std::enable_shared_from_this<Frame>
 {
@@ -103,7 +125,7 @@ public:
 
 #pragma mark - Feature extraction
 
-    void ExtractKeyPointsAndComputeDescriptors(const cv::Ptr<cv::Feature2D>& detector);
+    void ExtractKeyPointsAndComputeDescriptorsORB(const cv::Ptr<cv::Feature2D>& detector);
 
     void ExtractKeypointsAndDescriptorsWithSuperPointModel(const std::shared_ptr<SuperPointModel> model);
 
@@ -131,9 +153,9 @@ public:
 #pragma mark - Feature matching
 
     // Get matched keypoint idx for the mappoint
-    bool SearchKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool doDirectionCheck, size_t& kptIdx, float& distance, bool& mayObserveMpt);
+    std::optional<KptMatchResult> SearchORBKeypointMatchCandidate(const Mappoint::Ptr& mpt, const bool doDirectionCheck);
 
-    bool SearchSuperpointKeypointMatchCandidate(const Mappoint::Ptr& mpt, const float distanceMatchThresh, const std::optional<float> distanceRatioThresh, size_t& kptIdx, float& distance);
+    std::optional<KptMatchResult> SearchSuperpointKeypointMatchCandidate(const Mappoint::Ptr& mpt, const float distanceMatchThresh, const std::optional<float> distanceRatioThresh);
 
 #pragma mark - observing relationships
 
@@ -258,13 +280,13 @@ private:
     void ConstructKeypointGrids();
 
     // Calculate which grid the pixel point lies. (x: horizontal for col, y: vertical for row) is the pixel coordiante
-    size_t GetGridIdx(double x, double y);
+    void KeypointPosToGridInfo(const double x, const double y, GridInfo& gridInfo);
 
-    // Get the grid idx given its col idx and row idx
-    size_t GetGridIdx(size_t colIdx, size_t rowIdx);
+    // Get the grid id given its col idx and row idx
+    void PopulateGridId(GridInfo& gridInfo);
 
     // Get nearby grid idx including the input grid
-    void getNearbyGrids(size_t gridIdx, std::list<size_t>& nearbyGrids);
+    void GetNearbyGrids(const GridInfo& gridInfo, std::list<GridInfo>& nearbyGrids);
 
     // Update the covisible keyframe with new weight. Called by another object
     void UpdateCovisibleKeyframeWeight(const size_t otherKfId, const size_t weight);

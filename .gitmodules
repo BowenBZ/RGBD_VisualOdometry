@@ -10,3 +10,6 @@
 [submodule "g2o"]
 	path = dependency/g2o
 	url = https://github.com/BowenBZ/g2o.git
+[submodule "dependency/googletest"]
+	path = dependency/googletest
+	url = https://github.com/google/googletest.git
