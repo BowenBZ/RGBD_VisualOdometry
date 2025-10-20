@@ -36,7 +36,7 @@ frame.active_search.max_matched_descriptor_distance_orb: 30
 frame.active_search.min_best_secondary_distance_ratio_orb: 0.5
 
 # SuperPoint config
-superpoint.path: ./model/superpoint_converted.pt
+superpoint.path: /Users/bowen/Source/RGBD_VO/model/superpoint_converted.pt
 superpoint.confidenceThresh: 0.015
 superpoint.distThresh: 4
 superpoint.nnThresh: 0.7

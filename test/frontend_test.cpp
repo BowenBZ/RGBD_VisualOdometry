@@ -1,12 +1,14 @@
-#include "myslam/private/frame.hpp"
-#include "myslam/private/mappoint.hpp"
 #include <gtest/gtest.h>
 
-#include <memory>
-#include <myslam/config.hpp>
+#include <myslam/myslam.hpp>
+#include <myslam/private/frame.hpp>
+#include <myslam/private/mappoint.hpp>
 #include <myslam/private/superpoint_model.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
+
+#include <memory>
+#include <string>
 
 const std::string configPath = "//Users//bowen//Source//RGBD_VO//config//default.yaml";
 const std::string modelPath = "//Users//bowen//Source//RGBD_VO//model//superpoint_converted.pt";
@@ -18,7 +20,7 @@ const std::string imageName2 = "rgb//1305031102.211214.png";
 const std::string depthName1 = "depth//1305031102.160407.png";
 const std::string depthName2 = "depth//1305031102.226738.png";
 
-bool visualize = true;
+bool visualize = false;
 
 myslam::SuperPointModel::Ptr ConstructSuperPointModel() {
     myslam::SuperPointModel::Ptr model(new myslam::SuperPointModel(
@@ -75,13 +77,15 @@ TEST(FRONTEND_TEST, FeatureMatchActiveSearch) {
     myslam::FrameConfig::Ptr frameConfig(new myslam::FrameConfig());
 
     // Extract feature from image1
-    cv::Mat image1 = cv::imread(assetPath + "//" + imageName1);
+    std::string imagePath1 = assetPath + "//" + imageName1;
+    std::string depthPath1 = assetPath + "//" + depthName1;
+    cv::Mat image1 = cv::imread(imagePath1);
     myslam::Frame::Ptr frame1 = myslam::Frame::CreateFrame(
         frameConfig, 
         0, 
         camera, 
         image1, 
-        cv::imread(assetPath + "//" + depthName1));
+        cv::imread(depthPath1, cv::IMREAD_UNCHANGED));
 
     frame1->SetTcw(SE3());
     frame1->ExtractKeypointsAndDescriptorsWithSuperPointModel(model);
@@ -89,7 +93,8 @@ TEST(FRONTEND_TEST, FeatureMatchActiveSearch) {
     EXPECT_EQ(keypointSize1, 256);
 
     // Extract feature form image2
-    cv::Mat image2 = cv::imread(assetPath + "//" + imageName2);
+    std::string imagePath2 = assetPath + "//" + imageName2;
+    cv::Mat image2 = cv::imread(imagePath2);
     myslam::Frame::Ptr frame2 = myslam::Frame::CreateFrame(
         frameConfig, 
         0, 
@@ -121,7 +126,7 @@ TEST(FRONTEND_TEST, FeatureMatchActiveSearch) {
         mpts.push_back(mpt);
         mptIdToIdx[mpt->GetId()] = i;
     }
-    EXPECT_EQ(mpts.size(), 231);
+    EXPECT_EQ(mpts.size(), 206);
 
     // Try to find match from image2
     std::unordered_map<size_t, std::pair<myslam::Mappoint::Ptr, float>> kptToMpt;
@@ -140,8 +145,7 @@ TEST(FRONTEND_TEST, FeatureMatchActiveSearch) {
             kptToMpt[kptIdx] = {mpt, distance} ;
         }
     }
-    EXPECT_EQ(kptToMpt.size(), 196);
-    // printf("Match size: %zu\n", kptToMpt.size());
+    EXPECT_EQ(kptToMpt.size(), 178);
 
     if (!visualize) {
         return;
@@ -202,4 +206,42 @@ TEST(FRONTEND_TEST, FeatureMatchActiveSearch) {
 
     cv::imshow("Feature matching", combined);
     cv::waitKey(0);
+}
+
+// Test feature matching with active search and motion-only BA
+TEST(FRONTEND_TEST, FeatureMatchActiveSearchWithMotionBA) {
+    myslam::Config::setParameterFile(configPath);
+
+    myslam::Camera::Ptr camera(new myslam::Camera());
+    myslam::Frontend frontend(camera);
+
+    // Push first measurement
+    std::string imagePath1 = assetPath + "//" + imageName1;
+    std::string depthPath1 = assetPath + "//" + depthName1;
+
+    frontend.AddFrame({
+        0.0,
+        cv::imread(imagePath1),
+        cv::imread(depthPath1, -1)
+    });
+
+    EXPECT_EQ(frontend.GetState(), myslam::Frontend::TRACKING);
+    SE3 Twc1 = frontend.GetPose().inverse();
+    EXPECT_EQ(Twc1.translation().norm(), 0.0);
+    EXPECT_EQ(Twc1.rotationMatrix().trace(), 3.0);
+
+    // Push second measurement
+    std::string imagePath2 = assetPath + "//" + imageName2;
+    std::string depthPath2 = assetPath + "//" + depthName2;
+    frontend.AddFrame({
+        0.1,
+        cv::imread(imagePath2),
+        cv::imread(depthPath2, -1)
+    });
+
+    EXPECT_EQ(frontend.GetState(), myslam::Frontend::TRACKING);
+    SE3 Twc2 = frontend.GetPose().inverse();
+    std::cout << "Twc2: \n" << Twc2.matrix() << std::endl;
+
+    frontend.Stop();
 }

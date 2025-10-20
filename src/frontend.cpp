@@ -165,6 +165,7 @@ bool Frontend::TrackingHandler() {
             MatchKeyPointsWithMappointsActiveSearch(lastFrameMap_, lastFrameMapInfo_);
             EstimateCurrentFramePose(true);
 
+            printf("Map tracking\n");
             MatchKeyPointsWithMappointsActiveSearch(localMap_, localMapInfo_);
             EstimateCurrentFramePose(true);
         } else {
@@ -360,7 +361,7 @@ void Frontend::MatchKeyPointsWithMappointsActiveSearch(TrackingMap& trackingMap,
         }
     }
 
-    printf("  Matched mpts %zu / %zu", matchedKptIdxToInfo_.size(), trackingMap.size());
+    printf("  Matched mpts %zu / %zu\n", matchedKptIdxToInfo_.size(), trackingMap.size());
 }
 
 #pragma mark - Motion-only BA
@@ -392,7 +393,7 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
     assert(inliers.rows != 0);
     printf("  Size of inlier after P3P ransac: %d\n", inliers.rows);
 
-    // Covert rotation std::vector to matrix and to eigen types
+    // Convert rotation std::vector to matrix and to eigen types
     cv::Mat rotMat;
     cv::Rodrigues(rotVec, rotMat);
     Eigen::Matrix3d rotMatEigen;
@@ -427,6 +428,7 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
         edge->setVertex(0, poseVertex);
         edge->setMeasurement(toVector2d(frameCurr_->GetKeypoint(kptIdx).pt));
         edge->setInformation(Eigen::Matrix2d::Identity());
+        edge->setLevel(0);
         // Each edge needs to have a separate kernel object,
         // optimizer.clear() will deallocate them
         g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber();
@@ -439,9 +441,17 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
     }
 
     // Optimize 4 * 10 steps
+    double prevError = std::numeric_limits<double>::max();
     for (size_t iteration = 0; iteration < 4; ++iteration) {
         optimizer_.initializeOptimization(0);
         optimizer_.optimize(10);
+
+        double currentError = optimizer_.activeChi2();
+        if (std::abs(prevError - currentError) < 1e-6) {
+            printf("  Early exit since BA converged at iteration %zu with error: %f\n", iteration, currentError);
+            break;
+        }
+        prevError = currentError;
 
         // Handle outlier edges
         for (auto& edgeInfo: edgesInfo) {
@@ -453,10 +463,13 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
 
             // chi2 is the (u^2 + v^2)
             if (edge->chi2() > frontendConfig_.baInlierThres) {
-                // level 1 edges won't be optimized later
+                // Mark edges as outliers by setting their level to 1.
+                // Level 1 edges are excluded from optimization, which helps prevent
+                // them from negatively impacting the optimization process due to high error.
                 edge->setLevel(1);
                 edgeInfo.isOutlier = true;
             } else {
+                // Level 0 edges are included in optimization as they are considered inliers.
                 edge->setLevel(0);
                 edgeInfo.isOutlier = false;
             }
@@ -473,7 +486,7 @@ void Frontend::EstimateCurrentFramePose(const bool doMotionBA)
             matchedKptIdxToInfo_.erase(edgeInfo.kptIdx);
         }
     }
-    printf("  Size of inlier after BA: %zu\n", matchedKptIdxToInfo_.size());
+    printf("  Size of inlier of BA: %zu / %zu\n", matchedKptIdxToInfo_.size(), edgesInfo.size());
 
     // Set computed pose
     frameCurr_->SetTcw(poseVertex->estimate());
@@ -533,9 +546,10 @@ void Frontend::CreateTempMappoints() {
     kptIdxToNewMpt_.clear();
     for (size_t kptIdx = 0; kptIdx < frameCurr_->GetKeypointsSize(); ++kptIdx)
     {
-        // If the keypoint matches with mappoint from local map, just put that mappoint into last frame mappoint
+        // If the keypoint matches with mappoints, just put that mappoint into last frame mappoint
         if (matchedKptIdxToInfo_.count(kptIdx)) {
             const auto& mpt = matchedKptIdxToInfo_[kptIdx].mpt;
+            // TODO: check which mappoint should be put into last frame map
             if (!localMap_.count(mpt->GetId())) {
                 // if it's not from local map
                 lastFrameMap_[mpt->GetId()] = mpt;
